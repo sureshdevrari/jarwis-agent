@@ -1,0 +1,604 @@
+/* 
+ * Jarwis Devin-Inspired Theme
+ * Premium dark theme with sophisticated animations and glassmorphism
+ */
+
+/* ============================================= */
+/* CSS VARIABLES - DESIGN TOKENS                 */
+/* ============================================= */
+
+:root {
+  /* Background colors - Deep, rich blacks */
+  --bg-primary: #0a0a0b;
+  --bg-secondary: #111113;
+  --bg-tertiary: #18181b;
+  --bg-card: rgba(24, 24, 27, 0.6);
+  --bg-card-hover: rgba(30, 30, 35, 0.8);
+  
+  /* Surface overlays */
+  --surface-glass: rgba(255, 255, 255, 0.03);
+  --surface-glass-hover: rgba(255, 255, 255, 0.06);
+  
+  /* Border colors */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.1);
+  --border-accent: rgba(6, 182, 212, 0.3);
+  
+  /* Text colors */
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  
+  /* Accent colors - Jarwis cyan theme */
+  --accent-primary: #06b6d4;
+  --accent-secondary: #3b82f6;
+  --accent-glow: rgba(6, 182, 212, 0.15);
+  
+  /* Gradients */
+  --gradient-text: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+  --gradient-button: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  --gradient-card: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 40px rgba(6, 182, 212, 0.15);
+  
+  /* Spacing */
+  --section-padding: clamp(3rem, 8vw, 6rem);
+  --container-max: 1280px;
+  
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================= */
+/* BASE STYLES                                   */
+/* ============================================= */
+
+.devin-theme {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================= */
+/* HEADER STYLES                                 */
+/* ============================================= */
+
+.devin-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 11, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.devin-header-inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.devin-nav-link {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: all var(--transition-fast);
+}
+
+.devin-nav-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-glass);
+}
+
+.devin-nav-link.active {
+  color: var(--text-primary);
+}
+
+/* ============================================= */
+/* HERO SECTION                                  */
+/* ============================================= */
+
+.devin-hero {
+  position: relative;
+  min-height: calc(100vh - 80px);
+  display: flex;
+  align-items: center;
+  padding: var(--section-padding) 1.5rem;
+  overflow: hidden;
+}
+
+.devin-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1000px;
+  height: 600px;
+  background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.devin-hero-content {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.devin-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.devin-hero-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.devin-hero-title {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.devin-hero-title-gradient {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.devin-hero-subtitle {
+  font-size: clamp(1.125rem, 2vw, 1.375rem);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 600px;
+  margin-bottom: 2.5rem;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+/* ============================================= */
+/* BUTTONS                                       */
+/* ============================================= */
+
+.devin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: none;
+  outline: none;
+}
+
+.devin-btn-primary {
+  background: var(--gradient-button);
+  color: white;
+  box-shadow: var(--shadow-md), 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.devin-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(6, 182, 212, 0.3);
+}
+
+.devin-btn-secondary {
+  background: var(--surface-glass);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.devin-btn-secondary:hover {
+  background: var(--surface-glass-hover);
+  border-color: var(--border-accent);
+}
+
+/* ============================================= */
+/* CARDS - GLASSMORPHISM                         */
+/* ============================================= */
+
+.devin-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: all var(--transition-base);
+}
+
+.devin-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.devin-card-glow {
+  position: relative;
+}
+
+.devin-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--accent-primary), transparent, var(--accent-secondary));
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  z-index: -1;
+}
+
+.devin-card-glow:hover::before {
+  opacity: 0.3;
+}
+
+/* ============================================= */
+/* FEATURE GRID                                  */
+/* ============================================= */
+
+.devin-features {
+  padding: var(--section-padding) 1.5rem;
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.devin-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.devin-feature-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-card);
+  border: 1px solid var(--border-accent);
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  color: var(--accent-primary);
+}
+
+.devin-feature-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.devin-feature-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ============================================= */
+/* WORKFLOW STEPS                                */
+/* ============================================= */
+
+.devin-workflow {
+  padding: var(--section-padding) 1.5rem;
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.devin-workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+  position: relative;
+}
+
+.devin-workflow-step {
+  text-align: center;
+  position: relative;
+}
+
+.devin-workflow-number {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--accent-primary);
+  border-radius: 50%;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin: 0 auto 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.devin-workflow-step-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.devin-workflow-step-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Connecting line between steps */
+.devin-workflow-steps::before {
+  content: '';
+  position: absolute;
+  top: 24px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    var(--border-accent) 10%, 
+    var(--border-accent) 90%, 
+    transparent 100%
+  );
+  z-index: 0;
+}
+
+@media (max-width: 768px) {
+  .devin-workflow-steps::before {
+    display: none;
+  }
+}
+
+/* ============================================= */
+/* STATS SECTION                                 */
+/* ============================================= */
+
+.devin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3rem;
+  padding: var(--section-padding) 1.5rem;
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.devin-stat {
+  text-align: center;
+}
+
+.devin-stat-value {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.25rem;
+}
+
+.devin-stat-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ============================================= */
+/* LOGO MARQUEE                                  */
+/* ============================================= */
+
+.devin-marquee {
+  padding: 2rem 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.devin-marquee-inner {
+  display: flex;
+  animation: marquee 30s linear infinite;
+}
+
+.devin-marquee-item {
+  flex-shrink: 0;
+  padding: 0 2rem;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.devin-marquee-item:hover {
+  opacity: 1;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ============================================= */
+/* CTA SECTION                                   */
+/* ============================================= */
+
+.devin-cta {
+  padding: var(--section-padding) 1.5rem;
+  text-align: center;
+  position: relative;
+}
+
+.devin-cta::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 400px;
+  background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.devin-cta-content {
+  position: relative;
+  z-index: 1;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.devin-cta-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.devin-cta-subtitle {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+/* ============================================= */
+/* FOOTER                                        */
+/* ============================================= */
+
+.devin-footer {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  padding: 3rem 1.5rem 2rem;
+}
+
+.devin-footer-inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.devin-footer-link {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  transition: color var(--transition-fast);
+}
+
+.devin-footer-link:hover {
+  color: var(--text-primary);
+}
+
+/* ============================================= */
+/* ANIMATIONS                                    */
+/* ============================================= */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Utility animation classes */
+.animate-fade-in {
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+.animate-delay-1 { animation-delay: 0.1s; }
+.animate-delay-2 { animation-delay: 0.2s; }
+.animate-delay-3 { animation-delay: 0.3s; }
+.animate-delay-4 { animation-delay: 0.4s; }
+.animate-delay-5 { animation-delay: 0.5s; }
+
+/* ============================================= */
+/* SCROLL REVEAL                                 */
+/* ============================================= */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================= */
+/* RESPONSIVE ADJUSTMENTS                        */
+/* ============================================= */
+
+@media (max-width: 640px) {
+  .devin-hero {
+    min-height: auto;
+    padding: 3rem 1rem;
+  }
+  
+  .devin-hero-title {
+    font-size: 2rem;
+  }
+  
+  .devin-btn {
+    width: 100%;
+  }
+}

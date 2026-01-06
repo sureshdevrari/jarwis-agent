@@ -1,0 +1,38 @@
+proxy:
+  host: ""
+  port: 0
+  intercept: true
+  log_requests: true
+target:
+  url: "http://127.0.0.1:3000"
+  name: "OWASP_Juice_Shop"
+  scope: ""
+
+auth:
+  enabled: true
+  type: "form"
+  credentials:
+    username: "akshaydevrari@gmail.com"
+    password: "12341234"
+  login_url: "/#/login"
+  selectors:
+    username_field: "input#email"
+    password_field: "input#password"
+    submit_button: "button#loginButton"
+  success_indicator: "#/search"
+  success_url: "http://127.0.0.1:3000/#/search"
+
+scan:
+  modules: ["injection", "xss", "sensitive_data", "misconfig", "upload", "api", "idor", "csrf", "privesc"]
+  rate_limit: 10
+  timeout: 30
+
+ai:
+  enabled: true
+  provider: "gemini"
+  model: "gemini-2.5-flash"
+  api_key: "AIzaSyASpuSZ63PvdhjtousXDHDf8EEyiK51ZAU"
+
+output:
+  directory: "report1"
+  formats: ["html", "json"]

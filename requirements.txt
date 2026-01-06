@@ -1,0 +1,85 @@
+# JARWIS AGI PEN TEST - Dependencies
+# Core Framework
+playwright>=1.40.0
+mitmproxy>=10.1.0
+python-owasp-zap-v2.4>=0.0.21
+requests>=2.31.0
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# AI/LLM Integration
+openai>=1.6.0
+ollama>=0.1.0
+langchain>=0.1.0
+google-generativeai>=0.8.0  # Google Gemini API
+
+# Parsing & Data Processing
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+pyyaml>=6.0.1
+pydantic>=2.5.0
+jinja2>=3.1.2
+
+# Security Tools Integration
+sqlmap>=1.7
+python-nmap>=0.7.1
+
+# Reporting
+sarif-om>=1.0.4
+reportlab>=4.0.0
+python-docx>=1.1.0
+weasyprint>=60.0
+
+# Mobile Security Analysis
+androguard>=3.4.0a1
+frida>=16.0.0
+frida-tools>=12.0.0
+
+# Cloud Security SDKs
+boto3>=1.34.0
+azure-identity>=1.15.0
+azure-mgmt-resource>=23.0.0
+azure-mgmt-storage>=21.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-sql>=3.0.0
+azure-mgmt-keyvault>=10.0.0
+google-cloud-storage>=2.14.0
+google-cloud-compute>=1.15.0
+google-cloud-resource-manager>=1.11.0
+google-api-python-client>=2.110.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+
+# Utilities
+colorama>=0.4.6
+rich>=13.7.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+dnspython>=2.4.0  # For domain TXT record verification
+
+# FastAPI Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Database & ORM (PostgreSQL)
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+argon2-cffi>=23.1.0
+pydantic-settings>=2.1.0
+email-validator>=2.1.0
+
+# Payment Gateway
+razorpay>=1.4.0
+
+# Email (for password reset, optional)
+# aiosmtplib>=3.0.0
+# email-validator>=2.1.0

@@ -1,0 +1,119 @@
+# ============================================================
+# JARWIS AGI PEN TEST - Git Ignore Configuration
+# ============================================================
+
+# ------------------------------------------------------------
+# Dependencies (reinstallable - NOT backed up)
+# ------------------------------------------------------------
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ------------------------------------------------------------
+# Environment & Secrets (NEVER commit these)
+# ------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+key.txt
+secrets/
+
+# ------------------------------------------------------------
+# IDE & Editor
+# ------------------------------------------------------------
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ------------------------------------------------------------
+# OS Generated
+# ------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------
+# Testing & Coverage
+# ------------------------------------------------------------
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ------------------------------------------------------------
+# Build Outputs
+# ------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+reports/*.html
+reports/*.pdf
+reports/*.json
+!reports/.gitkeep
+
+# ------------------------------------------------------------
+# Playwright
+# ------------------------------------------------------------
+playwright-report/
+test-results/
+
+# ------------------------------------------------------------
+# Database
+# ------------------------------------------------------------
+*.db
+*.sqlite3
+
+# ------------------------------------------------------------
+# Keep these folders but ignore contents
+# ------------------------------------------------------------
+uploads/*
+!uploads/.gitkeep
+
+# ------------------------------------------------------------
+# FILES TO KEEP (backed up)
+# ------------------------------------------------------------
+# requirements.txt - Python dependencies manifest
+# package.json - Node dependencies manifest
+# package-lock.json - Locked versions
+# .env.example - Template for environment variables
+# restore.ps1 - Restoration script
+# SYSTEM_REQUIREMENTS.md - Full documentation
+# All source code in attacks/, core/, api/, jarwisfrontend/src/

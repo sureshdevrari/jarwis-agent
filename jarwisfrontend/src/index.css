@@ -1,0 +1,438 @@
+
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Devin-inspired theme styles */
+@import './styles/devin-theme.css';
+
+/* Import Mifty Dashboard theme - Modern E-commerce Style */
+@import './styles/mifty-theme.css';
+
+/* Import responsive design system */
+@import './styles/responsive.css';
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #09090b;
+  /* Prevent horizontal overflow on mobile */
+  overflow-x: hidden;
+  /* Enable smooth scrolling */
+  scroll-behavior: smooth;
+  /* Ensure proper text rendering on all devices */
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ============================================= */
+/* JARWIS CUSTOM ANIMATIONS                     */
+/* ============================================= */
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+/* Fade in up for staggered lists */
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+/* Hand wave animation */
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(20deg); }
+  75% { transform: rotate(-10deg); }
+}
+
+/* Gradient animation for text */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Pulse glow */
+@keyframes pulseGlow {
+  0%, 100% { 
+    box-shadow: 0 0 5px rgba(0, 255, 255, 0.3),
+                0 0 20px rgba(0, 255, 255, 0.2);
+  }
+  50% { 
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.5),
+                0 0 40px rgba(0, 255, 255, 0.3);
+  }
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Spin slow */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Scale in */
+@keyframes scaleIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.9); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from { 
+    opacity: 0; 
+    transform: translateX(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
+
+/* Animation classes */
+.animate-fadeIn {
+  animation: fadeIn 0.7s ease-out forwards;
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.animate-wave {
+  display: inline-block;
+  animation: wave 2s ease-in-out infinite;
+  transform-origin: 70% 70%;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulseGlow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-spinSlow {
+  animation: spinSlow 8s linear infinite;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s ease-out forwards;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.4s ease-out forwards;
+}
+
+/* Animation delays */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+.animation-delay-700 { animation-delay: 700ms; }
+.animation-delay-1000 { animation-delay: 1000ms; }
+
+/* Glassmorphism helper classes */
+.glass-dark {
+  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.glass-light {
+  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* Function Card - Highlighted containers for main functionality */
+.function-card-dark {
+  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  border: 2px solid rgba(99, 179, 237, 0.25);
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 
+              0 0 0 1px rgba(99, 179, 237, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease-out;
+}
+
+.function-card-dark:hover {
+  border-color: rgba(99, 179, 237, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 
+              0 0 0 1px rgba(99, 179, 237, 0.2),
+              0 0 24px rgba(99, 179, 237, 0.1);
+}
+
+.function-card-light {
+  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%);
+  border: 2px solid rgba(59, 130, 246, 0.25);
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 
+              0 0 0 1px rgba(59, 130, 246, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease-out;
+}
+
+.function-card-light:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 
+              0 0 0 1px rgba(59, 130, 246, 0.2),
+              0 0 24px rgba(59, 130, 246, 0.08);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.5);
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(0, 255, 255, 0.3);
+  color: inherit;
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+  outline: 2px solid rgba(0, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ============================================= */
+/* JARWIS CYBERSECURITY THEME ENHANCEMENTS      */
+/* ============================================= */
+
+/* Cyber glow effects */
+.cyber-glow {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3),
+              0 0 40px rgba(6, 182, 212, 0.1);
+}
+
+.cyber-glow-hover:hover {
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.5),
+              0 0 60px rgba(6, 182, 212, 0.2);
+}
+
+/* Neon text effect */
+.neon-text-cyan {
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5),
+               0 0 20px rgba(6, 182, 212, 0.3),
+               0 0 40px rgba(6, 182, 212, 0.1);
+}
+
+.neon-text-violet {
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.5),
+               0 0 20px rgba(139, 92, 246, 0.3),
+               0 0 40px rgba(139, 92, 246, 0.1);
+}
+
+.neon-text-rose {
+  text-shadow: 0 0 10px rgba(244, 63, 94, 0.5),
+               0 0 20px rgba(244, 63, 94, 0.3),
+               0 0 40px rgba(244, 63, 94, 0.1);
+}
+
+/* Scan line animation for cyber effect */
+@keyframes scanLine {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.scan-line-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(6, 182, 212, 0.5), 
+    transparent);
+  animation: scanLine 8s linear infinite;
+  pointer-events: none;
+}
+
+/* Grid background for cyber aesthetic */
+.cyber-grid-bg {
+  background-image: 
+    linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Pulsing border animation */
+@keyframes borderPulse {
+  0%, 100% { border-color: rgba(6, 182, 212, 0.3); }
+  50% { border-color: rgba(6, 182, 212, 0.8); }
+}
+
+.border-pulse {
+  animation: borderPulse 3s ease-in-out infinite;
+}
+
+/* Enhanced hover transitions */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Card hover zoom effect */
+.hover-zoom {
+  transition: transform 0.3s ease;
+}
+
+.hover-zoom:hover {
+  transform: scale(1.02);
+}
+
+/* Shimmer loading effect */
+.shimmer-loading {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Status indicator animations */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.2); }
+}
+
+.status-pulse {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* Frosted glass effect enhancement */
+.frosted-glass {
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+}
+
+/* Professional typography */
+.heading-gradient {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.heading-gradient-admin {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 50%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Button micro-interactions */
+.btn-cyber {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-cyber::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.btn-cyber:hover::before {
+  left: 100%;
+}
+
+/* Input focus cyber glow */
+.input-cyber:focus {
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2),
+              0 0 20px rgba(6, 182, 212, 0.1);
+}

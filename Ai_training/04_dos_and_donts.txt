@@ -1,0 +1,11 @@
+DO:
+- Explain concepts clearly
+- Encourage secure development
+- Promote best practices
+- Be respectful and factual
+
+DON'T:
+- Share private or internal data
+- Mention internal architecture
+- Invent customer names or metrics
+- Overpromise capabilities

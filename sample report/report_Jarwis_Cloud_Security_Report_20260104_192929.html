@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarwis Security Assessment Report - AWS Account: 123456789012 (us-east-1)</title>
+    <style>
+        /* ============================================
+           JARWIS PROFESSIONAL SECURITY REPORT
+           Optimized for PDF Generation
+           ============================================ */
+        
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        
+        @page content {
+            margin: 25mm 20mm 25mm 20mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #1a1a2e;
+            background: #ffffff;
+        }
+        
+        /* ============================================
+           COVER PAGE
+           ============================================ */
+        .cover-page {
+            width: 210mm;
+            height: 297mm;
+            background: linear-gradient(135deg, #040B28 0%, #0f1a3d 40%, #162447 70%, #1a2c55 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            page-break-after: always;
+            overflow: hidden;
+        }
+        
+        .cover-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(0, 193, 159, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 80% 20%, rgba(37, 106, 209, 0.1) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        
+        .cover-content {
+            text-align: center;
+            z-index: 10;
+            padding: 40px;
+        }
+        
+        .cover-logo {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 30px;
+        }
+        
+        .cover-brand {
+            font-size: 42pt;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00C19F 0%, #256AD1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+        
+        .cover-tagline {
+            font-size: 12pt;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 50px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        
+        .cover-title {
+            font-size: 28pt;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+        
+        .cover-subtitle {
+            font-size: 16pt;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 60px;
+        }
+        
+        .cover-info-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 30px 50px;
+            text-align: left;
+            min-width: 400px;
+        }
+        
+        .cover-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .cover-info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .cover-info-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .cover-info-value {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 11pt;
+        }
+        
+        .cover-confidential {
+            position: absolute;
+            bottom: 40px;
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid rgba(220, 38, 38, 0.4);
+            color: #fca5a5;
+            padding: 10px 30px;
+            border-radius: 6px;
+            font-size: 10pt;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        /* ============================================
+           PAGE LAYOUT
+           ============================================ */
+        .page {
+            page: content;
+            padding: 25mm 20mm;
+            min-height: 297mm;
+            position: relative;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .avoid-break {
+            page-break-inside: avoid;
+        }
+        
+        /* Page Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 25px;
+        }
+        
+        .page-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .page-header-logo {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .page-header-brand {
+            font-size: 14pt;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00C19F 0%, #256AD1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .page-header-right {
+            text-align: right;
+            font-size: 9pt;
+            color: #6b7280;
+        }
+        
+        /* ============================================
+           SECTION HEADERS
+           ============================================ */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 30px 0 20px 0;
+            padding-bottom: 12px;
+            border-bottom: 3px solid;
+            border-image: linear-gradient(135deg, #00C19F, #256AD1) 1;
+        }
+        
+        .section-number {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #00C19F, #256AD1);
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14pt;
+        }
+        
+        .section-title {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        
+        /* ============================================
+           TABLE OF CONTENTS
+           ============================================ */
+        .toc-page {
+            padding: 25mm 20mm;
+            min-height: 297mm;
+            page-break-after: always;
+        }
+        
+        .toc-title {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid;
+            border-image: linear-gradient(135deg, #00C19F, #256AD1) 1;
+        }
+        
+        .toc-section {
+            margin-bottom: 20px;
+        }
+        
+        .toc-section-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #256AD1;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .toc-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0 8px 15px;
+            font-size: 10pt;
+            color: #4a5568;
+            border-bottom: 1px dotted #e2e8f0;
+        }
+        
+        .toc-item:last-child {
+            border-bottom: none;
+        }
+        
+        /* ============================================
+           EXECUTIVE SUMMARY PAGE
+           ============================================ */
+        .exec-summary-page {
+            padding: 25mm 20mm;
+            min-height: 297mm;
+            page-break-after: always;
+        }
+        
+        .exec-summary-box {
+            background: linear-gradient(135deg, #040B28 0%, #1a2c55 100%);
+            border-radius: 12px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 25px;
+        }
+        
+        .exec-summary-title {
+            font-size: 11pt;
+            color: #00C598;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .exec-summary-text {
+            font-size: 11pt;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .exec-summary-text p {
+            margin-bottom: 15px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: flex;
+            gap: 15px;
+            margin: 25px 0;
+        }
+        
+        .stat-card {
+            flex: 1;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28pt;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 9pt;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-critical .stat-value { color: #dc2626; }
+        .stat-high .stat-value { color: #ea580c; }
+        .stat-medium .stat-value { color: #d97706; }
+        .stat-low .stat-value { color: #059669; }
+        .stat-info .stat-value { color: #0284c7; }
+        
+        /* Risk Meter */
+        .risk-meter-container {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        
+        .risk-meter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .risk-meter-title {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        
+        .risk-meter-score {
+            font-size: 24pt;
+            font-weight: 800;
+        }
+        
+        .risk-meter-bar {
+            height: 16px;
+            background: #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .risk-meter-fill {
+            height: 100%;
+            border-radius: 8px;
+        }
+        
+        .risk-meter-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 8pt;
+            color: #6b7280;
+        }
+        
+        /* Key Findings Summary */
+        .key-findings-box {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .key-findings-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 12px;
+        }
+        
+        .key-finding-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            font-size: 10pt;
+            color: #78350f;
+        }
+        
+        .key-finding-bullet {
+            color: #f59e0b;
+            font-weight: 700;
+        }
+        
+        /* ============================================
+           FINDINGS SECTION
+           ============================================ */
+        .findings-page {
+            padding: 25mm 20mm;
+        }
+        
+        .finding {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+        
+        .finding-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .finding-severity-critical .finding-header { border-left: 5px solid #dc2626; }
+        .finding-severity-high .finding-header { border-left: 5px solid #ea580c; }
+        .finding-severity-medium .finding-header { border-left: 5px solid #d97706; }
+        .finding-severity-low .finding-header { border-left: 5px solid #059669; }
+        .finding-severity-info .finding-header { border-left: 5px solid #0284c7; }
+        
+        .finding-id {
+            font-size: 9pt;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        
+        .finding-title {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+        
+        .finding-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .tag {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 8pt;
+            font-weight: 600;
+        }
+        
+        .tag-category {
+            background: rgba(37, 106, 209, 0.1);
+            color: #256AD1;
+        }
+        
+        .tag-cwe {
+            background: rgba(139, 92, 246, 0.1);
+            color: #7c3aed;
+        }
+        
+        .severity-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 9pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        
+        .severity-critical { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .severity-high { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+        .severity-medium { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .severity-low { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .severity-info { background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; }
+        
+        .finding-body {
+            padding: 20px;
+        }
+        
+        .finding-section {
+            margin-bottom: 18px;
+        }
+        
+        .finding-section-title {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .finding-description {
+            font-size: 10pt;
+            line-height: 1.7;
+            color: #4a5568;
+        }
+        
+        /* Technical Details Table */
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 9pt;
+        }
+        
+        .detail-table tr {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .detail-table tr:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #f8fafc;
+            color: #6b7280;
+            font-weight: 600;
+            width: 120px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 8pt;
+        }
+        
+        .detail-table td {
+            padding: 10px 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            word-break: break-all;
+            color: #1a1a2e;
+        }
+        
+        /* Evidence Box */
+        .evidence-box {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 9pt;
+            color: #00ff9d;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.6;
+        }
+        
+        /* Remediation Box */
+        .remediation-box {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .remediation-title {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #059669;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .remediation-text {
+            font-size: 10pt;
+            line-height: 1.6;
+            color: #065f46;
+        }
+        
+        /* AI Analysis Box */
+        .ai-analysis-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .ai-analysis-title {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #1d4ed8;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .ai-analysis-text {
+            font-size: 10pt;
+            line-height: 1.6;
+            color: #1e40af;
+        }
+        
+        /* HTTP Request/Response */
+        .http-section {
+            margin: 15px 0;
+        }
+        
+        .http-title {
+            font-size: 9pt;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .http-content {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 8pt;
+            color: #e2e8f0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        /* ============================================
+           METHODOLOGY PAGE
+           ============================================ */
+        .methodology-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .methodology-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 15px;
+        }
+        
+        .methodology-steps {
+            list-style: none;
+        }
+        
+        .methodology-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .methodology-step:last-child {
+            border-bottom: none;
+        }
+        
+        .step-number {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #00C19F, #256AD1);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 10pt;
+            flex-shrink: 0;
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+        
+        .step-desc {
+            font-size: 9pt;
+            color: #6b7280;
+        }
+        
+        /* ============================================
+           APPENDIX - ENDPOINTS
+           ============================================ */
+        .endpoints-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 9pt;
+        }
+        
+        .endpoints-table th {
+            background: #f8fafc;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #6b7280;
+            border-bottom: 2px solid #e2e8f0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 8pt;
+        }
+        
+        .endpoints-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 8pt;
+        }
+        
+        /* ============================================
+           FOOTER
+           ============================================ */
+        .report-footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+        }
+        
+        .footer-logo {
+            width: 30px;
+            height: 30px;
+            margin-bottom: 10px;
+        }
+        
+        .footer-text {
+            font-size: 8pt;
+            color: #6b7280;
+        }
+        
+        .footer-brand {
+            font-weight: 700;
+            background: linear-gradient(135deg, #00C19F, #256AD1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* ============================================
+           DISCLAIMER PAGE
+           ============================================ */
+        .disclaimer-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .disclaimer-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #dc2626;
+            margin-bottom: 12px;
+        }
+        
+        .disclaimer-text {
+            font-size: 9pt;
+            line-height: 1.7;
+            color: #7f1d1d;
+        }
+        
+        .disclaimer-text p {
+            margin-bottom: 10px;
+        }
+        
+        .legal-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .legal-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        
+        .legal-text {
+            font-size: 9pt;
+            line-height: 1.7;
+            color: #4a5568;
+        }
+        
+        /* ============================================
+           PRINT STYLES
+           ============================================ */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            .cover-page {
+                background: linear-gradient(135deg, #040B28 0%, #0f1a3d 40%, #162447 70%, #1a2c55 100%) !important;
+            }
+            
+            .finding {
+                page-break-inside: avoid;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         COVER PAGE
+         ============================================ -->
+    <div class="cover-page">
+        <div class="cover-pattern"></div>
+        <div class="cover-content">
+            <div class="cover-logo">
+                <svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGrad" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGrad)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+        <path fill="#256AD1" d="M250,208.65c-13.03,0-23.62,10.6-23.62,23.63v5.37l7-4.04v-1.33c0-9.17,7.46-16.63,16.63-16.63c9.16,0,16.63,7.46,16.63,16.63v1.33l7,4.04v-5.37C273.62,219.25,263.02,208.65,250,208.65z"/>
+        <polygon fill="#040B28" points="257.37,273.56 242.63,273.56 248,255.24 252,255.24"/>
+        <circle fill="#040B28" cx="250" cy="254.83" r="5.69"/>
+    </svg>
+            </div>
+            <div class="cover-brand">JARWIS</div>
+            <div class="cover-tagline">AI-Powered Security Testing Platform</div>
+            
+            <div class="cover-title">Security Assessment Report</div>
+            <div class="cover-subtitle">AWS Cloud Infrastructure Security Assessment</div>
+            
+            <div class="cover-info-box">
+                <div class="cover-info-row">
+                    <span class="cover-info-label">Target</span>
+                    <span class="cover-info-value">AWS Account: 123456789012 (us-east-1)</span>
+                </div>
+                <div class="cover-info-row">
+                    <span class="cover-info-label">Report ID</span>
+                    <span class="cover-info-value">JAR-20260104_192929-48D573</span>
+                </div>
+                <div class="cover-info-row">
+                    <span class="cover-info-label">Date</span>
+                    <span class="cover-info-value">January 04, 2026</span>
+                </div>
+                <div class="cover-info-row">
+                    <span class="cover-info-label">Total Findings</span>
+                    <span class="cover-info-value">7</span>
+                </div>
+                <div class="cover-info-row">
+                    <span class="cover-info-label">Risk Level</span>
+                    <span class="cover-info-value">CRITICAL</span>
+                </div>
+            </div>
+        </div>
+        <div class="cover-confidential">CONFIDENTIAL</div>
+    </div>
+    
+    <!-- ============================================
+         TABLE OF CONTENTS
+         ============================================ -->
+    <div class="toc-page">
+        <div class="page-header">
+            <div class="page-header-left">
+                <div class="page-header-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+                <div class="page-header-brand">JARWIS</div>
+            </div>
+            <div class="page-header-right">
+                JAR-20260104_192929-48D573<br>
+                January 04, 2026
+            </div>
+        </div>
+        
+        <div class="toc-title">Table of Contents</div>
+        
+        <div class="toc-section">
+            <div class="toc-section-title">1. Executive Summary</div>
+            <div class="toc-item"><span>Overview & Key Findings</span></div>
+            <div class="toc-item"><span>Risk Assessment Summary</span></div>
+            <div class="toc-item"><span>Recommendations</span></div>
+        </div>
+        
+        <div class="toc-section">
+            <div class="toc-section-title">2. Detailed Findings</div>
+            <div class="toc-item"><span>1. [CRITICAL] S3 Bucket with Public Access</span></div>
+<div class="toc-item"><span>2. [CRITICAL] IAM User with Admin Access and No MFA</span></div>
+<div class="toc-item"><span>3. [HIGH] Security Group Allows Unrestricted SSH Access</span></div>
+<div class="toc-item"><span>4. [HIGH] RDS Instance Without Encryption</span></div>
+<div class="toc-item"><span>5. [MEDIUM] CloudTrail Logging Disabled</span></div>
+<div class="toc-item"><span>6. [MEDIUM] Lambda Function Using Outdated Runtime</span></div>
+<div class="toc-item"><span>7. [LOW] EBS Volumes Not Encrypted by Default</span></div>
+        </div>
+        
+        <div class="toc-section">
+            <div class="toc-section-title">3. Methodology</div>
+            <div class="toc-item"><span>Testing Approach</span></div>
+            <div class="toc-item"><span>Tools & Techniques</span></div>
+            <div class="toc-item"><span>Scope & Limitations</span></div>
+        </div>
+        
+        <div class="toc-section">
+            <div class="toc-section-title">4. Appendix</div>
+            <div class="toc-item"><span>Discovered Endpoints</span></div>
+            <div class="toc-item"><span>Disclaimer & Legal</span></div>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         EXECUTIVE SUMMARY
+         ============================================ -->
+    <div class="exec-summary-page">
+        <div class="page-header">
+            <div class="page-header-left">
+                <div class="page-header-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+                <div class="page-header-brand">JARWIS</div>
+            </div>
+            <div class="page-header-right">
+                JAR-20260104_192929-48D573<br>
+                January 04, 2026
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <div class="section-number">1</div>
+            <div class="section-title">Executive Summary</div>
+        </div>
+        
+        <div class="exec-summary-box">
+            <div class="exec-summary-title">Assessment Overview</div>
+            <div class="exec-summary-text">
+                <p><strong>Assessment Objective:</strong> Jarwis AGI Security Platform conducted a comprehensive AWS Cloud Infrastructure Security Assessment of the target environment to identify security vulnerabilities, assess risk exposure, and provide actionable remediation guidance.</p>
+
+<p><strong>Scope:</strong> AWS Account: 123456789012 (us-east-1)</p>
+
+<p><strong>Key Findings:</strong> A total of <strong>7 security issues</strong> were identified during this assessment:</p>
+<ul style="margin: 10px 0 10px 20px; list-style: disc;">
+    <li><strong style="color: #dc2626;">2 Critical</strong> - Require immediate attention</li>
+    <li><strong style="color: #ea580c;">2 High</strong> - Urgent remediation recommended</li>
+    <li><strong style="color: #d97706;">2 Medium</strong> - Should be addressed promptly</li>
+    <li><strong style="color: #059669;">1 Low</strong> - Address in regular maintenance cycle</li>
+</ul>
+
+<p><strong>Overall Risk Level: CRITICAL</strong></p>
+<p>Immediate action is required. Critical vulnerabilities have been identified that could lead to complete system compromise, data breach, or significant business impact.</p>
+
+<p><strong>Testing Methodology:</strong> This assessment utilized Jarwis AGI-powered security testing covering the OWASP Top 10 (2021) vulnerability categories. Testing included authenticated and unauthenticated testing across 12 discovered endpoints.</p>
+
+<p><strong>Recommendations:</strong> It is recommended that all Critical and High severity findings be remediated within 7 days. Medium severity findings should be addressed within 30 days. Detailed remediation guidance is provided for each finding in this report.</p>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card stat-critical">
+                <div class="stat-value">2</div>
+                <div class="stat-label">Critical</div>
+            </div>
+            <div class="stat-card stat-high">
+                <div class="stat-value">2</div>
+                <div class="stat-label">High</div>
+            </div>
+            <div class="stat-card stat-medium">
+                <div class="stat-value">2</div>
+                <div class="stat-label">Medium</div>
+            </div>
+            <div class="stat-card stat-low">
+                <div class="stat-value">1</div>
+                <div class="stat-label">Low</div>
+            </div>
+            <div class="stat-card stat-info">
+                <div class="stat-value">0</div>
+                <div class="stat-label">Info</div>
+            </div>
+        </div>
+        
+        <div class="risk-meter-container">
+            <div class="risk-meter-header">
+                <div class="risk-meter-title">Overall Risk Score</div>
+                <div class="risk-meter-score" style="color: #dc2626">99/100</div>
+            </div>
+            <div class="risk-meter-bar">
+                <div class="risk-meter-fill" style="width: 99%; background: linear-gradient(90deg, #dc2626, #ea580c);"></div>
+            </div>
+            <div class="risk-meter-labels">
+                <span>Low Risk (0-25)</span>
+                <span>Medium (26-50)</span>
+                <span>High (51-75)</span>
+                <span>Critical (76-100)</span>
+            </div>
+        </div>
+        
+        <div class="key-findings-box">
+            <div class="key-findings-title">Ã¢Å¡Â Ã¯Â¸Â Key Findings Requiring Immediate Attention</div>
+            <div class="key-finding-item"><span class="key-finding-bullet">Ã¢â€”Â</span><span><strong>[CRITICAL]</strong> S3 Bucket with Public Access</span></div>
+<div class="key-finding-item"><span class="key-finding-bullet">Ã¢â€”Â</span><span><strong>[CRITICAL]</strong> IAM User with Admin Access and No MFA</span></div>
+<div class="key-finding-item"><span class="key-finding-bullet">Ã¢â€”Â</span><span><strong>[HIGH]</strong> Security Group Allows Unrestricted SSH Access</span></div>
+<div class="key-finding-item"><span class="key-finding-bullet">Ã¢â€”Â</span><span><strong>[HIGH]</strong> RDS Instance Without Encryption</span></div>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         DETAILED FINDINGS
+         ============================================ -->
+    <div class="findings-page page-break">
+        <div class="page-header">
+            <div class="page-header-left">
+                <div class="page-header-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+                <div class="page-header-brand">JARWIS</div>
+            </div>
+            <div class="page-header-right">
+                JAR-20260104_192929-48D573<br>
+                January 04, 2026
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <div class="section-number">2</div>
+            <div class="section-title">Detailed Findings</div>
+        </div>
+        
+        
+<div class="finding finding-severity-critical avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-001</div>
+            <div class="finding-title">S3 Bucket with Public Access</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A01 - Broken Access Control</span>
+                <span class="tag tag-cwe">CWE-284</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-critical">CRITICAL</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">An S3 bucket containing sensitive data is publicly accessible to anyone on the internet without authentication.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>s3://company-prod-data.s3.amazonaws.com</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>ACL</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">Bucket ACL allows &#39;s3:GetObject&#39; for Principal: &#39;*&#39;</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis scanned the S3 bucket permissions and found that the bucket ACL allows public read access. Any unauthenticated user can list and download objects from this bucket.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">AWS CLI: aws s3api get-bucket-acl --bucket company-prod-data</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">{
+  &quot;Grants&quot;: [{
+    &quot;Grantee&quot;: {&quot;Type&quot;: &quot;Group&quot;, &quot;URI&quot;: &quot;http://acs.amazonaws.com/groups/global/AllUsers&quot;},
+    &quot;Permission&quot;: &quot;READ&quot;
+  }]
+}</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Remove public access from the bucket. Enable S3 Block Public Access at the account level. Use bucket policies with explicit deny for public access. Enable CloudTrail logging for S3.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-critical avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-002</div>
+            <div class="finding-title">IAM User with Admin Access and No MFA</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A05 - Security Misconfiguration</span>
+                <span class="tag tag-cwe">CWE-308</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-critical">CRITICAL</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">An IAM user has AdministratorAccess policy attached without MFA enabled, posing a significant security risk if credentials are compromised.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>arn:aws:iam::123456789012:user/admin-user</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>IAM</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">User has AdministratorAccess policy, MFADevices: []</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis analyzed IAM configurations and found a user with full administrator access without multi-factor authentication enabled. Compromised credentials would give attackers complete control.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">IAM Security Audit</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">User: admin-user
+Policies: [AdministratorAccess]
+MFA: DISABLED
+Access Keys: 2 (both active)
+Last Login: Never (programmatic access only)</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Enable MFA for all IAM users, especially those with admin access. Implement least privilege principle. Use IAM roles instead of long-term credentials where possible.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-high avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-003</div>
+            <div class="finding-title">Security Group Allows Unrestricted SSH Access</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A05 - Security Misconfiguration</span>
+                <span class="tag tag-cwe">CWE-284</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-high">HIGH</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">A security group allows SSH access (port 22) from any IP address (0.0.0.0/0), exposing EC2 instances to brute force attacks.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>sg-0abc123def456789</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>SecurityGroup</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">Inbound rule: TCP 22 from 0.0.0.0/0</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis scanned security group configurations and found an inbound rule allowing SSH from any IP. This exposes instances to brute force attacks and exploitation of SSH vulnerabilities.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">Security Group Analysis: sg-0abc123def456789</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">Inbound Rules:
+- TCP 22: 0.0.0.0/0 (SSH - OPEN TO WORLD)
+- TCP 443: 0.0.0.0/0 (HTTPS)
+- TCP 3306: 0.0.0.0/0 (MySQL - OPEN TO WORLD)</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Restrict SSH access to known IP ranges. Use AWS Systems Manager Session Manager instead of direct SSH. Implement VPN or bastion host architecture.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-high avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-004</div>
+            <div class="finding-title">RDS Instance Without Encryption</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A02 - Cryptographic Failures</span>
+                <span class="tag tag-cwe">CWE-311</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-high">HIGH</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">A production RDS database instance is not using encryption at rest, potentially exposing sensitive data if storage is compromised.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>arn:aws:rds:us-east-1:123456789012:db:prod-database</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>StorageEncrypted</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">StorageEncrypted: false, Engine: mysql</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis analyzed RDS configurations and found a production database without encryption at rest enabled. Data on the underlying storage could be accessed if physical security is breached.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">RDS Configuration Analysis</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">DBInstance: prod-database
+Engine: mysql 8.0
+StorageEncrypted: false
+PubliclyAccessible: false
+MultiAZ: false
+BackupRetention: 7 days</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Enable encryption at rest for RDS instances. Note: This requires creating a new encrypted instance and migrating data. Use AWS KMS customer-managed keys for key rotation.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-medium avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-005</div>
+            <div class="finding-title">CloudTrail Logging Disabled</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A09 - Logging Failures</span>
+                <span class="tag tag-cwe">CWE-778</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-medium">MEDIUM</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">AWS CloudTrail is not enabled for the account, preventing visibility into API calls and security events.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>AWS Account: 123456789012</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>CloudTrail</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">No CloudTrail trails configured for the account</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis checked CloudTrail configuration and found no trails enabled. Without CloudTrail, there is no audit log of API calls, making incident investigation impossible.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">CloudTrail Configuration Check</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">{
+  &quot;trailList&quot;: []
+}</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Enable CloudTrail in all regions. Configure a multi-region trail with log file validation. Store logs in a separate, protected S3 bucket with versioning enabled.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-medium avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-006</div>
+            <div class="finding-title">Lambda Function Using Outdated Runtime</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A06 - Vulnerable Components</span>
+                <span class="tag tag-cwe">CWE-1104</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-medium">MEDIUM</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">Lambda functions are using deprecated runtime versions with known security vulnerabilities.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>arn:aws:lambda:us-east-1:123456789012:function:data-processor</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>Runtime</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">Runtime: python3.6 (deprecated, end of support: Dec 2021)</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis analyzed Lambda configurations and found functions using deprecated Python 3.6 runtime. This runtime no longer receives security patches, exposing the function to known vulnerabilities.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">Lambda Runtime Analysis</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">Deprecated Runtimes Found:
+- data-processor: python3.6
+- image-resizer: nodejs12.x
+- auth-handler: python3.7</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Update Lambda functions to the latest supported runtime (python3.11 or higher). Test thoroughly before deployment. Set up automated runtime version monitoring.</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="finding finding-severity-low avoid-break" style="margin-bottom: 25px;">
+    <div class="finding-header">
+        <div>
+            <div class="finding-id">CLD-007</div>
+            <div class="finding-title">EBS Volumes Not Encrypted by Default</div>
+            <div class="finding-tags">
+                <span class="tag tag-category">A02 - Cryptographic Failures</span>
+                <span class="tag tag-cwe">CWE-311</span>
+            </div>
+        </div>
+        <span class="severity-badge severity-low">LOW</span>
+    </div>
+    
+    <div class="finding-body">
+        <div class="finding-section">
+            <div class="finding-section-title">Description</div>
+            <div class="finding-description">The AWS account does not have default EBS encryption enabled, requiring manual encryption for each volume.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Technical Details</div>
+            <table class="detail-table">
+                <tr><th>URL</th><td>AWS Account Settings</td></tr>
+                <tr><th>Method</th><td>AWS_API</td></tr>
+                <tr><th>Parameter</th><td>EBS</td></tr>
+            </table>
+        </div>
+        
+        <div class="finding-section">
+            <div class="finding-section-title">Evidence / Proof of Concept</div>
+            <div class="evidence-box">EbsEncryptionByDefault: false</div>
+        </div>
+        
+        <div class="ai-analysis-box">
+            <div class="ai-analysis-title">Ã°Å¸Â¤â€“ Jarwis AGI Analysis</div>
+            <div class="ai-analysis-text">Jarwis checked account-level EBS settings and found default encryption is disabled. This means new EBS volumes will be unencrypted unless explicitly specified.</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Request</div>
+            <div class="http-content">EBS Default Encryption Check</div>
+        </div>
+        
+        <div class="finding-section">
+            <div class="http-title">HTTP Response</div>
+            <div class="http-content">{
+  &quot;EbsEncryptionByDefault&quot;: false
+}</div>
+        </div>
+        
+        <div class="remediation-box">
+            <div class="remediation-title">Ã°Å¸â€ºÂ¡Ã¯Â¸Â Remediation</div>
+            <div class="remediation-text">Enable default EBS encryption at the account level for each region. Use AWS KMS for key management. Audit existing unencrypted volumes and migrate data.</div>
+        </div>
+    </div>
+</div>
+
+    </div>
+    
+    <!-- ============================================
+         METHODOLOGY
+         ============================================ -->
+    <div class="page page-break">
+        <div class="page-header">
+            <div class="page-header-left">
+                <div class="page-header-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+                <div class="page-header-brand">JARWIS</div>
+            </div>
+            <div class="page-header-right">
+                JAR-20260104_192929-48D573<br>
+                January 04, 2026
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <div class="section-number">3</div>
+            <div class="section-title">Methodology</div>
+        </div>
+        
+        <div class="methodology-box">
+            <div class="methodology-title">Testing Approach</div>
+            <div class="methodology-steps">
+                <div class="methodology-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Reconnaissance & Discovery</div>
+                        <div class="step-desc">Automated crawling and endpoint discovery using Jarwis Browser Controller with Playwright engine. Identified all accessible URLs, forms, API endpoints, and assets.</div>
+                    </div>
+                </div>
+                <div class="methodology-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Pre-Authentication Testing</div>
+                        <div class="step-desc">Security testing of publicly accessible surfaces including login forms, registration flows, password reset functionality, and unauthenticated API endpoints.</div>
+                    </div>
+                </div>
+                <div class="methodology-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Authentication Analysis</div>
+                        <div class="step-desc">Examination of authentication mechanisms, session management, token handling, and credential storage practices.</div>
+                    </div>
+                </div>
+                <div class="methodology-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Post-Authentication Testing</div>
+                        <div class="step-desc">Authenticated security testing including IDOR, CSRF, privilege escalation, and access control bypass attempts.</div>
+                    </div>
+                </div>
+                <div class="methodology-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <div class="step-title">AI-Powered Analysis</div>
+                        <div class="step-desc">Jarwis AGI engine analyzed all findings to eliminate false positives, determine exploitation likelihood, and provide contextual remediation recommendations.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="methodology-box">
+            <div class="methodology-title">OWASP Top 10 Coverage</div>
+            <p style="font-size: 9pt; color: #6b7280; margin-bottom: 15px;">This assessment covers the OWASP Top 10 (2021) security risks:</p>
+            <table class="detail-table">
+                <tr><th>Code</th><td>A01: Broken Access Control</td></tr>
+                <tr><th>Code</th><td>A02: Cryptographic Failures</td></tr>
+                <tr><th>Code</th><td>A03: Injection (SQL, XSS, Command, etc.)</td></tr>
+                <tr><th>Code</th><td>A04: Insecure Design</td></tr>
+                <tr><th>Code</th><td>A05: Security Misconfiguration</td></tr>
+                <tr><th>Code</th><td>A06: Vulnerable and Outdated Components</td></tr>
+                <tr><th>Code</th><td>A07: Identification and Authentication Failures</td></tr>
+                <tr><th>Code</th><td>A08: Software and Data Integrity Failures</td></tr>
+                <tr><th>Code</th><td>A09: Security Logging and Monitoring Failures</td></tr>
+                <tr><th>Code</th><td>A10: Server-Side Request Forgery (SSRF)</td></tr>
+            </table>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         APPENDIX
+         ============================================ -->
+    <div class="page page-break">
+        <div class="page-header">
+            <div class="page-header-left">
+                <div class="page-header-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+                <div class="page-header-brand">JARWIS</div>
+            </div>
+            <div class="page-header-right">
+                JAR-20260104_192929-48D573<br>
+                January 04, 2026
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <div class="section-number">4</div>
+            <div class="section-title">Appendix</div>
+        </div>
+        
+        <h3 style="font-size: 14pt; margin: 20px 0 15px 0; color: #1a1a2e;">A. Discovered Endpoints</h3>
+        <p style="font-size: 9pt; color: #6b7280; margin-bottom: 15px;">The following endpoints were discovered during the reconnaissance phase:</p>
+        
+        <table class="endpoints-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Endpoint / Component</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>1</td><td>S3 Buckets (15)</td></tr>
+<tr><td>2</td><td>EC2 Instances (23)</td></tr>
+<tr><td>3</td><td>RDS Databases (5)</td></tr>
+<tr><td>4</td><td>Lambda Functions (47)</td></tr>
+<tr><td>5</td><td>IAM Users (12)</td></tr>
+<tr><td>6</td><td>IAM Roles (35)</td></tr>
+<tr><td>7</td><td>Security Groups (28)</td></tr>
+<tr><td>8</td><td>VPCs (3)</td></tr>
+<tr><td>9</td><td>CloudFront (4)</td></tr>
+<tr><td>10</td><td>API Gateway (8)</td></tr>
+<tr><td>11</td><td>DynamoDB Tables (7)</td></tr>
+<tr><td>12</td><td>EKS Clusters (2)</td></tr>
+            </tbody>
+        </table>
+        
+        <div class="disclaimer-box" style="margin-top: 30px;">
+            <div class="disclaimer-title">Ã¢Å¡Â Ã¯Â¸Â Important Disclaimer</div>
+            <div class="disclaimer-text">
+                <p>This security assessment report is provided for informational purposes only. The findings contained herein represent the security posture of the target application at the time of testing.</p>
+                <p>Jarwis AGI Security Platform and its operators do not guarantee the completeness or accuracy of this assessment. Security is a continuous process, and new vulnerabilities may be discovered after this report is generated.</p>
+                <p>The recipient of this report is responsible for implementing the recommended remediation measures and verifying their effectiveness.</p>
+            </div>
+        </div>
+        
+        <div class="legal-box">
+            <div class="legal-title">Terms of Use</div>
+            <div class="legal-text">
+                <p>This report is confidential and intended solely for the authorized recipient. Unauthorized distribution, reproduction, or use of this report is strictly prohibited.</p>
+                <p>All security testing was conducted within the agreed scope and with proper authorization. Any actions taken based on this report are the sole responsibility of the recipient.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ============================================
+         FOOTER
+         ============================================ -->
+    <div class="page">
+        <div class="report-footer">
+            <div class="footer-logo"><svg viewBox="0 0 500 500" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="logoGradSmall" x1="250" y1="111.235" x2="250" y2="383.576" gradientUnits="userSpaceOnUse">
+                <stop offset="0" style="stop-color:#00C19F"/>
+                <stop offset="1" style="stop-color:#256AD1"/>
+            </linearGradient>
+        </defs>
+        <path fill="url(#logoGradSmall)" d="M343.73,166.48l-12.75-7.4L250,112.35l-25.51,14.73l-12.75,7.33l-80.97,46.8V318.8l25.5,14.72l12.75,7.4l12.75,7.33l12.75,7.39L250,387.65l25.51-14.73l12.75-7.4l12.75-7.33l12.75-7.33l55.47-32.07V181.21L343.73,166.48z M250,127.08l80.97,46.73v14.73l0,0v14.73l0,0v65.29l-12.75,7.14v-94.49l-12.75-7.4l-55.47-32l-12.75-7.33L250,127.08z M250,314.01L194.53,282V218L250,185.99L305.47,218v64.84L250,314.01z M143.53,188.54l80.97-46.73l12.75,7.33h0.07l12.69,7.39l55.47,32.01v14.72l-55.47-32l-12.75-7.4l-12.75-7.33l-12.75,7.4h-0.07l-55.41,32l-12.75,7.4V188.54z M143.53,311.47V218l12.75-7.33l12.75-7.4l55.41-32l12.81,7.4l-55.47,32L169.03,218l-12.75,7.39v93.41L143.53,311.47z M250,372.92l-55.47-32l-12.75-7.4l-12.75-7.33v-93.47l12.75-7.39v93.47v0.06l12.75,7.33L250,358.2l12.75,7.33L250,372.92z M275.51,358.2l-12.75-7.4L250,343.47l-55.47-32v-14.73l55.47,32l12.75,7.4l12.75,7.33l12.75,7.4L275.51,358.2z M356.47,311.47l-55.47,32l-12.75-7.33l55.47-32v-0.07l12.75-7.33V311.47z M356.47,282l-12.75,7.33l-12.75,7.4l-55.47,32l-12.63-7.27l68.09-38.32l12.75-7.14l12.75-7.2V282z M356.47,254.21l-12.75,7.13v-65.41v-14.72l12.75,7.33V254.21z"/>
+        <polygon fill="#00C598" points="250,229.09 220.91,245.88 220.91,279.44 250,296.23 279.09,279.88 279.09,245.88"/>
+    </svg></div>
+            <div class="footer-text">
+                Generated by <span class="footer-brand">JARWIS</span> AI Security Testing Platform<br>
+                January 04, 2026 Ã¢â‚¬Â¢ Report ID: JAR-20260104_192929-48D573<br>
+                <br>
+                Ã‚Â© 2026 Jarwis Technologies. All rights reserved.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

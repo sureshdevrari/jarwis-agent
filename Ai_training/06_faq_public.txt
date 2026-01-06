@@ -1,0 +1,8 @@
+Q: What is Jarwis AGI?
+A: Jarwis AGI is a security engineering platform that helps teams build secure software faster.
+
+Q: Who is Jarwis AGI for?
+A: Engineering, security, and platform teams.
+
+Q: Is Jarwis replacing engineers?
+A: No. Jarwis supports engineers, not replaces them.

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarwis Mobile Security Report - 20260103_001524_Instagram_410.1.0.63.71_APKPure_f29a7919.apk</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e0e0e0; 
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+        .header h1 { color: white; font-size: 2em; margin-bottom: 10px; }
+        .header p { color: rgba(255,255,255,0.9); }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px; }
+        .meta-item { background: rgba(255,255,255,0.1); padding: 10px 15px; border-radius: 8px; }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: #1a1a2e;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            border-left: 4px solid;
+        }
+        .summary-card.critical { border-color: #ff4757; }
+        .summary-card.high { border-color: #ffa502; }
+        .summary-card.medium { border-color: #ffd32a; }
+        .summary-card.low { border-color: #3498db; }
+        .summary-card.info { border-color: #2ecc71; }
+        .summary-card h2 { font-size: 2.5em; margin-bottom: 5px; }
+        .summary-card.critical h2 { color: #ff4757; }
+        .summary-card.high h2 { color: #ffa502; }
+        .summary-card.medium h2 { color: #ffd32a; }
+        .summary-card.low h2 { color: #3498db; }
+        .summary-card.info h2 { color: #2ecc71; }
+        .section { background: #1a1a2e; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
+        .section h3 { color: #667eea; margin-bottom: 15px; font-size: 1.3em; }
+        .finding {
+            background: #16213e;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        .finding.critical { border-color: #ff4757; }
+        .finding.high { border-color: #ffa502; }
+        .finding.medium { border-color: #ffd32a; }
+        .finding.low { border-color: #3498db; }
+        .finding.info { border-color: #2ecc71; }
+        .finding-header { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+        .finding-title { font-weight: bold; font-size: 1.1em; }
+        .severity-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .severity-badge.critical { background: #ff4757; color: white; }
+        .severity-badge.high { background: #ffa502; color: #333; }
+        .severity-badge.medium { background: #ffd32a; color: #333; }
+        .severity-badge.low { background: #3498db; color: white; }
+        .severity-badge.info { background: #2ecc71; color: white; }
+        .finding-desc { color: #aaa; margin-bottom: 10px; }
+        .finding-meta { display: flex; gap: 20px; font-size: 0.9em; color: #888; margin-bottom: 10px; }
+        .finding-file, .finding-remediation, .finding-poc { 
+            font-size: 0.9em; 
+            margin-top: 10px;
+            padding: 10px;
+            background: #0f0f1a;
+            border-radius: 6px;
+        }
+        .finding-poc code { color: #ff6b6b; }
+        .executive-summary { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .executive-summary h3 { color: #fff; margin-bottom: 15px; }
+        .executive-summary p { line-height: 1.8; }
+        .top-risks { margin-top: 20px; }
+        .top-risks li { 
+            padding: 10px 15px;
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+            border-radius: 6px;
+            list-style: none;
+        }
+        .recommendation {
+            background: #16213e;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        .badge { 
+            display: inline-block;
+            padding: 3px 10px;
+            background: #667eea;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-top: 10px;
+        }
+        /* Endpoints Table Styles */
+        .endpoints-section { background: #1a1a2e; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
+        .attack-surface-summary { 
+            display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; 
+        }
+        .attack-surface-summary .stat {
+            background: #16213e;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        .attack-surface-summary .stat.vulnerable-stat {
+            border-left-color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+        .endpoints-table { 
+            width: 100%; 
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .endpoints-table th, .endpoints-table td { 
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .endpoints-table th { 
+            background: #0f0f1a;
+            color: #667eea;
+            font-weight: 600;
+        }
+        .endpoints-table tr:hover { background: rgba(102, 126, 234, 0.1); }
+        .endpoints-table tr.vulnerable { background: rgba(255, 71, 87, 0.1); }
+        .endpoints-table .path { font-family: 'Consolas', monospace; color: #4ecdc4; }
+        .method { 
+            padding: 3px 8px; 
+            border-radius: 4px; 
+            font-size: 0.75em;
+            font-weight: bold;
+        }
+        .method.get { background: #2ecc71; color: #fff; }
+        .method.post { background: #3498db; color: #fff; }
+        .method.put { background: #f39c12; color: #fff; }
+        .method.delete { background: #e74c3c; color: #fff; }
+        .method.patch { background: #9b59b6; color: #fff; }
+        .badge.auth { background: #2ecc71; }
+        .badge.no-auth { background: #e74c3c; }
+        .safe { color: #2ecc71; }
+        .risk-score { 
+            font-weight: bold;
+            text-align: center;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        @media (max-width: 768px) {
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .endpoints-table { font-size: 0.85em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Ã°Å¸â€ºÂ¡Ã¯Â¸Â Jarwis Mobile Security Report</h1>
+            <p>Comprehensive security assessment for 20260103_001524_Instagram_410.1.0.63.71_APKPure_f29a7919.apk</p>
+            <div class="meta-grid">
+                <div class="meta-item"><strong>Platform:</strong> ANDROID</div>
+                <div class="meta-item"><strong>Scan ID:</strong> MOBILE-20260103_001525</div>
+                <div class="meta-item"><strong>Total Findings:</strong> 3</div>
+                <div class="meta-item"><strong>Generated:</strong> 2026-01-03 00:16:11</div>
+            </div>
+        </div>
+        
+        <div class="summary-grid">
+            <div class="summary-card critical"><h2>0</h2><p>Critical</p></div>
+            <div class="summary-card high"><h2>0</h2><p>High</p></div>
+            <div class="summary-card medium"><h2>3</h2><p>Medium</p></div>
+            <div class="summary-card low"><h2>0</h2><p>Low</p></div>
+            <div class="summary-card info"><h2>0</h2><p>Info</p></div>
+        </div>
+        
+        
+        
+        
+        
+        
+        
+        <div class="section">
+            <h3>Ã°Å¸â€œâ€¹ Security Findings (3)</h3>
+            
+        <div class="finding medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">Application Allows Backup</span>
+            </div>
+            <p class="finding-desc">The app allows ADB backup which can expose application data including databases, shared preferences, and cached data.</p>
+            <div class="finding-meta">
+                <span><strong>Category:</strong> configuration</span>
+                <span><strong>OWASP:</strong> M2</span>
+            </div>
+            
+            <div class="finding-remediation"><strong>Remediation:</strong> Set android:allowBackup='false' in manifest</div>
+            <div class="finding-poc"><strong>PoC:</strong> <code>adb backup -apk -shared -all -f backup.ab <package></code></div>
+        </div>
+        
+        <div class="finding medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">Cleartext Traffic Allowed</span>
+            </div>
+            <p class="finding-desc">The app allows unencrypted HTTP traffic. Sensitive data could be intercepted by attackers on the same network.</p>
+            <div class="finding-meta">
+                <span><strong>Category:</strong> network</span>
+                <span><strong>OWASP:</strong> M3</span>
+            </div>
+            
+            <div class="finding-remediation"><strong>Remediation:</strong> Set android:usesCleartextTraffic='false' and implement Network Security Config</div>
+            <div class="finding-poc"><strong>PoC:</strong> <code>Configure device proxy and intercept with mitmproxy/Burp</code></div>
+        </div>
+        
+        <div class="finding medium">
+            <div class="finding-header">
+                <span class="severity-badge medium">MEDIUM</span>
+                <span class="finding-title">Outdated Target SDK</span>
+            </div>
+            <p class="finding-desc">Target SDK  is outdated and may lack security features.</p>
+            <div class="finding-meta">
+                <span><strong>Category:</strong> M1</span>
+                <span><strong>OWASP:</strong> N/A</span>
+            </div>
+            <div class="finding-file"><strong>File:</strong> AndroidManifest.xml</div>
+            
+            
+        </div>
+        
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Jarwis AGI Penetration Testing Framework</p>
+            <p>Ã°Å¸â€â€™ Confidential Security Report</p>
+        </div>
+    </div>
+</body>
+</html>

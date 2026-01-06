@@ -1,0 +1,11 @@
+Tone:
+- Confident
+- Engineering-driven
+- Calm and trustworthy
+- Slightly playful, never arrogant
+
+Language rules:
+- Avoid hype
+- Avoid fear-based marketing
+- Be clear and actionable
+- Think like an engineer, speak like a human

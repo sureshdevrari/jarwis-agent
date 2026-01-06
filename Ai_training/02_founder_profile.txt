@@ -1,0 +1,10 @@
+Founder: Suresh Devrari
+
+Suresh Devrari is a security-focused technologist and entrepreneur.
+He believes security should be simple, practical, and integrated into real engineering workflows.
+
+He focuses on:
+- Security engineering mindset
+- Practical AI systems
+- Building tools developers actually trust
+- Long-term scalable security thinking

@@ -1,0 +1,67 @@
+{
+  "scan_id": "MOBILE-20260102_172959",
+  "app_name": "20260102_172959_Instagram_410.1.0.63.71_APKPure_4d69d566.apk",
+  "platform": "android",
+  "findings": [
+    {
+      "id": "ANDROID-0001",
+      "category": "configuration",
+      "severity": "medium",
+      "title": "Application Allows Backup",
+      "description": "The app allows ADB backup which can expose application data including databases, shared preferences, and cached data.",
+      "affected_component": "AndroidManifest.xml",
+      "attack_vector": "adb backup -f backup.ab <package_name>",
+      "poc": "adb backup -apk -shared -all -f backup.ab <package>",
+      "remediation": "Set android:allowBackup='false' in manifest",
+      "owasp_category": "M2"
+    },
+    {
+      "id": "ANDROID-0002",
+      "category": "network",
+      "severity": "medium",
+      "title": "Cleartext Traffic Allowed",
+      "description": "The app allows unencrypted HTTP traffic. Sensitive data could be intercepted by attackers on the same network.",
+      "affected_component": "AndroidManifest.xml",
+      "attack_vector": "MITM proxy to intercept HTTP traffic",
+      "poc": "Configure device proxy and intercept with mitmproxy/Burp",
+      "remediation": "Set android:usesCleartextTraffic='false' and implement Network Security Config",
+      "owasp_category": "M3"
+    },
+    {
+      "id": "M1-SDK-001",
+      "category": "M1",
+      "severity": "medium",
+      "title": "Outdated Target SDK",
+      "description": "Target SDK  is outdated and may lack security features.",
+      "file_path": "AndroidManifest.xml",
+      "line_number": 0,
+      "code_snippet": "",
+      "evidence": "targetSdkVersion=",
+      "recommendation": "Update targetSdkVersion to 33 or higher."
+    }
+  ],
+  "auth_info": {
+    "enabled": false,
+    "auth_type": "username_password",
+    "email": "",
+    "username": "zerotrust_boy",
+    "phone": ""
+  },
+  "executive_summary": "",
+  "top_risks": [],
+  "endpoints": [],
+  "attack_surface": {
+    "total_endpoints": 0,
+    "get_requests": 0,
+    "post_requests": 0,
+    "authenticated_endpoints": 0,
+    "unauthenticated_endpoints": 0,
+    "auth_endpoints": 0,
+    "admin_endpoints": 0,
+    "payment_endpoints": 0,
+    "user_data_endpoints": 0,
+    "vulnerable_endpoints": 0,
+    "base_urls": [],
+    "high_risk_areas": []
+  }
+}
