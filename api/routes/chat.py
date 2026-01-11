@@ -25,6 +25,7 @@ from database.dependencies import get_current_user, get_current_user_optional
 from database.security import (
     FileUploadValidator, InputValidator, get_client_ip, security_store
 )
+from shared.ai_config import get_ai_config
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +39,20 @@ logger.info("Chat module loaded - chatbot will be initialized on first request")
 
 
 def _load_chat_config():
-    """Load AI config from config.yaml - always reload fresh"""
+    """Load AI config from centralized config"""
     global _chatbot_config
     if _chatbot_config:
         return _chatbot_config
     
-    try:
-        import yaml
-        import os
-        config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'config.yaml')
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        _chatbot_config = {'ai': config.get('ai', {})}
-        logger.info(f"Loaded chat config: provider={config.get('ai', {}).get('provider')}, model={config.get('ai', {}).get('model')}")
-    except Exception as e:
-        logger.warning(f"Could not load config: {e}, using defaults")
-        import os
-        _chatbot_config = {
-            'ai': {
-                'provider': 'gemini',
-                'model': 'gemini-2.5-flash',
-                'api_key': os.environ.get('GEMINI_API_KEY', '')
-            }
+    ai_config = get_ai_config()
+    _chatbot_config = {
+        'ai': {
+            'provider': ai_config.provider,
+            'model': ai_config.model,
+            'api_key': ai_config.api_key
         }
+    }
+    logger.info(f"Loaded chat config: provider={ai_config.provider}, model={ai_config.model}")
     return _chatbot_config
 
 

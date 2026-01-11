@@ -42,6 +42,7 @@ from database.security import (
     get_security_headers, get_client_ip, security_store, InputValidator
 )
 from api.routes import api_router
+from shared.ai_config import get_ai_config
 
 logger = logging.getLogger(__name__)
 
@@ -1151,8 +1152,7 @@ async def run_scan_async(config: ScanConfig):
             },
             'ai': {
                 'enabled': True,
-                'provider': 'gemini',
-                'model': 'gemini-2.5-flash'
+                # Uses centralized config from shared/ai_config.py
             },
             'attacks': {
                 'enabled': {

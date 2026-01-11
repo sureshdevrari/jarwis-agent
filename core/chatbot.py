@@ -201,62 +201,48 @@ Remember: You are Jarwis AGI in Savi 3.1 Thinking mode. Provide comprehensive se
         self._init_client()
     
     def _init_client(self):
-        """Initialize the AI client based on provider"""
-        # Gemini provider
-        if self.provider in ["gemini", "google"]:
-            if not GEMINI_AVAILABLE:
-                logger.warning("google-generativeai package not installed")
-                self._available = False
-                return
+        """Initialize Gemini AI client"""
+        if not GEMINI_AVAILABLE:
+            logger.warning("google-generativeai package not installed")
+            self._available = False
+            return
+        try:
+            genai.configure(api_key=self.api_key)
+            # Safety settings - allow security discussions
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            # Suru 1.1 model (gemini-2.5-flash) - Quick responses for Pro users
+            self._gemini_model = genai.GenerativeModel(
+                model_name=self.model,
+                safety_settings=safety_settings
+            )
+            # Savi 3.1 Thinking model (gemini-2.5-pro) - Deep analysis for Enterprise
             try:
-                genai.configure(api_key=self.api_key)
-                # Safety settings - allow security discussions
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
-                # Suru 1.1 model (gemini-2.5-flash) - Quick responses for Pro users
-                self._gemini_model = genai.GenerativeModel(
-                    model_name=self.model,
+                self._gemini_model_thinking = genai.GenerativeModel(
+                    model_name=self.model_thinking,
                     safety_settings=safety_settings
                 )
-                # Savi 3.1 Thinking model (gemini-2.5-pro) - Deep analysis for Enterprise
-                try:
-                    self._gemini_model_thinking = genai.GenerativeModel(
-                        model_name=self.model_thinking,
-                        safety_settings=safety_settings
-                    )
-                    logger.info(f"Savi 3.1 Thinking model initialized ({self.model_thinking})")
-                except Exception as e:
-                    logger.warning(f"Savi 3.1 Thinking model not available: {e}")
-                    self._gemini_model_thinking = self._gemini_model  # Fallback to Suru
-                
-                # Test connection
-                self._gemini_model.generate_content("test")
-                self._available = True
-                logger.info(f"Jarwis Chatbot initialized - Suru 1.1 ({self.model}), Savi 3.1 ({self.model_thinking})")
+                logger.info(f"Savi 3.1 Thinking model initialized ({self.model_thinking})")
             except Exception as e:
-                logger.warning(f"Gemini not available for chatbot: {e}")
-                self._available = False
-        
-        # Ollama provider (fallback)
-        elif self.provider == "ollama":
-            try:
-                import ollama
-                self._client = ollama.Client(host=self.base_url)
-                self._client.list()
-                self._available = True
-                logger.info("Jarwis Chatbot connected to Ollama")
-            except Exception as e:
-                logger.warning(f"Ollama not available for chatbot: {e}")
-                self._available = False
-    
+                logger.warning(f"Savi 3.1 Thinking model not available: {e}")
+                self._gemini_model_thinking = self._gemini_model  # Fallback to Suru
+            
+            # Test connection
+            self._gemini_model.generate_content("test")
+            self._available = True
+            logger.info(f"Jarwis Chatbot initialized - Suru 1.1 ({self.model}), Savi 3.1 ({self.model_thinking})")
+        except Exception as e:
+            logger.warning(f"Gemini not available for chatbot: {e}")
+            self._available = False
+
     @property
     def is_available(self) -> bool:
         return self._available
-    
+
     def get_or_create_session(self, session_id: str, user_id: str = None) -> UserSession:
         """Get existing session or create new one"""
         if session_id not in self._sessions:

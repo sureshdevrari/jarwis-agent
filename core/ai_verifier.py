@@ -133,78 +133,52 @@ Respond in JSON format ONLY:
         self._init_client()
     
     def _init_client(self):
-        """Initialize the AI client"""
-        if self.provider in ["gemini", "google"]:
-            if not GEMINI_AVAILABLE:
-                logger.warning("google-generativeai package not installed")
+        """Initialize the Gemini AI client"""
+        if not GEMINI_AVAILABLE:
+            logger.warning("google-generativeai package not installed")
+            self._available = False
+            return
+        try:
+            central_config = get_ai_config()
+            api_key = self.ai_config.get('api_key') or central_config.api_key
+            if not api_key:
+                logger.warning("Gemini API key not configured")
                 self._available = False
                 return
-            try:
-                central_config = get_ai_config()
-                api_key = self.ai_config.get('api_key') or central_config.api_key
-                if not api_key:
-                    logger.warning("Gemini API key not configured")
-                    self._available = False
-                    return
-                genai.configure(api_key=api_key)
-                # Safety settings for security content
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
-                self._client = genai.GenerativeModel(
-                    model_name=self.model,
-                    safety_settings=safety_settings
-                )
-                self._available = True
-                logger.info(f"AI Verifier connected to Gemini ({self.model})")
-            except Exception as e:
-                logger.warning(f"Gemini not available for verification: {e}")
-                self._available = False
-        elif self.provider == "ollama":
-            try:
-                import ollama
-                self._client = ollama.Client(host=self.base_url)
-                self._client.list()
-                self._available = True
-                logger.info(f"AI Verifier connected to Ollama at {self.base_url}")
-            except Exception as e:
-                logger.warning(f"Ollama not available for verification: {e}")
-                self._available = False
+            genai.configure(api_key=api_key)
+            # Safety settings for security content
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            self._client = genai.GenerativeModel(
+                model_name=self.model,
+                safety_settings=safety_settings
+            )
+            self._available = True
+            logger.info(f"AI Verifier connected to Gemini ({self.model})")
+        except Exception as e:
+            logger.warning(f"Gemini not available for verification: {e}")
+            self._available = False
     
     @property
     def is_available(self) -> bool:
         return self._available
     
     def _query_llm(self, prompt: str) -> Optional[str]:
-        """Query the LLM and return response"""
+        """Query Gemini and return response"""
         if not self._available or not self._client:
             return None
         
         try:
-            # Gemini provider
-            if self.provider in ["gemini", "google"]:
-                response = self._client.generate_content(prompt)
-                if response and response.text:
-                    return response.text
-                return None
-            # Ollama provider
-            elif self.provider == "ollama":
-                response = self._client.chat(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    options={"temperature": 0.3}
-                )
-                # Handle both old and new ollama library formats
-                if hasattr(response, 'message'):
-                    return response.message.content
-                elif isinstance(response, dict):
-                    return response.get('message', {}).get('content', '')
+            response = self._client.generate_content(prompt)
+            if response and response.text:
+                return response.text
             return None
         except Exception as e:
-            logger.error(f"LLM query failed: {e}")
+            logger.error(f"Gemini query failed: {e}")
             return None
     
     def _parse_json_response(self, response: str) -> Optional[dict]:

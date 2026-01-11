@@ -19,6 +19,7 @@ from .browser import BrowserController
 from .proxy import ProxyInterceptor
 from .ai_planner import AIPlanner
 from .reporters import ReportGenerator
+from shared.ai_config import get_ai_config
 
 console = Console()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -143,8 +144,7 @@ class PenTestRunner:
             },
             'ai': {
                 'enabled': False,
-                'provider': 'gemini',
-                'model': 'gemini-2.5-flash'
+                # Defaults from centralized config
             },
             'browser': {
                 'headless': False,  # Set True for headless mode (API), False for visible browser

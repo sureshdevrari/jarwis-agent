@@ -43,16 +43,14 @@ class AIConfig:
     """
     
     # ========================================
-    # CHANGE THESE TO SWITCH AI PROVIDERS
+    # GEMINI AI CONFIGURATION (Only provider)
     # ========================================
     DEFAULT_PROVIDER: str = "gemini"
-    DEFAULT_MODEL: str = "gemini-1.5-flash"
+    DEFAULT_MODEL: str = "gemini-2.5-flash"
     
-    # Provider-specific model mappings
+    # Model mapping
     PROVIDER_MODELS: Dict[str, str] = field(default_factory=lambda: {
-        "gemini": "gemini-1.5-flash",
-        "openai": "gpt-4o-mini",
-        "custom": "your-model-name",
+        "gemini": "gemini-2.5-flash",
     })
     
     # ========================================
