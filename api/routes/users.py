@@ -3,16 +3,24 @@ User Management API Routes
 Profile management, user updates, account deletion
 """
 
+import os
+import hashlib
+import json
+import zipfile
+import io
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pydantic import BaseModel, Field, HttpUrl
 
 from database.connection import get_db
-from database.models import User
+from database.models import User, ScanHistory, Finding, LoginHistory
 from database.schemas import UserResponse, UserUpdate, MessageResponse
-from database.auth import get_user_by_email, get_user_by_username, hash_password
+from database.auth import get_user_by_email, get_user_by_username, hash_password, verify_password
 from database.dependencies import get_current_active_user, get_current_superuser
 from database.subscription import (
     get_user_usage_stats, 
@@ -24,6 +32,47 @@ from database.subscription import (
 from database import crud
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
+
+
+# ============== Profile Request/Response Models ==============
+
+class ProfileUpdateRequest(BaseModel):
+    """Extended profile update request"""
+    full_name: Optional[str] = Field(None, max_length=255)
+    company: Optional[str] = Field(None, max_length=255)
+    bio: Optional[str] = Field(None, max_length=1000)
+    job_title: Optional[str] = Field(None, max_length=100)
+    linkedin_url: Optional[str] = Field(None, max_length=500)
+    twitter_url: Optional[str] = Field(None, max_length=500)
+    github_url: Optional[str] = Field(None, max_length=500)
+    timezone: Optional[str] = Field(None, max_length=50)
+    language: Optional[str] = Field(None, max_length=10)
+
+
+class NotificationSettingsRequest(BaseModel):
+    """Notification settings update"""
+    email_enabled: bool = True
+    email_scan_completed: bool = True
+    email_vulnerability_found: bool = True
+    email_weekly_digest: bool = False
+    push_enabled: bool = False
+    slack_enabled: bool = False
+    slack_webhook_url: Optional[str] = None
+
+
+class ScanPreferencesRequest(BaseModel):
+    """Scan preferences update"""
+    default_scan_type: str = "web"
+    auto_scan_on_domain_add: bool = False
+    detailed_logs: bool = True
+    save_scan_history: bool = True
+    default_report_format: str = "html"  # html, pdf, json
+
+
+class DeleteAccountRequest(BaseModel):
+    """Delete account request (requires password)"""
+    password: str = Field(..., min_length=1)
+    confirm_phrase: Optional[str] = None  # Optional: "DELETE MY ACCOUNT"
 
 
 @router.get("/me", response_model=UserResponse)
@@ -67,17 +116,339 @@ async def update_my_profile(
 
 @router.delete("/me", response_model=MessageResponse)
 async def delete_my_account(
+    data: DeleteAccountRequest,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Delete current user's account.
+    Requires password confirmation.
     This action is irreversible!
     """
+    # Verify password
+    if not verify_password(data.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password"
+        )
+    
     await crud.delete_user(db, current_user)
     
     return MessageResponse(
         message="Account deleted successfully",
+        success=True
+    )
+
+
+# ============== Extended Profile Endpoints ==============
+
+@router.put("/me/profile", response_model=UserResponse)
+async def update_extended_profile(
+    profile: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update extended profile fields (bio, job_title, social links, etc.)
+    """
+    update_fields = profile.model_dump(exclude_unset=True)
+    
+    # Validate URLs if provided
+    for url_field in ['linkedin_url', 'twitter_url', 'github_url']:
+        url_value = update_fields.get(url_field)
+        if url_value:
+            if not url_value.startswith(('http://', 'https://')):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{url_field} must be a valid URL starting with http:// or https://"
+                )
+    
+    # Update fields
+    for field, value in update_fields.items():
+        if hasattr(current_user, field):
+            setattr(current_user, field, value)
+    
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return current_user
+
+
+@router.post("/me/avatar")
+async def upload_avatar(
+    avatar: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload profile avatar image.
+    
+    - Max size: 2MB
+    - Allowed formats: JPEG, PNG, GIF, WebP
+    """
+    # Validate file size (2MB max)
+    MAX_SIZE = 2 * 1024 * 1024  # 2MB
+    content = await avatar.read()
+    
+    if len(content) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 2MB."
+        )
+    
+    # Validate file type by checking magic bytes
+    allowed_types = {
+        b'\xff\xd8\xff': 'image/jpeg',
+        b'\x89PNG\r\n\x1a\n': 'image/png',
+        b'GIF87a': 'image/gif',
+        b'GIF89a': 'image/gif',
+        b'RIFF': 'image/webp',  # WebP starts with RIFF
+    }
+    
+    file_type = None
+    for magic, mime in allowed_types.items():
+        if content.startswith(magic):
+            file_type = mime
+            break
+    
+    if not file_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Allowed: JPEG, PNG, GIF, WebP"
+        )
+    
+    # Generate unique filename using hash
+    file_hash = hashlib.sha256(content).hexdigest()[:16]
+    ext = file_type.split('/')[-1]
+    if ext == 'jpeg':
+        ext = 'jpg'
+    filename = f"avatar_{current_user.id}_{file_hash}.{ext}"
+    
+    # Save to uploads directory
+    upload_dir = os.path.join("data", "uploads", "avatars")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, filename)
+    
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    # Update user avatar URL
+    avatar_url = f"/api/uploads/avatars/{filename}"
+    current_user.avatar_url = avatar_url
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {
+        "success": True,
+        "avatar_url": avatar_url,
+        "message": "Avatar uploaded successfully"
+    }
+
+
+@router.put("/me/notifications")
+async def update_notification_settings(
+    settings: NotificationSettingsRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update notification preferences.
+    """
+    current_user.notification_settings = settings.model_dump()
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": "Notification settings updated",
+        "settings": current_user.notification_settings
+    }
+
+
+@router.get("/me/notifications")
+async def get_notification_settings(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current notification preferences.
+    """
+    defaults = {
+        "email_enabled": True,
+        "email_scan_completed": True,
+        "email_vulnerability_found": True,
+        "email_weekly_digest": False,
+        "push_enabled": False,
+        "slack_enabled": False,
+        "slack_webhook_url": None
+    }
+    
+    settings = current_user.notification_settings or {}
+    return {**defaults, **settings}
+
+
+@router.put("/me/preferences")
+async def update_scan_preferences(
+    preferences: ScanPreferencesRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update scan preferences.
+    """
+    current_user.scan_preferences = preferences.model_dump()
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": "Scan preferences updated",
+        "preferences": current_user.scan_preferences
+    }
+
+
+@router.get("/me/preferences")
+async def get_scan_preferences(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current scan preferences.
+    """
+    defaults = {
+        "default_scan_type": "web",
+        "auto_scan_on_domain_add": False,
+        "detailed_logs": True,
+        "save_scan_history": True,
+        "default_report_format": "html"
+    }
+    
+    preferences = current_user.scan_preferences or {}
+    return {**defaults, **preferences}
+
+
+@router.get("/me/export")
+async def export_user_data(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Export all user data (GDPR compliance).
+    Returns a ZIP file containing JSON exports of all user data.
+    """
+    # Gather user profile data
+    profile_data = {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "company": current_user.company,
+        "bio": current_user.bio,
+        "job_title": current_user.job_title,
+        "plan": current_user.plan,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "notification_settings": current_user.notification_settings,
+        "scan_preferences": current_user.scan_preferences,
+    }
+    
+    # Gather scan history
+    result = await db.execute(
+        select(ScanHistory).where(ScanHistory.user_id == current_user.id)
+    )
+    scans = result.scalars().all()
+    scans_data = []
+    for scan in scans:
+        scans_data.append({
+            "scan_id": scan.scan_id,
+            "target_url": scan.target_url,
+            "scan_type": scan.scan_type,
+            "status": scan.status,
+            "started_at": scan.started_at.isoformat() if scan.started_at else None,
+            "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
+            "findings_count": scan.findings_count,
+        })
+    
+    # Gather login history
+    result = await db.execute(
+        select(LoginHistory).where(LoginHistory.user_id == current_user.id).order_by(LoginHistory.created_at.desc()).limit(100)
+    )
+    logins = result.scalars().all()
+    logins_data = []
+    for login in logins:
+        logins_data.append({
+            "ip_address": login.ip_address,
+            "device_type": login.device_type,
+            "browser": login.browser,
+            "location": login.location,
+            "success": login.success,
+            "created_at": login.created_at.isoformat() if login.created_at else None,
+        })
+    
+    # Create ZIP file in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr('profile.json', json.dumps(profile_data, indent=2))
+        zip_file.writestr('scans.json', json.dumps(scans_data, indent=2))
+        zip_file.writestr('login_history.json', json.dumps(logins_data, indent=2))
+        zip_file.writestr('README.txt', f"""
+Jarwis Data Export
+==================
+Exported for: {current_user.email}
+Date: {datetime.utcnow().isoformat()}
+
+Contents:
+- profile.json: Your profile information
+- scans.json: Your scan history
+- login_history.json: Recent login activity
+
+For questions, contact support@jarwis.ai
+""")
+    
+    zip_buffer.seek(0)
+    
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=jarwis_export_{current_user.username}_{datetime.utcnow().strftime('%Y%m%d')}.zip"
+        }
+    )
+
+
+@router.delete("/me/data")
+async def delete_all_user_data(
+    data: DeleteAccountRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete all user scan data while keeping the account.
+    Requires password confirmation.
+    """
+    # Verify password
+    if not verify_password(data.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password"
+        )
+    
+    # Delete all scans (cascade will delete findings)
+    from sqlalchemy import delete
+    await db.execute(
+        delete(ScanHistory).where(ScanHistory.user_id == current_user.id)
+    )
+    
+    # Delete login history
+    await db.execute(
+        delete(LoginHistory).where(LoginHistory.user_id == current_user.id)
+    )
+    
+    # Reset scan count
+    current_user.scans_this_month = 0
+    
+    await db.commit()
+    
+    return MessageResponse(
+        message="All scan data has been deleted",
         success=True
     )
 

@@ -1,9 +1,8 @@
 """
 Scan OTP Routes - Handle 2FA OTP for Target Website Scanning
 
-This module handles the 2FA workflow when scanning websites that require
-two-factor authentication. The scanner waits for the user to provide OTP
-when the target website sends a 2FA code.
+This module provides HTTP endpoints for the OTP workflow.
+All business logic is in services/otp_service.py.
 
 Endpoints:
 - GET  /api/scan-otp/{scan_id}/status    - Check if scan is waiting for OTP
@@ -23,9 +22,8 @@ Flow:
 10. Scan proceeds to authenticated testing phase
 """
 
-import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -38,112 +36,26 @@ from database.models import User
 from database.dependencies import get_current_active_user
 from database import crud
 
+# Import from services layer - single source of truth for OTP logic
+from services.otp_service import (
+    otp_service,
+    get_scan_otp_state,
+    set_scan_waiting_for_otp,
+    submit_otp_for_scan,
+    wait_for_otp,
+    set_otp_error,
+    clear_scan_otp_state,
+    reset_otp_for_retry,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scan-otp", tags=["Scan OTP"])
 
 
-# ============== Global OTP Store ==============
-# In-memory store for scan OTP handling
-# In production, this should be Redis or similar
-scan_otp_store: dict = {}
-
-
-def get_scan_otp_state(scan_id: str) -> dict:
-    """Get or create OTP state for a scan"""
-    if scan_id not in scan_otp_store:
-        scan_otp_store[scan_id] = {
-            "waiting_for_otp": False,
-            "otp_value": None,
-            "otp_submitted_at": None,
-            "otp_type": None,  # email, sms, authenticator
-            "otp_contact": None,  # masked email/phone
-            "waiting_since": None,
-            "timeout_seconds": 300,  # 5 minutes default
-            "attempts": 0,
-            "max_attempts": 3,
-            "error_message": None,
-            "2fa_enabled": False,
-            "2fa_config": None
-        }
-    return scan_otp_store[scan_id]
-
-
-def set_scan_waiting_for_otp(
-    scan_id: str, 
-    otp_type: str, 
-    contact: str,
-    timeout_seconds: int = 300
-):
-    """Called by scanner when target website requires OTP"""
-    state = get_scan_otp_state(scan_id)
-    state["waiting_for_otp"] = True
-    state["otp_type"] = otp_type
-    state["otp_contact"] = mask_contact(contact, otp_type)
-    state["waiting_since"] = datetime.utcnow().isoformat()
-    state["timeout_seconds"] = timeout_seconds
-    state["otp_value"] = None
-    state["error_message"] = None
-    logger.info(f"Scan {scan_id} waiting for OTP ({otp_type})")
-
-
-def submit_otp_for_scan(scan_id: str, otp: str) -> bool:
-    """Submit OTP for a waiting scan"""
-    state = get_scan_otp_state(scan_id)
-    if not state["waiting_for_otp"]:
-        return False
-    
-    state["otp_value"] = otp
-    state["otp_submitted_at"] = datetime.utcnow().isoformat()
-    state["attempts"] += 1
-    logger.info(f"OTP submitted for scan {scan_id}")
-    return True
-
-
-def get_submitted_otp(scan_id: str) -> Optional[str]:
-    """Get submitted OTP (called by scanner)"""
-    state = get_scan_otp_state(scan_id)
-    return state.get("otp_value")
-
-
-def clear_scan_otp_state(scan_id: str):
-    """Clear OTP state after successful authentication"""
-    if scan_id in scan_otp_store:
-        scan_otp_store[scan_id]["waiting_for_otp"] = False
-        scan_otp_store[scan_id]["otp_value"] = None
-        logger.info(f"OTP state cleared for scan {scan_id}")
-
-
-def set_otp_error(scan_id: str, error_message: str):
-    """Set error message when OTP fails"""
-    state = get_scan_otp_state(scan_id)
-    state["error_message"] = error_message
-    state["otp_value"] = None  # Clear invalid OTP
-
-
-def mask_contact(contact: str, contact_type: str) -> str:
-    """Mask email or phone number for privacy"""
-    if not contact:
-        return "***"
-    
-    if contact_type == "email":
-        parts = contact.split("@")
-        if len(parts) == 2:
-            username = parts[0]
-            domain = parts[1]
-            if len(username) > 2:
-                masked_username = username[0] + "*" * (len(username) - 2) + username[-1]
-            else:
-                masked_username = username[0] + "*"
-            return f"{masked_username}@{domain}"
-    elif contact_type in ["sms", "phone"]:
-        if len(contact) > 4:
-            return "*" * (len(contact) - 4) + contact[-4:]
-    
-    return contact[:2] + "***"
-
-
 # ============== Request/Response Models ==============
+# Note: OTP business logic is now in services/otp_service.py
+# This route file only handles HTTP concerns
 
 class OTPStatusResponse(BaseModel):
     """OTP waiting status for a scan"""

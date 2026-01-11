@@ -25,9 +25,9 @@ const EscapingButton = ({
 
   // Funny messages
   const escapeMessages = useMemo(() => [
-    "Nice try! ", "Fill the form! [NOTE]", "Can't catch me! ‍", 
-    "Nope! ", "Too slow! [!]", "Fill details! ", "I'm fast! [LAUNCH]",
-    "Missing fields? ", "Complete form! [TARGET]", "Not today! "
+    "Nice try! ", "Fill the form! 📝", "Can't catch me! ‍", 
+    "Nope! ", "Too slow! ⚠️", "Fill details! ", "I'm fast! 🚀",
+    "Missing fields? ", "Complete form! 🎯", "Not today! "
   ], []);
 
   useEffect(() => {
@@ -231,8 +231,8 @@ const EscapingButton = ({
             </>
           ) : (
             <>
-              {!isFormValid && <span>[LOCK]</span>}
-              {isFormValid && <span>[OK]</span>}
+              {!isFormValid && <span>🔒</span>}
+              {isFormValid && <span>✅</span>}
               {children}
             </>
           )}
@@ -257,7 +257,7 @@ const EscapingButton = ({
             exit={{ opacity: 0 }}
             className="w-full text-center mt-3 text-xs text-gray-500"
           >
-            [IDEA] Hint: Fill in both email and password!
+            💡 Hint: Fill in both email and password!
           </motion.p>
         )}
       </AnimatePresence>

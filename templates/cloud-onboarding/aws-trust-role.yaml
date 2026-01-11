@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Jarwis Cloud Security Scanner - Cross-Account IAM Role
+  
+  This template creates an IAM role that allows Jarwis to perform 
+  read-only security assessments of your AWS account.
+  
+  The role uses:
+  - SecurityAudit managed policy (read-only)
+  - External ID for confused deputy protection
+  - Minimal required permissions
+
+Parameters:
+  ExternalId:
+    Type: String
+    Description: |
+      External ID provided by Jarwis during onboarding.
+      This prevents unauthorized access (confused deputy attack).
+    MinLength: 10
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: Must be alphanumeric with hyphens, minimum 10 characters.
+  
+  JarwisAccountId:
+    Type: String
+    Default: '000000000000'
+    Description: |
+      Jarwis AWS Account ID. This will be provided during onboarding.
+      Leave default if testing locally.
+    AllowedPattern: '^\d{12}$'
+    ConstraintDescription: Must be a 12-digit AWS account ID.
+  
+  RoleName:
+    Type: String
+    Default: 'JarwisSecurityScannerRole'
+    Description: Name for the IAM role
+    AllowedPattern: '^[a-zA-Z0-9+=,.@_-]+$'
+    ConstraintDescription: Must be a valid IAM role name.
+
+Resources:
+  JarwisSecurityRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Cross-account role for Jarwis Cloud Security Scanner (read-only)
+      MaxSessionDuration: 3600  # 1 hour
+      
+      # Trust policy - allows Jarwis account to assume this role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${JarwisAccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref ExternalId
+      
+      # Attach AWS managed security audit policy
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/SecurityAudit'
+      
+      # Additional inline policy for specific Jarwis requirements
+      Policies:
+        - PolicyName: JarwisAdditionalReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 bucket policy and ACL access
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketPolicy'
+                  - 's3:GetBucketPolicyStatus'
+                  - 's3:GetBucketPublicAccessBlock'
+                  - 's3:GetAccountPublicAccessBlock'
+                  - 's3:GetBucketAcl'
+                  - 's3:GetBucketVersioning'
+                  - 's3:GetBucketLogging'
+                  - 's3:GetEncryptionConfiguration'
+                  - 's3:ListAllMyBuckets'
+                Resource: '*'
+              
+              # Lambda function configuration
+              - Effect: Allow
+                Action:
+                  - 'lambda:GetFunctionConfiguration'
+                  - 'lambda:ListFunctions'
+                  - 'lambda:GetPolicy'
+                Resource: '*'
+              
+              # CloudTrail configuration
+              - Effect: Allow
+                Action:
+                  - 'cloudtrail:DescribeTrails'
+                  - 'cloudtrail:GetTrailStatus'
+                  - 'cloudtrail:GetEventSelectors'
+                Resource: '*'
+              
+              # KMS key metadata (no decrypt)
+              - Effect: Allow
+                Action:
+                  - 'kms:DescribeKey'
+                  - 'kms:GetKeyPolicy'
+                  - 'kms:GetKeyRotationStatus'
+                  - 'kms:ListKeys'
+                  - 'kms:ListAliases'
+                Resource: '*'
+              
+              # Secrets Manager (metadata only, no secrets)
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:ListSecrets'
+                  - 'secretsmanager:DescribeSecret'
+                Resource: '*'
+      
+      Tags:
+        - Key: Purpose
+          Value: JarwisSecurityScanning
+        - Key: CreatedBy
+          Value: JarwisCloudFormation
+        - Key: Environment
+          Value: Security
+
+Outputs:
+  RoleArn:
+    Description: |
+      ARN of the Jarwis Security Scanner role.
+      Copy this value and paste it in the Jarwis dashboard.
+    Value: !GetAtt JarwisSecurityRole.Arn
+    Export:
+      Name: JarwisSecurityScannerRoleArn
+  
+  RoleName:
+    Description: Name of the created IAM role
+    Value: !Ref JarwisSecurityRole
+  
+  ExternalId:
+    Description: External ID used for this role (keep this secure)
+    Value: !Ref ExternalId
+  
+  Instructions:
+    Description: Next steps
+    Value: |
+      1. Copy the RoleArn from the Outputs tab above
+      2. Paste it in the Jarwis Cloud Scan configuration
+      3. Your External ID is already known to Jarwis
+      4. Click "Validate" to test the connection

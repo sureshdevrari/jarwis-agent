@@ -1,0 +1,85 @@
+# Jarwis Backend Dockerfile
+# Multi-stage build for optimized production image
+
+# Stage 1: Builder
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers (for PDF generation)
+RUN pip install --user playwright
+RUN python -m playwright install chromium --with-deps
+
+# Stage 2: Production
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    # Playwright dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash jarwis
+USER jarwis
+
+# Copy Python dependencies from builder
+COPY --from=builder /root/.local /home/jarwis/.local
+
+# Copy Playwright browsers
+COPY --from=builder /root/.cache/ms-playwright /home/jarwis/.cache/ms-playwright
+
+# Set up path
+ENV PATH=/home/jarwis/.local/bin:$PATH
+ENV PYTHONPATH=/app
+
+# Copy application code
+COPY --chown=jarwis:jarwis . .
+
+# Create required directories (new data/ structure)
+RUN mkdir -p data/uploads data/reports data/logs data/temp config/secrets
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+# Run with gunicorn for production
+CMD ["gunicorn", "api.server:app", \
+     "--workers", "4", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:8000", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

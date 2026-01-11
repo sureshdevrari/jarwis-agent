@@ -1,6 +1,7 @@
 """
 OAuth2 Social Login Routes for Jarwis API
 Handles Google, GitHub, and Microsoft authentication
+Now with HttpOnly cookie support for secure token storage
 """
 
 import os
@@ -18,7 +19,7 @@ except ImportError:
     pass
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -29,6 +30,7 @@ from database.auth import (
     create_access_token, create_refresh_token, 
     store_refresh_token, get_user_by_email, auth_settings
 )
+from database.cookie_auth import set_auth_cookies
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +129,20 @@ class OAuthStatusResponse(BaseModel):
 
 # ============== Helper Functions ==============
 
+# Which OAuth providers have callbacks fully configured in their respective consoles
+# Set to comma-separated list of enabled providers, e.g., "google,github,microsoft"
+OAUTH_ENABLED_PROVIDERS = os.getenv("OAUTH_ENABLED_PROVIDERS", "google").lower().split(",")
+
+
 def is_provider_configured(provider: str) -> bool:
-    """Check if OAuth provider is configured"""
+    """Check if OAuth provider is configured AND enabled"""
     if provider not in OAUTH_PROVIDERS:
         return False
+    
+    # Check if provider is in the enabled list (callback configured in provider console)
+    if provider.lower() not in [p.strip() for p in OAUTH_ENABLED_PROVIDERS]:
+        return False
+    
     config = OAUTH_PROVIDERS[provider]
     return bool(config.get("client_id") and config.get("client_secret"))
 
@@ -199,11 +211,12 @@ async def get_or_create_oauth_user(
 def create_auth_tokens_for_user(user: User, db: AsyncSession) -> dict:
     """Create access and refresh tokens for a user"""
     access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
+    refresh_token, refresh_expires = create_refresh_token(user.id)
     
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
+        "refresh_expires": refresh_expires,
         "token_type": "bearer",
         "expires_in": auth_settings.access_token_expire_minutes * 60,
     }
@@ -249,8 +262,10 @@ async def google_login(request: Request):
     config = OAUTH_PROVIDERS["google"]
     state = secrets.token_urlsafe(32)
     oauth_states[state] = {"provider": "google", "created": datetime.utcnow()}
+    logger.info(f"Created OAuth state for Google: {state[:20]}... Total states: {len(oauth_states)}")
     
     callback_url = get_callback_url(request, "google")
+    logger.info(f"Google OAuth callback URL: {callback_url}")
     
     params = {
         "client_id": config["client_id"],
@@ -275,13 +290,19 @@ async def google_callback(
     db: AsyncSession = Depends(get_db)
 ):
     """Handle Google OAuth callback"""
+    logger.info(f"Google OAuth callback received - state: {state[:20] if state else 'None'}..., code: {'present' if code else 'None'}")
+    logger.info(f"Available states in memory: {list(oauth_states.keys())[:5]}")
+    
     if error:
         logger.warning(f"Google OAuth error: {error}")
         return RedirectResponse(url=f"{FRONTEND_URL}/login?error={error}")
     
     # Validate and consume state token (CSRF protection)
-    if not code or not validate_and_consume_state(state):
-        logger.warning(f"Invalid or expired OAuth state token for Google callback")
+    state_valid = validate_and_consume_state(state)
+    logger.info(f"State validation result: {state_valid}")
+    
+    if not code or not state_valid:
+        logger.warning(f"Invalid or expired OAuth state token for Google callback. State in dict: {state in oauth_states if state else False}")
         return RedirectResponse(url=f"{FRONTEND_URL}/login?error=invalid_state")
     
     config = OAUTH_PROVIDERS["google"]
@@ -327,18 +348,50 @@ async def google_callback(
         avatar_url=userinfo.get("picture"),
     )
     
-    # Create tokens
-    auth_tokens = create_auth_tokens_for_user(user, db)
-    await store_refresh_token(db, user.id, auth_tokens["refresh_token"])
+    # Check approval status FIRST - don't issue tokens to pending users
+    approval_status = getattr(user, 'approval_status', 'pending')
     
-    # Redirect to frontend with tokens
+    if approval_status != 'approved':
+        # Pending or rejected users go to pending-approval page WITHOUT tokens
+        logger.info(f"OAuth user {user.email} has approval_status={approval_status}, redirecting to pending-approval")
+        redirect_url = (
+            f"{FRONTEND_URL}/pending-approval"
+            f"?email={user.email}"
+            f"&provider=google"
+            f"&status={approval_status}"
+        )
+        return RedirectResponse(url=redirect_url)
+    
+    # Only approved users get tokens
+    auth_tokens = create_auth_tokens_for_user(user, db)
+    await store_refresh_token(
+        db=db,
+        user_id=user.id,
+        token=auth_tokens["refresh_token"],
+        expires_at=auth_tokens["refresh_expires"]
+    )
+    
+    logger.info(f"OAuth user {user.email} is approved, issuing tokens")
+    
+    # Create redirect response and set HttpOnly cookies
     redirect_url = (
         f"{FRONTEND_URL}/oauth/callback"
         f"?access_token={auth_tokens['access_token']}"
         f"&refresh_token={auth_tokens['refresh_token']}"
         f"&provider=google"
     )
-    return RedirectResponse(url=redirect_url)
+    response = RedirectResponse(url=redirect_url)
+    
+    # Set HttpOnly cookies for secure token storage
+    set_auth_cookies(
+        response=response,
+        access_token=auth_tokens['access_token'],
+        refresh_token=auth_tokens['refresh_token'],
+        access_expires_minutes=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        refresh_expires_days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+    
+    return response
 
 
 # ============== GitHub OAuth ==============
@@ -458,18 +511,50 @@ async def github_callback(
         avatar_url=userinfo.get("avatar_url"),
     )
     
-    # Create tokens
-    auth_tokens = create_auth_tokens_for_user(user, db)
-    await store_refresh_token(db, user.id, auth_tokens["refresh_token"])
+    # Check approval status FIRST - don't issue tokens to pending users
+    approval_status = getattr(user, 'approval_status', 'pending')
     
-    # Redirect to frontend with tokens
+    if approval_status != 'approved':
+        # Pending or rejected users go to pending-approval page WITHOUT tokens
+        logger.info(f"OAuth user {user.email} has approval_status={approval_status}, redirecting to pending-approval")
+        redirect_url = (
+            f"{FRONTEND_URL}/pending-approval"
+            f"?email={user.email}"
+            f"&provider=github"
+            f"&status={approval_status}"
+        )
+        return RedirectResponse(url=redirect_url)
+    
+    # Only approved users get tokens
+    auth_tokens = create_auth_tokens_for_user(user, db)
+    await store_refresh_token(
+        db=db,
+        user_id=user.id,
+        token=auth_tokens["refresh_token"],
+        expires_at=auth_tokens["refresh_expires"]
+    )
+    
+    logger.info(f"OAuth user {user.email} is approved, issuing tokens")
+    
+    # Create redirect response and set HttpOnly cookies
     redirect_url = (
         f"{FRONTEND_URL}/oauth/callback"
         f"?access_token={auth_tokens['access_token']}"
         f"&refresh_token={auth_tokens['refresh_token']}"
         f"&provider=github"
     )
-    return RedirectResponse(url=redirect_url)
+    response = RedirectResponse(url=redirect_url)
+    
+    # Set HttpOnly cookies for secure token storage
+    set_auth_cookies(
+        response=response,
+        access_token=auth_tokens['access_token'],
+        refresh_token=auth_tokens['refresh_token'],
+        access_expires_minutes=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        refresh_expires_days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+    
+    return response
 
 
 # ============== Microsoft OAuth ==============
@@ -571,15 +656,47 @@ async def microsoft_callback(
         provider_id=userinfo.get("id"),
     )
     
-    # Create tokens
-    auth_tokens = create_auth_tokens_for_user(user, db)
-    await store_refresh_token(db, user.id, auth_tokens["refresh_token"])
+    # Check approval status FIRST - don't issue tokens to pending users
+    approval_status = getattr(user, 'approval_status', 'pending')
     
-    # Redirect to frontend with tokens
+    if approval_status != 'approved':
+        # Pending or rejected users go to pending-approval page WITHOUT tokens
+        logger.info(f"OAuth user {user.email} has approval_status={approval_status}, redirecting to pending-approval")
+        redirect_url = (
+            f"{FRONTEND_URL}/pending-approval"
+            f"?email={user.email}"
+            f"&provider=microsoft"
+            f"&status={approval_status}"
+        )
+        return RedirectResponse(url=redirect_url)
+    
+    # Only approved users get tokens
+    auth_tokens = create_auth_tokens_for_user(user, db)
+    await store_refresh_token(
+        db=db,
+        user_id=user.id,
+        token=auth_tokens["refresh_token"],
+        expires_at=auth_tokens["refresh_expires"]
+    )
+    
+    logger.info(f"OAuth user {user.email} is approved, issuing tokens")
+    
+    # Create redirect response and set HttpOnly cookies
     redirect_url = (
         f"{FRONTEND_URL}/oauth/callback"
         f"?access_token={auth_tokens['access_token']}"
         f"&refresh_token={auth_tokens['refresh_token']}"
         f"&provider=microsoft"
     )
-    return RedirectResponse(url=redirect_url)
+    response = RedirectResponse(url=redirect_url)
+    
+    # Set HttpOnly cookies for secure token storage
+    set_auth_cookies(
+        response=response,
+        access_token=auth_tokens['access_token'],
+        refresh_token=auth_tokens['refresh_token'],
+        access_expires_minutes=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        refresh_expires_days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+    
+    return response

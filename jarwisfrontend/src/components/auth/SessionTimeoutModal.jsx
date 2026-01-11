@@ -136,7 +136,7 @@ const SessionTimeoutModal = ({ isOpen, reason = "inactive", onClose }) => {
 
             {/* Security note */}
             <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
-              [LOCK] Your data remains secure. No unauthorized access occurred.
+              🔒 Your data remains secure. No unauthorized access occurred.
             </p>
           </div>
         </div>

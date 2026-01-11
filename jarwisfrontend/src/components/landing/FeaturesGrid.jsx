@@ -7,60 +7,60 @@ import {
   Zap,
   Shield,
   Globe,
-  Lock,
-  BarChart3,
-  RefreshCw,
-  Code2
+  Smartphone,
+  Network,
+  Cloud,
+  Bot
 } from "lucide-react";
 
 const features = [
   {
+    icon: Globe,
+    title: "Web Application Security",
+    description: "Full OWASP Top 10 coverage including SQL injection, XSS, CSRF, broken authentication, and security misconfigurations.",
+    gradient: "from-cyan-500 to-blue-500"
+  },
+  {
+    icon: Smartphone,
+    title: "Mobile App Security",
+    description: "APK & IPA analysis for Android and iOS. Detect hardcoded secrets, insecure storage, and vulnerable SDKs.",
+    gradient: "from-purple-500 to-pink-500"
+  },
+  {
+    icon: Network,
+    title: "Network Security",
+    description: "Port scanning, service detection, CVE identification, and OS fingerprinting with agent-based internal scanning.",
+    gradient: "from-green-500 to-emerald-500"
+  },
+  {
+    icon: Cloud,
+    title: "Cloud Security Posture",
+    description: "AWS, Azure & GCP misconfiguration detection. IAM analysis, compliance checks, and cost optimization.",
+    gradient: "from-orange-500 to-amber-500"
+  },
+  {
+    icon: Bot,
+    title: "AI Security Assistant",
+    description: "Get instant vulnerability explanations, remediation guidance, and code fixes through natural language chat.",
+    gradient: "from-blue-500 to-violet-500"
+  },
+  {
     icon: Brain,
     title: "True AGI Intelligence",
-    description: "Thinks like an expert security engineer, understanding business logic and context to find complex vulnerabilities others miss.",
-    gradient: "from-cyan-500 to-blue-500"
+    description: "Thinks like an expert security engineer, understanding business logic to find vulnerabilities others miss.",
+    gradient: "from-rose-500 to-pink-500"
   },
   {
     icon: Zap,
     title: "10x Faster Testing",
-    description: "Complete comprehensive security assessments in hours, not weeks. Continuous testing that keeps pace with your development.",
+    description: "Complete comprehensive security assessments in hours, not weeks. Continuous testing at development speed.",
     gradient: "from-yellow-500 to-orange-500"
   },
   {
     icon: Shield,
-    title: "OWASP Top 10 Coverage",
-    description: "Thorough detection of injection, broken auth, XSS, CSRF, and all critical vulnerabilities with 99.8% accuracy.",
-    gradient: "from-green-500 to-emerald-500"
-  },
-  {
-    icon: Globe,
-    title: "Works Everywhere",
-    description: "Web apps, REST APIs, GraphQL, mobile backends, and cloud infrastructure. One tool for all your security needs.",
-    gradient: "from-blue-500 to-violet-500"
-  },
-  {
-    icon: Lock,
-    title: "Zero False Positives",
-    description: "AI-verified findings mean your team focuses on real threats. Every vulnerability is validated before reporting.",
-    gradient: "from-rose-500 to-pink-500"
-  },
-  {
-    icon: RefreshCw,
-    title: "Always Learning",
-    description: "Continuously evolves with new attack patterns. Adapts to your codebase and learns from each engagement.",
-    gradient: "from-violet-500 to-purple-500"
-  },
-  {
-    icon: Code2,
-    title: "Natural Language",
-    description: "Describe what you want to test in plain English. No complex configurations or scripting required.",
-    gradient: "from-teal-500 to-cyan-500"
-  },
-  {
-    icon: BarChart3,
     title: "Actionable Reports",
-    description: "Detailed findings with proof-of-concept exploits, risk scores, and step-by-step remediation guidance.",
-    gradient: "from-amber-500 to-yellow-500"
+    description: "Detailed findings with proof-of-concept exploits, CVSS scores, and step-by-step remediation guidance.",
+    gradient: "from-teal-500 to-cyan-500"
   }
 ];
 
@@ -86,7 +86,7 @@ const FeaturesGrid = () => {
             </span>
           </h2>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            Unlike traditional scanners, Jarwis understands context, logic, and intent
+            Complete security coverage for Web, Mobile, Network, Cloud, and AI-powered remediation
           </p>
         </motion.div>
 

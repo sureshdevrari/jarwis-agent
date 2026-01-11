@@ -10,7 +10,7 @@ from uuid import UUID as PyUUID
 
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 
 from database.models import User, ScanHistory
 from database.connection import get_db
@@ -32,6 +32,7 @@ class SubscriptionAction(str, Enum):
     ACCESS_API_TESTING = "api_testing"
     ACCESS_CREDENTIAL_SCAN = "credential_scan"
     ACCESS_MOBILE_PENTEST = "mobile_pentest"
+    ACCESS_NETWORK_SCAN = "network_scan"
     ACCESS_CLOUD_SCAN = "cloud_scanning"
     ACCESS_CHATBOT = "chatbot"
     ACCESS_COMPLIANCE = "compliance"
@@ -41,12 +42,12 @@ class SubscriptionAction(str, Enum):
 # Plan configuration with limits and features
 PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
     "free": {
-        "display_name": "Free Trial",
+        "display_name": "Free (Corporate)",
         "price_monthly": 0,
         "limits": {
-            "max_websites_per_month": 1,
-            "max_scans_per_month": 3,
-            "max_pages_per_scan": 25,
+            "max_websites_per_month": 0,  # Admin assigns after approval
+            "max_scans_per_month": 0,  # Admin assigns quota
+            "max_pages_per_scan": 50,
             "max_team_members": 1,
             "dashboard_access_days": 7,
         },
@@ -54,7 +55,8 @@ PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
             "api_testing": False,
             "credential_scanning": False,
             "mobile_pentest": False,
-            "cloud_scanning": False,  # No cloud for free
+            "network_scan": False,
+            "cloud_scanning": False,
             "chatbot_access": False,
             "compliance_audits": False,
             "advanced_reporting": False,
@@ -66,22 +68,23 @@ PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
     },
     "individual": {
         "display_name": "Individual",
-        "price_per_scan": 20,  # Pay per scan
+        "price_per_scan": 100,  # Per scan pricing
         "limits": {
-            "max_websites_per_month": 1,  # Individual can only scan 1 website
-            "max_scans_per_month": 5,
+            "max_websites_per_month": 1,  # 1 website only
+            "max_scans_per_month": 1,  # 1 scan per purchase
             "max_pages_per_scan": 100,
             "max_team_members": 1,
-            "dashboard_access_days": 30,
+            "dashboard_access_days": 7,  # 7 days dashboard access
         },
         "features": {
-            "api_testing": False,  # No API testing for individual
-            "credential_scanning": False,
-            "mobile_pentest": False,  # No mobile for individual
-            "cloud_scanning": False,  # No cloud for individual
-            "chatbot_access": False,
+            "api_testing": False,  # No API testing
+            "credential_scanning": False,  # No credential-based scanning
+            "mobile_pentest": False,  # Web only
+            "network_scan": False,  # Web only
+            "cloud_scanning": False,  # Web only
+            "chatbot_access": False,  # No Jarwis AGI
             "compliance_audits": False,
-            "advanced_reporting": False,  # Basic reporting only
+            "advanced_reporting": False,
             "priority_support": False,
             "api_key_access": False,
             "custom_integrations": False,
@@ -90,23 +93,24 @@ PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
     },
     "professional": {
         "display_name": "Professional",
-        "price_monthly": 999,
+        "price_monthly": 200,  # Per month
         "limits": {
-            "max_websites_per_month": 50,
-            "max_scans_per_month": 100,
+            "max_websites_per_month": 10,
+            "max_scans_per_month": 10,  # 10 scans per month
             "max_pages_per_scan": 500,
-            "max_team_members": 10,
-            "dashboard_access_days": 365,
+            "max_team_members": 3,  # Up to 3 users
+            "dashboard_access_days": 0,  # Until plan is active
         },
         "features": {
             "api_testing": True,
             "credential_scanning": True,
             "mobile_pentest": True,
-            "cloud_scanning": True,  # Pro includes cloud scanning
-            "chatbot_access": True,
-            "compliance_audits": False,
+            "network_scan": True,
+            "cloud_scanning": True,
+            "chatbot_access": True,  # Suru 1.1 - 500K tokens
+            "compliance_audits": True,
             "advanced_reporting": True,
-            "priority_support": True,
+            "priority_support": False,
             "api_key_access": True,
             "custom_integrations": False,
             "sso": False,
@@ -114,23 +118,25 @@ PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
     },
     "enterprise": {
         "display_name": "Enterprise",
-        "price_monthly": None,  # Custom pricing
+        "price_monthly": None,  # Custom pricing (billed annually)
         "limits": {
             "max_websites_per_month": 999999,  # Unlimited
             "max_scans_per_month": 999999,  # Unlimited
             "max_pages_per_scan": 10000,
             "max_team_members": 999999,  # Unlimited
-            "dashboard_access_days": 999999,  # Unlimited
+            "dashboard_access_days": 0,  # Until plan is active
         },
         "features": {
             "api_testing": True,
             "credential_scanning": True,
             "mobile_pentest": True,
-            "cloud_scanning": True,  # Enterprise includes cloud scanning
-            "chatbot_access": True,
+            "network_scan": True,
+            "cloud_scanning": True,
+            "chatbot_access": True,  # Savi 3.1 Thinking - 5M tokens
             "compliance_audits": True,
             "advanced_reporting": True,
             "priority_support": True,
+            "dedicated_support": True,  # 24x7 call & chat
             "api_key_access": True,
             "custom_integrations": True,
             "sso": True,
@@ -160,7 +166,18 @@ async def get_user_scan_count_this_month(
     db: AsyncSession, 
     user_id: PyUUID
 ) -> int:
-    """Get the number of scans a user has started this month"""
+    """
+    Get the number of scans that count against user's monthly limit.
+    
+    Only counts:
+    - Completed scans (status='completed')
+    - Running/queued scans (status='running' or 'queued')
+    - Failed/stopped scans where refund was blocked due to abuse (refund_blocked=True)
+    
+    Does NOT count:
+    - Failed scans (status='error') that were refunded
+    - Stopped scans (status='stopped') that were refunded
+    """
     # First day of current month
     today = datetime.utcnow()
     first_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -169,7 +186,17 @@ async def get_user_scan_count_this_month(
         select(func.count(ScanHistory.id)).where(
             and_(
                 ScanHistory.user_id == user_id,
-                ScanHistory.started_at >= first_of_month
+                ScanHistory.started_at >= first_of_month,
+                # Only count scans that should use quota:
+                # 1. Completed, running, or queued scans
+                # 2. OR failed/stopped scans where refund was blocked (abuse)
+                or_(
+                    ScanHistory.status.in_(['completed', 'running', 'queued']),
+                    and_(
+                        ScanHistory.status.in_(['error', 'stopped']),
+                        ScanHistory.refund_blocked == True
+                    )
+                )
             )
         )
     )
@@ -222,6 +249,7 @@ async def check_subscription_limit(
         SubscriptionAction.ACCESS_API_TESTING: ("api_testing", "API Testing"),
         SubscriptionAction.ACCESS_CREDENTIAL_SCAN: ("credential_scanning", "Credential Scanning"),
         SubscriptionAction.ACCESS_MOBILE_PENTEST: ("mobile_pentest", "Mobile Pentesting"),
+        SubscriptionAction.ACCESS_NETWORK_SCAN: ("network_scan", "Network Scanning"),
         SubscriptionAction.ACCESS_CLOUD_SCAN: ("cloud_scanning", "Cloud Scanning"),
         SubscriptionAction.ACCESS_CHATBOT: ("chatbot_access", "AI Chatbot"),
         SubscriptionAction.ACCESS_COMPLIANCE: ("compliance_audits", "Compliance Audits"),

@@ -19,7 +19,7 @@ from pydantic import BaseModel, EmailStr
 
 from database.connection import get_db
 from database.models import User
-from database.dependencies import get_current_user_optional, get_current_active_user
+from database.dependencies import get_current_user_optional, get_current_active_user, get_current_user
 from database.auth import get_user_by_id, get_user_by_email
 
 logger = logging.getLogger(__name__)
@@ -324,12 +324,42 @@ async def verify_payment(
     if not user and request.email:
         user = await get_user_by_email(db, request.email)
     
+    if not user and request.email:
+        # Create new user for guest checkout with payment
+        # This user is auto-approved since they paid
+        from uuid import uuid4
+        import secrets
+        
+        username = request.email.split('@')[0]
+        # Make username unique
+        from database.auth import get_user_by_username
+        existing = await get_user_by_username(db, username)
+        if existing:
+            username = f"{username}_{secrets.token_hex(4)}"
+        
+        user = User(
+            id=uuid4(),
+            email=request.email,
+            username=username,
+            full_name=username,
+            hashed_password="",  # No password - user will need to set via "forgot password" or OAuth
+            is_active=True,
+            is_verified=True,  # Auto-verified since they paid
+            approval_status="approved",  # Auto-approved since they paid
+            plan=request.plan,
+            created_at=datetime.utcnow(),
+            last_login=datetime.utcnow(),
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"Created new user via payment: {request.email} with plan {request.plan}")
+    
     if not user:
-        # Payment successful but no user found
-        # This shouldn't happen in normal flow
+        # Payment successful but no user found and no email provided
         return PaymentSuccessResponse(
             success=True,
-            message="Payment successful! Please complete registration to activate your subscription.",
+            message="Payment successful! Please complete registration with the same email to activate your subscription.",
             plan=request.plan,
             user_id=None,
             subscription_expires=None
@@ -421,3 +451,143 @@ async def get_payment_config():
         "currency_default": "INR",
         "supported_currencies": list(CURRENCY_RATES.keys()),
     }
+
+
+# ============== Razorpay Webhook ==============
+
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+
+def verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
+    """Verify Razorpay webhook signature"""
+    if not secret:
+        return True  # Skip verification if no secret configured (dev mode)
+    generated = hmac.new(
+        secret.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(generated, signature)
+
+
+@router.get("/history")
+async def get_payment_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get payment history for the current user"""
+    # For now, return placeholder data since we don't have a PaymentHistory model yet
+    # In production, this would query a payments table
+    payments = []
+    
+    # If user has a subscription, create a mock entry
+    if current_user.plan and current_user.plan != "free":
+        payments.append({
+            "id": str(current_user.id),
+            "date": current_user.subscription_start.isoformat() if current_user.subscription_start else datetime.utcnow().isoformat(),
+            "amount": 19900 if current_user.plan == "professional" else 0,  # Rs. 199 in paise
+            "currency": "INR",
+            "plan": current_user.plan,
+            "status": "success",
+            "description": f"Subscription to {current_user.plan.capitalize()} plan"
+        })
+    
+    return {
+        "payments": payments,
+        "total": len(payments)
+    }
+
+
+@router.get("/cards")
+async def get_saved_cards(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get saved payment cards for the current user"""
+    # For now, return empty list since Razorpay handles card storage
+    # In production with saved cards enabled, this would fetch from Razorpay
+    return {
+        "cards": [],
+        "total": 0
+    }
+
+
+@router.post("/webhook")
+async def razorpay_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handle Razorpay webhook events.
+    This ensures payment is processed even if frontend callback fails.
+    """
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    
+    # Verify webhook signature
+    if RAZORPAY_WEBHOOK_SECRET and not verify_webhook_signature(body, signature, RAZORPAY_WEBHOOK_SECRET):
+        logger.warning("Razorpay webhook signature verification failed")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    event_type = event.get("event")
+    payload = event.get("payload", {})
+    
+    logger.info(f"Razorpay webhook received: {event_type}")
+    
+    if event_type == "payment.captured":
+        # Payment was successfully captured
+        payment_entity = payload.get("payment", {}).get("entity", {})
+        order_id = payment_entity.get("order_id")
+        payment_id = payment_entity.get("id")
+        email = payment_entity.get("email")
+        notes = payment_entity.get("notes", {})
+        plan = notes.get("plan", "individual")
+        
+        if email:
+            # Find or create user
+            user = await get_user_by_email(db, email)
+            
+            if not user:
+                # Create new user
+                from uuid import uuid4
+                import secrets as sec
+                from database.auth import get_user_by_username
+                
+                username = email.split('@')[0]
+                existing = await get_user_by_username(db, username)
+                if existing:
+                    username = f"{username}_{sec.token_hex(4)}"
+                
+                user = User(
+                    id=uuid4(),
+                    email=email,
+                    username=username,
+                    full_name=username,
+                    hashed_password="",
+                    is_active=True,
+                    is_verified=True,
+                    approval_status="approved",
+                    plan=plan,
+                    created_at=datetime.utcnow(),
+                    last_login=datetime.utcnow(),
+                )
+                db.add(user)
+                logger.info(f"Webhook: Created new user {email} with plan {plan}")
+            
+            # Update user subscription
+            subscription_end = datetime.utcnow() + timedelta(days=30)
+            user.plan = plan
+            user.approval_status = "approved"
+            user.is_verified = True
+            user.subscription_start = datetime.utcnow()
+            user.subscription_end = subscription_end
+            user.scans_this_month = 0
+            
+            await db.commit()
+            logger.info(f"Webhook: Updated user {email} subscription to {plan}")
+    
+    return {"status": "ok"}

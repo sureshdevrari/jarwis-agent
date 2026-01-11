@@ -2,6 +2,7 @@
 // Inspired by Mannatthemes Mifty E-commerce Dashboard
 
 import { useState, useEffect } from "react";
+import { Lock } from "lucide-react";
 
 // =============================================
 // STAT CARD - Performance metrics card
@@ -673,7 +674,7 @@ export const MiftyQuickAction = ({
         `}
         >
           <div className="text-center">
-            <span className="text-2xl mb-1 block">[LOCK]</span>
+            <span className="text-2xl mb-1 block"><Lock className="w-6 h-6 mx-auto" /></span>
             <span
               className={`text-xs font-semibold ${
                 isDarkMode ? "text-purple-400" : "text-purple-600"

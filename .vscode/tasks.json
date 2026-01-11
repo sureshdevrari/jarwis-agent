@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Jarwis (Backend + Frontend)",
+      "type": "shell",
+      "command": "& D:\\jarwis-ai-pentest\\scripts\\startup\\jarwis_service.ps1 -Action start",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Stop Jarwis",
+      "type": "shell",
+      "command": "& D:\\jarwis-ai-pentest\\scripts\\startup\\jarwis_service.ps1 -Action stop",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Restart Jarwis",
+      "type": "shell",
+      "command": "& D:\\jarwis-ai-pentest\\scripts\\startup\\jarwis_service.ps1 -Action restart",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Jarwis Status",
+      "type": "shell",
+      "command": "& D:\\jarwis-ai-pentest\\scripts\\startup\\jarwis_service.ps1 -Action status",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Start Backend Only",
+      "type": "shell",
+      "command": "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd D:\\jarwis-ai-pentest; .\\.venv\\Scripts\\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload' -WindowStyle Normal",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "Start Frontend Only",
+      "type": "shell",
+      "command": "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd D:\\jarwis-ai-pentest\\jarwisfrontend; $env:BROWSER=\"none\"; npm start' -WindowStyle Normal",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent"
+      }
+    }
+  ]
+}

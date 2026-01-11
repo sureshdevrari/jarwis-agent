@@ -17,6 +17,8 @@ const OAuthCallback = () => {
       const refreshToken = searchParams.get("refresh_token");
       const provider = searchParams.get("provider");
       const errorParam = searchParams.get("error");
+      const approvalStatus = searchParams.get("approval_status");
+      const isNewUser = searchParams.get("is_new_user") === "true";
 
       if (errorParam) {
         setError(`Login failed: ${errorParam}`);
@@ -27,6 +29,15 @@ const OAuthCallback = () => {
       if (!accessToken || !refreshToken) {
         setError("Invalid OAuth response");
         setTimeout(() => navigate("/login"), 3000);
+        return;
+      }
+
+      // Check if new user needs approval BEFORE trying to fetch profile
+      if (isNewUser && approvalStatus === "pending") {
+        setStatus("Account created! Awaiting admin approval...");
+        // Store tokens anyway so user can check status later
+        setTokens(accessToken, refreshToken);
+        setTimeout(() => navigate("/pending-approval"), 2000);
         return;
       }
 
@@ -43,20 +54,31 @@ const OAuthCallback = () => {
 
         setStatus("Login successful! Redirecting...");
 
-        // Redirect based on user role
+        // Redirect based on user role and approval status
         setTimeout(() => {
           if (profile.is_superuser || profile.role === "admin" || profile.role === "super_admin") {
             navigate("/admin");
-          } else if (profile.is_verified || profile.approval_status === "approved") {
-            navigate("/dashboard");
           } else if (profile.approval_status === "rejected") {
             navigate("/access-denied");
-          } else {
+          } else if (profile.approval_status === "pending" || !profile.is_verified) {
             navigate("/pending-approval");
+          } else {
+            navigate("/dashboard");
           }
         }, 1000);
       } catch (err) {
         console.error("OAuth callback error:", err);
+        
+        // If profile fetch fails but we have approval_status from URL, use that
+        if (approvalStatus === "pending") {
+          setStatus("Account pending approval...");
+          setTimeout(() => navigate("/pending-approval"), 2000);
+          return;
+        } else if (approvalStatus === "rejected") {
+          setTimeout(() => navigate("/access-denied"), 2000);
+          return;
+        }
+        
         setError("Failed to complete login. Please try again.");
         setTimeout(() => navigate("/login"), 3000);
       }

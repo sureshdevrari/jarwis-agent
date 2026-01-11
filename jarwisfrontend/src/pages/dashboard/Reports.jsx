@@ -1,6 +1,6 @@
 // src/pages/dashboard/Reports.jsx - Reports Page with PDF Download
 import { useState, useEffect, useCallback } from "react";
-import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
+import DashboardPageLayout from "../../components/dashboardTheme/DashboardPageLayout";
 import { useTheme } from "../../context/ThemeContext";
 import { scanAPI } from "../../services/api";
 
@@ -112,19 +112,19 @@ const Reports = () => {
 
   if (loading) {
     return (
-      <MiftyJarwisLayout>
+      <DashboardPageLayout>
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p className={isDarkMode ? "text-gray-400" : "text-gray-600"}>Loading reports...</p>
           </div>
         </div>
-      </MiftyJarwisLayout>
+      </DashboardPageLayout>
     );
   }
 
   return (
-    <MiftyJarwisLayout>
+    <DashboardPageLayout>
       <div className="space-y-6 p-6">
         {/* Header */}
         <div className="flex justify-between items-center flex-wrap gap-4">
@@ -311,7 +311,7 @@ const Reports = () => {
       </div>
 
       </div>
-    </MiftyJarwisLayout>
+    </DashboardPageLayout>
   );
 };
 

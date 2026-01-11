@@ -115,53 +115,82 @@ export const AuthProvider = ({ children }) => {
 
   // Load user from storage on mount
   useEffect(() => {
+    let isMounted = true;
+    
     const initAuth = async () => {
+      console.log("[AuthContext] Starting auth initialization...");
       try {
         const token = getAccessToken();
         const storedUser = getStoredUser();
+        
+        console.log("[AuthContext] Token exists:", !!token, "StoredUser exists:", !!storedUser);
 
         if (token && storedUser) {
           // Check for session inactivity
           if (isSessionInactive()) {
-            console.warn("Session inactive on load, clearing auth");
+            console.warn("[AuthContext] Session inactive on load, clearing auth");
             clearAuth();
-            setUser(null);
-            setUserDoc(null);
-            setLoading(false);
+            if (isMounted) {
+              setUser(null);
+              setUserDoc(null);
+              setLoading(false);
+            }
             return;
           }
           
-          // Verify token is still valid by fetching profile
+          // Verify token is still valid by fetching profile with timeout
           try {
-            const profile = await authAPI.getProfile();
-            setUser(profile);
-            setUserDoc(profile);
-            startTokenRefreshInterval();
+            console.log("[AuthContext] Verifying token with API...");
+            // Create a promise race with a 10 second timeout
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+            );
+            const profile = await Promise.race([
+              authAPI.getProfile(),
+              timeoutPromise
+            ]);
+            console.log("[AuthContext] Profile verified:", profile?.email);
+            if (isMounted) {
+              setUser(profile);
+              setUserDoc(profile);
+              startTokenRefreshInterval();
+            }
           } catch (error) {
-            // Token expired or invalid
-            console.warn("Token validation failed:", error);
+            // Token expired or invalid or timeout
+            console.warn("[AuthContext] Token validation failed:", error.message);
             clearAuth();
+            if (isMounted) {
+              setUser(null);
+              setUserDoc(null);
+            }
+          }
+        } else {
+          console.log("[AuthContext] No stored auth, user is not logged in");
+          if (isMounted) {
             setUser(null);
             setUserDoc(null);
           }
-        } else {
+        }
+      } catch (error) {
+        console.error("[AuthContext] Auth initialization error:", error);
+        clearAuth();
+        if (isMounted) {
           setUser(null);
           setUserDoc(null);
         }
-      } catch (error) {
-        console.error("Auth initialization error:", error);
-        clearAuth();
-        setUser(null);
-        setUserDoc(null);
       } finally {
-        setLoading(false);
+        console.log("[AuthContext] Auth initialization complete, setting loading=false");
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     initAuth();
     
-    // Cleanup interval on unmount
+    // Cleanup on unmount
     return () => {
+      isMounted = false;
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
@@ -172,6 +201,16 @@ export const AuthProvider = ({ children }) => {
   const loginWithEmail = useCallback(async (email, password) => {
     try {
       const result = await authAPI.login(email, password);
+      
+      // Check if 2FA is required
+      if (result.two_factor_required) {
+        return {
+          two_factor_required: true,
+          two_factor_token: result.two_factor_token,
+          two_factor_method: result.two_factor_method || 'email',
+          message: result.message || "Two-factor authentication required",
+        };
+      }
       
       // Get full profile after login
       const profile = await authAPI.getProfile();
@@ -188,7 +227,40 @@ export const AuthProvider = ({ children }) => {
         message: "Login successful!",
       };
     } catch (error) {
-      console.error("Email login error:", error);
+      console.error("[AUTH DEBUG] Email login error:", error);
+      console.error("[AUTH DEBUG] Error details - code:", error.code, "message:", error.message, "response:", error.response?.data);
+      
+      // Check for network errors specifically
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        throw new Error('Network Error: Cannot connect to backend server. Check if the API is running on port 8000.');
+      }
+      
+      const errorMessage = formatAPIError(error);
+      throw new Error(errorMessage);
+    }
+  }, [startTokenRefreshInterval]);
+
+  // Complete login with 2FA code
+  const complete2FALogin = useCallback(async (twoFactorToken, code, useBackupCode = false) => {
+    try {
+      const result = await authAPI.loginWith2FA(twoFactorToken, code, useBackupCode);
+      
+      // Get full profile after login
+      const profile = await authAPI.getProfile();
+      setUser(profile);
+      setUserDoc(profile);
+      setSessionExpired(false);
+      
+      // Start token refresh interval
+      startTokenRefreshInterval();
+
+      return {
+        user: profile,
+        userDoc: profile,
+        message: "Login successful!",
+      };
+    } catch (error) {
+      console.error("[AUTH DEBUG] 2FA login error:", error);
       const errorMessage = formatAPIError(error);
       throw new Error(errorMessage);
     }
@@ -390,7 +462,7 @@ export const AuthProvider = ({ children }) => {
       },
       individual: {
         name: "Individual",
-        badge: "[STAR]",
+        badge: "⭐",
         color: "blue",
         features: ["5 websites/month", "30 days dashboard", "API testing"]
       },
@@ -419,6 +491,7 @@ export const AuthProvider = ({ children }) => {
 
     // Authentication methods
     loginWithEmail,
+    complete2FALogin,
     loginWithProvider,
     registerWithEmail,
     signupWithEmail,

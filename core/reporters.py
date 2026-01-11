@@ -115,6 +115,12 @@ class ReportGenerator:
         except:
             return 'unknown_target'
     
+    def _get_finding_attr(self, finding, attr: str, default=''):
+        """Get attribute from finding - works with both dict and object"""
+        if isinstance(finding, dict):
+            return finding.get(attr, default)
+        return getattr(finding, attr, default)
+    
     async def generate(
         self,
         findings: List,
@@ -140,7 +146,7 @@ class ReportGenerator:
         # Sort findings by severity
         sorted_findings = sorted(
             findings,
-            key=lambda f: self.SEVERITY_ORDER.get(getattr(f, 'severity', 'info'), 4)
+            key=lambda f: self.SEVERITY_ORDER.get(self._get_finding_attr(f, 'severity', 'info'), 4)
         )
         
         # Store extra data
@@ -169,7 +175,7 @@ class ReportGenerator:
         """Count findings by severity"""
         counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
         for f in findings:
-            sev = getattr(f, 'severity', 'info').lower()
+            sev = self._get_finding_attr(f, 'severity', 'info').lower()
             if sev in counts:
                 counts[sev] += 1
         return counts
@@ -179,6 +185,65 @@ class ReportGenerator:
         if not text:
             return ''
         return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    
+    def _format_http_for_pdf(self, http_data: str, is_request: bool = True) -> str:
+        """
+        Format HTTP request/response data line-by-line for PDF rendering.
+        Parses headers and body separately with proper color coding.
+        """
+        if not http_data:
+            return ''
+        
+        lines = str(http_data).strip().split('\n')
+        formatted_lines = []
+        in_body = False
+        body_lines = []
+        
+        for i, line in enumerate(lines):
+            line = line.rstrip('\r')
+            
+            # Check for empty line (separator between headers and body)
+            if not line.strip() and not in_body:
+                in_body = True
+                continue
+            
+            if in_body:
+                body_lines.append(self._escape_html(line))
+            else:
+                # First line is request/status line
+                if i == 0:
+                    css_class = "http-line-method" if is_request else "http-line-status"
+                    formatted_lines.append(
+                        f'<span class="http-line {css_class}">{self._escape_html(line)}</span>'
+                    )
+                else:
+                    # Header line (Key: Value)
+                    if ':' in line:
+                        key, _, value = line.partition(':')
+                        formatted_lines.append(
+                            f'<span class="http-line">'
+                            f'<span class="http-line-header">{self._escape_html(key)}:</span> '
+                            f'<span class="http-line-value">{self._escape_html(value.strip())}</span>'
+                            f'</span>'
+                        )
+                    else:
+                        formatted_lines.append(
+                            f'<span class="http-line">{self._escape_html(line)}</span>'
+                        )
+        
+        # Join headers
+        html = '\n'.join(formatted_lines)
+        
+        # Add body if present
+        if body_lines:
+            body_content = '\n'.join(body_lines)
+            # Truncate body if too long (800 chars max for PDF readability)
+            if len(body_content) > 800:
+                body_content = body_content[:800] + '\n... (truncated for readability)'
+            html += f'\n<div class="http-body-separator"></div>\n<span class="http-body">{body_content}</span>'
+        
+        return html
+
     
     def _calculate_risk_score(self, findings: List) -> Tuple[int, str, str, str]:
         """Calculate overall risk score (0-100), color, gradient, and level"""
@@ -241,16 +306,16 @@ class ReportGenerator:
     
     def _generate_critical_findings_summary(self, findings: List) -> str:
         """Generate detailed summary of critical and high findings"""
-        critical_high = [f for f in findings if getattr(f, 'severity', '') in ['critical', 'high']]
+        critical_high = [f for f in findings if self._get_finding_attr(f, 'severity', '') in ['critical', 'high']]
         
         if not critical_high:
             return ""
         
         summaries = []
         for f in critical_high[:4]:  # Top 4 critical/high
-            severity = getattr(f, 'severity', 'high')
-            title = getattr(f, 'title', 'Security Issue')
-            desc = getattr(f, 'description', '')[:200]
+            severity = self._get_finding_attr(f, 'severity', 'high')
+            title = self._get_finding_attr(f, 'title', 'Security Issue')
+            desc = self._get_finding_attr(f, 'description', '')[:200]
             
             summaries.append(f'''
 <p class="content-text" style="margin-bottom: 12px;">
@@ -312,11 +377,11 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
         
         rows = []
         for f in findings:
-            severity = getattr(f, 'severity', 'info')
-            title = getattr(f, 'title', 'Finding')[:50]
-            category = getattr(f, 'category', 'A05')
+            severity = self._get_finding_attr(f, 'severity', 'info')
+            title = self._get_finding_attr(f, 'title', 'Finding')[:50]
+            category = self._get_finding_attr(f, 'category', 'A05')
             category_name = self.OWASP_CATEGORIES.get(category, 'Security Issue')
-            cwe = getattr(f, 'cwe_id', '') or self.CWE_MAPPING.get(category, 'N/A')
+            cwe = self._get_finding_attr(f, 'cwe_id', '') or self.CWE_MAPPING.get(category, 'N/A')
             
             rows.append(f'''<tr>
                 <td><span class="severity-pill {severity}">{severity.upper()}</span></td>
@@ -353,23 +418,23 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
         html_parts = []
         
         for idx, f in enumerate(findings, 1):
-            severity = getattr(f, 'severity', 'info')
-            finding_id = getattr(f, 'id', f'JAR-{idx:03d}')
-            title = getattr(f, 'title', 'Security Issue')
-            description = getattr(f, 'description', 'No description available')
-            url = getattr(f, 'url', 'N/A')
-            method = getattr(f, 'method', 'GET')
-            parameter = getattr(f, 'parameter', '') or 'N/A'
-            category = getattr(f, 'category', 'A05')
+            severity = self._get_finding_attr(f, 'severity', 'info')
+            finding_id = self._get_finding_attr(f, 'id', f'JAR-{idx:03d}')
+            title = self._get_finding_attr(f, 'title', 'Security Issue')
+            description = self._get_finding_attr(f, 'description', 'No description available')
+            url = self._get_finding_attr(f, 'url', 'N/A')
+            method = self._get_finding_attr(f, 'method', 'GET')
+            parameter = self._get_finding_attr(f, 'parameter', '') or 'N/A'
+            category = self._get_finding_attr(f, 'category', 'A05')
             category_name = self.OWASP_CATEGORIES.get(category, 'Security Issue')
-            cwe = getattr(f, 'cwe_id', '') or self.CWE_MAPPING.get(category, 'N/A')
+            cwe = self._get_finding_attr(f, 'cwe_id', '') or self.CWE_MAPPING.get(category, 'N/A')
             
-            evidence = getattr(f, 'evidence', '') or getattr(f, 'poc', '') or ''
-            remediation = getattr(f, 'remediation', 'Review and fix according to OWASP guidelines.')
-            reasoning = getattr(f, 'reasoning', '')
+            evidence = self._get_finding_attr(f, 'evidence', '') or self._get_finding_attr(f, 'poc', '') or ''
+            remediation = self._get_finding_attr(f, 'remediation', 'Review and fix according to OWASP guidelines.')
+            reasoning = self._get_finding_attr(f, 'reasoning', '')
             
-            request_data = getattr(f, 'request_data', '') or ''
-            response_data = getattr(f, 'response_data', getattr(f, 'response_snippet', '')) or ''
+            request_data = self._get_finding_attr(f, 'request_data', '') or ''
+            response_data = self._get_finding_attr(f, 'response_data', self._get_finding_attr(f, 'response_snippet', '')) or ''
             
             # Build finding card
             html = f'''
@@ -422,24 +487,26 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
             <div class="ai-box-content">{self._escape_html(reasoning)}</div>
         </div>'''
             
-            # Add request/response if available
+            # Add request/response if available - formatted line by line for PDF
             if request_data or response_data:
                 html += '''
-        <div class="finding-section">
+        <div class="finding-section avoid-break">
             <div class="finding-section-title">HTTP Details</div>'''
                 
                 if request_data:
+                    formatted_request = self._format_http_for_pdf(str(request_data)[:2000], is_request=True)
                     html += f'''
             <div class="http-section">
-                <div class="http-title">Request</div>
-                <div class="http-content">{self._escape_html(str(request_data)[:800])}</div>
+                <div class="http-title">📤 Request</div>
+                <div class="http-content">{formatted_request}</div>
             </div>'''
                 
                 if response_data:
+                    formatted_response = self._format_http_for_pdf(str(response_data)[:2000], is_request=False)
                     html += f'''
             <div class="http-section">
-                <div class="http-title">Response</div>
-                <div class="http-content">{self._escape_html(str(response_data)[:800])}</div>
+                <div class="http-title">📥 Response</div>
+                <div class="http-content">{formatted_response}</div>
             </div>'''
                 
                 html += '</div>'
@@ -660,11 +727,29 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
                 file_url = f'file:///{html_path.absolute().as_posix()}'
                 pdf_logger.info(f"Loading HTML for PDF: {file_url}")
                 page.goto(file_url, wait_until='networkidle')
+                
+                # Generate professional PDF with proper settings
                 page.pdf(
                     path=str(pdf_path), 
                     format='A4', 
                     print_background=True,
-                    margin={'top': '10mm', 'bottom': '10mm', 'left': '10mm', 'right': '10mm'}
+                    margin={
+                        'top': '15mm', 
+                        'bottom': '15mm', 
+                        'left': '15mm', 
+                        'right': '15mm'
+                    },
+                    # Enable page footers with page numbers
+                    display_header_footer=True,
+                    header_template='<div></div>',  # Empty header
+                    footer_template='''
+                        <div style="font-size: 9px; width: 100%; text-align: center; color: #6b7280; padding: 5px 20px;">
+                            <span>Jarwis AI Penetration Test Report</span>
+                            <span style="float: right;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+                        </div>
+                    ''',
+                    prefer_css_page_size=True,  # Respect @page CSS rules
+                    scale=1.0,  # No scaling
                 )
                 browser.close()
             return True
@@ -711,12 +796,12 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
         
         for f in findings:
             sarif["runs"][0]["results"].append({
-                "ruleId": getattr(f, 'id', 'unknown'),
-                "level": self._sarif_level(getattr(f, 'severity', 'info')),
-                "message": {"text": getattr(f, 'description', '')},
+                "ruleId": self._get_finding_attr(f, 'id', 'unknown'),
+                "level": self._sarif_level(self._get_finding_attr(f, 'severity', 'info')),
+                "message": {"text": self._get_finding_attr(f, 'description', '')},
                 "locations": [{
                     "physicalLocation": {
-                        "artifactLocation": {"uri": getattr(f, 'url', '')}
+                        "artifactLocation": {"uri": self._get_finding_attr(f, 'url', '')}
                     }
                 }]
             })
@@ -769,4 +854,284 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
                 'parameter': getattr(finding, 'parameter', ''),
                 'evidence': getattr(finding, 'evidence', ''),
                 'remediation': getattr(finding, 'remediation', '')
+            }
+
+    # ========================
+    # CLOUD SECURITY REPORTS
+    # ========================
+
+    def generate_cloud_report(
+        self,
+        findings: List,
+        resources: List,
+        attack_paths: List,
+        compliance_scores: Dict,
+        config: Dict,
+        base_filename: str = None
+    ) -> Dict[str, Path]:
+        """Generate cloud security scan reports"""
+        if not base_filename:
+            base_filename = f"cloud_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        reports = {}
+        if 'html' in self.formats:
+            reports['html'] = self._generate_cloud_html(
+                findings, resources, attack_paths, compliance_scores, config, base_filename
+            )
+        if 'json' in self.formats:
+            reports['json'] = self._generate_cloud_json(
+                findings, resources, attack_paths, compliance_scores, config, base_filename
+            )
+        if 'sarif' in self.formats:
+            reports['sarif'] = self._generate_cloud_sarif(findings, base_filename)
+        return reports
+
+    def _generate_cloud_html(
+        self,
+        findings: List,
+        resources: List,
+        attack_paths: List,
+        compliance_scores: Dict,
+        config: Dict,
+        base_filename: str
+    ) -> Path:
+        """Generate cloud-specific HTML report with attack path diagrams."""
+        providers = config.get('providers', [])
+        provider_str = ', '.join(p.upper() for p in providers) if providers else 'Cloud'
+
+        # Severity counts
+        sev_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
+        for f in findings:
+            sev = self._get_finding_attr(f, 'severity', 'info')
+            if hasattr(sev, 'value'):
+                sev = sev.value
+            sev_counts[str(sev).lower()] = sev_counts.get(str(sev).lower(), 0) + 1
+
+        # Build compliance cards HTML
+        compliance_html = ''
+        for framework, score in compliance_scores.items():
+            if isinstance(score, dict):
+                pct = score.get('score', 0)
+            else:
+                pct = score
+            compliance_html += f'''
+            <div style="background:#1a1a2e;border-radius:8px;padding:16px;text-align:center;">
+                <h4 style="margin:0;color:#888;">{framework}</h4>
+                <div style="font-size:28px;font-weight:bold;color:{'#00c19f' if pct >= 70 else '#ff6b6b'};">{pct:.0f}%</div>
+            </div>'''
+
+        # Build attack path diagram HTML (Mermaid syntax wrapped in <pre>)
+        attack_path_html = ''
+        if attack_paths:
+            mermaid_lines = ['graph LR']
+            for idx, ap in enumerate(attack_paths[:5]):
+                path = ap.get('path', [])
+                if len(path) >= 2:
+                    for i in range(len(path) - 1):
+                        src = path[i].replace(' ', '_')
+                        tgt = path[i + 1].replace(' ', '_')
+                        mermaid_lines.append(f'    {src} --> {tgt}')
+            mermaid_code = '\n'.join(mermaid_lines)
+            attack_path_html = f'''
+            <h2>Attack Paths</h2>
+            <pre class="mermaid">{mermaid_code}</pre>
+            <script type="module">
+                import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                mermaid.initialize({{startOnLoad:true, theme:'dark'}});
+            </script>'''
+
+        # Build findings table rows
+        findings_rows = ''
+        for f in findings[:100]:
+            fid = self._get_finding_attr(f, 'id', '')
+            title = self._get_finding_attr(f, 'title', '')
+            sev = self._get_finding_attr(f, 'severity', 'info')
+            if hasattr(sev, 'value'):
+                sev = sev.value
+            provider = self._get_finding_attr(f, 'provider', '')
+            if hasattr(provider, 'value'):
+                provider = provider.value
+            service = self._get_finding_attr(f, 'service', '')
+            resource_id = self._get_finding_attr(f, 'resource_id', '')
+            findings_rows += f'''
+            <tr>
+                <td>{fid}</td>
+                <td><span class="severity-{sev}">{sev}</span></td>
+                <td>{title}</td>
+                <td>{provider}</td>
+                <td>{service}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{resource_id}</td>
+            </tr>'''
+
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cloud Security Report - {provider_str}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f1a; color: #e0e0e0; margin: 0; padding: 20px; }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        h1 {{ color: #00c19f; }}
+        .summary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 20px 0; }}
+        .summary-card {{ background: #1a1a2e; border-radius: 8px; padding: 16px; text-align: center; }}
+        .summary-card h3 {{ margin: 0; font-size: 28px; }}
+        .summary-card p {{ margin: 4px 0 0; color: #888; }}
+        .severity-critical {{ background: #dc3545; padding: 2px 8px; border-radius: 4px; }}
+        .severity-high {{ background: #fd7e14; padding: 2px 8px; border-radius: 4px; }}
+        .severity-medium {{ background: #ffc107; color: #000; padding: 2px 8px; border-radius: 4px; }}
+        .severity-low {{ background: #28a745; padding: 2px 8px; border-radius: 4px; }}
+        .severity-info {{ background: #6c757d; padding: 2px 8px; border-radius: 4px; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #2a2a3e; }}
+        th {{ background: #1a1a2e; }}
+        .mermaid {{ background: #1a1a2e; padding: 20px; border-radius: 8px; }}
+        .compliance-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>☁️ Cloud Security Report</h1>
+    <p>Providers: {provider_str} | Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+
+    <h2>Summary</h2>
+    <div class="summary-grid">
+        <div class="summary-card"><h3>{len(findings)}</h3><p>Total Findings</p></div>
+        <div class="summary-card"><h3>{len(resources)}</h3><p>Resources</p></div>
+        <div class="summary-card"><h3 style="color:#dc3545">{sev_counts['critical']}</h3><p>Critical</p></div>
+        <div class="summary-card"><h3 style="color:#fd7e14">{sev_counts['high']}</h3><p>High</p></div>
+        <div class="summary-card"><h3 style="color:#ffc107">{sev_counts['medium']}</h3><p>Medium</p></div>
+        <div class="summary-card"><h3 style="color:#28a745">{sev_counts['low']}</h3><p>Low</p></div>
+    </div>
+
+    <h2>Compliance Scores</h2>
+    <div class="compliance-grid">{compliance_html}</div>
+
+    {attack_path_html}
+
+    <h2>Findings</h2>
+    <table>
+        <thead><tr><th>ID</th><th>Severity</th><th>Title</th><th>Provider</th><th>Service</th><th>Resource</th></tr></thead>
+        <tbody>{findings_rows}</tbody>
+    </table>
+</div>
+</body>
+</html>'''
+
+        path = self.output_dir / f"report_{base_filename}.html"
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        return path
+
+    def _generate_cloud_json(
+        self,
+        findings: List,
+        resources: List,
+        attack_paths: List,
+        compliance_scores: Dict,
+        config: Dict,
+        base_filename: str
+    ) -> Path:
+        """Generate cloud-specific JSON report."""
+        report = {
+            'report_id': str(uuid.uuid4())[:8],
+            'generated_at': datetime.now().isoformat(),
+            'providers': config.get('providers', []),
+            'summary': {
+                'total_findings': len(findings),
+                'total_resources': len(resources),
+                'attack_paths_count': len(attack_paths),
+                'by_severity': {},
+            },
+            'compliance_scores': compliance_scores,
+            'attack_paths': attack_paths[:20],
+            'findings': [self._cloud_finding_to_dict(f) for f in findings],
+            'resources': [self._cloud_resource_to_dict(r) for r in resources[:500]],
+        }
+        # Count by severity
+        for f in findings:
+            sev = self._get_finding_attr(f, 'severity', 'info')
+            if hasattr(sev, 'value'):
+                sev = sev.value
+            sev = str(sev).lower()
+            report['summary']['by_severity'][sev] = report['summary']['by_severity'].get(sev, 0) + 1
+
+        path = self.output_dir / f"report_{base_filename}.json"
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, default=str)
+        return path
+
+    def _generate_cloud_sarif(self, findings: List, base_filename: str) -> Path:
+        """Generate cloud findings in SARIF format."""
+        sarif = {
+            '$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+            'version': '2.1.0',
+            'runs': [{
+                'tool': {
+                    'driver': {
+                        'name': 'Jarwis Cloud Scanner',
+                        'informationUri': 'https://jarwis.ai',
+                        'version': '2.0.0',
+                        'rules': []
+                    }
+                },
+                'results': []
+            }]
+        }
+        for f in findings:
+            fid = self._get_finding_attr(f, 'id', 'unknown')
+            sev = self._get_finding_attr(f, 'severity', 'info')
+            if hasattr(sev, 'value'):
+                sev = sev.value
+            desc = self._get_finding_attr(f, 'description', '')
+            resource = self._get_finding_attr(f, 'resource_arn', '')
+            sarif['runs'][0]['results'].append({
+                'ruleId': fid,
+                'level': self._sarif_level(str(sev)),
+                'message': {'text': desc},
+                'locations': [{
+                    'physicalLocation': {
+                        'artifactLocation': {'uri': resource}
+                    }
+                }]
+            })
+        path = self.output_dir / f"report_{base_filename}.sarif"
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(sarif, f, indent=2)
+        return path
+
+    def _cloud_finding_to_dict(self, finding) -> Dict:
+        """Convert cloud finding to dict handling enums."""
+        try:
+            d = asdict(finding)
+            # Convert enums to strings
+            for k, v in d.items():
+                if hasattr(v, 'value'):
+                    d[k] = v.value
+            return d
+        except Exception:
+            return {
+                'id': getattr(finding, 'id', ''),
+                'title': getattr(finding, 'title', ''),
+                'severity': str(getattr(finding, 'severity', 'info')),
+                'provider': str(getattr(finding, 'provider', '')),
+                'service': getattr(finding, 'service', ''),
+                'resource_id': getattr(finding, 'resource_id', ''),
+                'description': getattr(finding, 'description', ''),
+                'remediation': getattr(finding, 'remediation', ''),
+            }
+
+    def _cloud_resource_to_dict(self, resource) -> Dict:
+        """Convert cloud resource to dict."""
+        try:
+            d = asdict(resource)
+            for k, v in d.items():
+                if hasattr(v, 'value'):
+                    d[k] = v.value
+            return d
+        except Exception:
+            return {
+                'resource_id': getattr(resource, 'resource_id', ''),
+                'resource_type': getattr(resource, 'resource_type', ''),
+                'provider': str(getattr(resource, 'provider', '')),
+                'name': getattr(resource, 'name', ''),
             }

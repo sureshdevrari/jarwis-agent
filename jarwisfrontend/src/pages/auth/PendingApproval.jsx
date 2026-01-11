@@ -1,18 +1,35 @@
 // src/pages/auth/PendingApproval.jsx
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
-import { Clock, Shield, Mail, CheckCircle } from "lucide-react";
+import { Clock, Shield, Mail, CheckCircle, LogIn } from "lucide-react";
 
 const PendingApproval = () => {
-  const { user, userDoc, logout, isApproved, isRejected, getApprovalStatus } =
-    useAuth();
+  const { user, userDoc, logout, isApproved, isRejected } = useAuth();
   const { isDarkMode } = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Get OAuth user info from URL params (for users redirected without tokens)
+  const oauthEmail = searchParams.get("email");
+  const oauthProvider = searchParams.get("provider");
+  const oauthStatus = searchParams.get("status") || "pending";
+  
+  // Determine if this is an OAuth redirect (no tokens) or authenticated user
+  const isOAuthRedirect = oauthEmail && !user;
+  
+  // For display purposes
+  const displayEmail = isOAuthRedirect ? oauthEmail : user?.email;
+  const displayProvider = oauthProvider || "email";
 
-  // Redirect if user status changes
+  // Redirect if user status changes (only for authenticated users)
   useEffect(() => {
+    // If OAuth redirect without tokens, don't check auth status
+    if (isOAuthRedirect) {
+      return;
+    }
+    
     if (!user) {
       navigate("/login");
       return;
@@ -27,7 +44,7 @@ const PendingApproval = () => {
       navigate("/access-denied");
       return;
     }
-  }, [user, userDoc, isApproved, isRejected, navigate]);
+  }, [user, userDoc, isApproved, isRejected, navigate, isOAuthRedirect]);
 
   const handleLogout = async () => {
     try {
@@ -123,35 +140,48 @@ const PendingApproval = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className={themeClasses.infoLabel}>Email</span>
-              <span className={themeClasses.infoValue}>{user?.email}</span>
+              <span className={themeClasses.infoValue}>{displayEmail}</span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className={themeClasses.infoLabel}>Name</span>
-              <span className={themeClasses.infoValue}>
-                {userDoc?.displayName || "Not provided"}
-              </span>
-            </div>
+            {!isOAuthRedirect && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className={themeClasses.infoLabel}>Name</span>
+                  <span className={themeClasses.infoValue}>
+                    {userDoc?.displayName || "Not provided"}
+                  </span>
+                </div>
 
-            <div className="flex items-center justify-between">
-              <span className={themeClasses.infoLabel}>Company</span>
-              <span className={themeClasses.infoValue}>
-                {userDoc?.company || "Not provided"}
-              </span>
-            </div>
+                <div className="flex items-center justify-between">
+                  <span className={themeClasses.infoLabel}>Company</span>
+                  <span className={themeClasses.infoValue}>
+                    {userDoc?.company || "Not provided"}
+                  </span>
+                </div>
 
-            <div className="flex items-center justify-between">
-              <span className={themeClasses.infoLabel}>Requested</span>
-              <span className={themeClasses.infoValue}>
-                {formatDate(userDoc?.createdAt)}
-              </span>
-            </div>
+                <div className="flex items-center justify-between">
+                  <span className={themeClasses.infoLabel}>Requested</span>
+                  <span className={themeClasses.infoValue}>
+                    {formatDate(userDoc?.createdAt)}
+                  </span>
+                </div>
+              </>
+            )}
+            
+            {isOAuthRedirect && (
+              <div className="flex items-center justify-between">
+                <span className={themeClasses.infoLabel}>Sign-in Method</span>
+                <span className={themeClasses.infoValue}>
+                  {displayProvider.charAt(0).toUpperCase() + displayProvider.slice(1)}
+                </span>
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <span className={themeClasses.infoLabel}>Status</span>
               <div className={themeClasses.statusBadge}>
                 <Clock className="w-4 h-4 mr-1" />
-                Pending Review
+                {oauthStatus === 'rejected' ? 'Rejected' : 'Pending Review'}
               </div>
             </div>
           </div>
@@ -214,9 +244,21 @@ const PendingApproval = () => {
 
         {/* Actions */}
         <div className="space-y-4">
-          <button onClick={handleLogout} className={themeClasses.logoutButton}>
-            Sign Out
-          </button>
+          {isOAuthRedirect ? (
+            <button 
+              onClick={() => navigate("/login")} 
+              className={themeClasses.logoutButton}
+            >
+              <span className="flex items-center justify-center">
+                <LogIn className="w-4 h-4 mr-2" />
+                Back to Login
+              </span>
+            </button>
+          ) : (
+            <button onClick={handleLogout} className={themeClasses.logoutButton}>
+              Sign Out
+            </button>
+          )}
 
           <p
             className={`text-center text-sm ${

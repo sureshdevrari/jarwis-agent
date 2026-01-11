@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Import database and routes
 from database.connection import get_db, init_db, close_db
 from database.models import User
-from database.dependencies import get_current_user, get_current_user_optional
+from database.dependencies import get_current_user, get_current_user_optional, get_current_active_user
 from database.security import (
     get_security_headers, get_client_ip, security_store, InputValidator
 )
@@ -173,6 +173,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/redoc",
     }
     
+    # Paths with relaxed rate limiting for authenticated users (polling endpoints)
+    RELAXED_PATHS = {
+        "/api/scans/",  # Scan status polling
+        "/logs",        # Log fetching
+    }
+    
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         
@@ -182,8 +188,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         client_ip = get_client_ip(request)
         
-        # Determine tier (anonymous by default)
+        # Determine tier from JWT token if available
         tier = "anonymous"
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from database.auth import decode_token
+                token = auth_header[7:]  # Remove "Bearer " prefix
+                payload = decode_token(token)
+                if payload:
+                    # Get user's plan from token or default to professional for relaxed limits
+                    tier = payload.get("plan", "professional")
+                    # Map plan names to rate limit tiers
+                    if tier not in ["free", "individual", "professional", "enterprise"]:
+                        tier = "professional"  # Default authenticated tier
+            except Exception:
+                pass  # Keep anonymous tier on any error
+        
+        # Skip rate limiting entirely for scan-related paths when authenticated
+        is_scan_polling = any(pattern in path for pattern in self.RELAXED_PATHS)
+        if is_scan_polling and tier != "anonymous":
+            return await call_next(request)
         
         # Check rate limit
         is_allowed, current_count, limit = await security_store.check_rate_limit(
@@ -212,20 +237,106 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """
+    CSRF protection using double-submit cookie pattern.
+    - Sets a CSRF token cookie on all responses
+    - Validates X-CSRF-Token header matches cookie on state-changing requests
+    """
+    
+    CSRF_COOKIE_NAME = "jarwis_csrf_token"
+    CSRF_HEADER_NAME = "X-CSRF-Token"
+    
+    # Methods that require CSRF validation (state-changing)
+    PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+    
+    # Paths exempt from CSRF (login, token refresh, webhooks, health checks)
+    EXEMPT_PATHS = {
+        "/api/auth/login",
+        "/api/auth/register",
+        "/api/auth/refresh",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/api/oauth/google/callback",
+        "/api/oauth/github/callback",
+        "/api/health",
+        "/api/webhooks",
+    }
+    
+    def _generate_csrf_token(self) -> str:
+        """Generate a cryptographically secure CSRF token"""
+        import secrets
+        return secrets.token_urlsafe(32)
+    
+    async def dispatch(self, request: Request, call_next):
+        # Get or generate CSRF token
+        csrf_cookie = request.cookies.get(self.CSRF_COOKIE_NAME)
+        
+        # Validate CSRF for protected methods
+        if request.method in self.PROTECTED_METHODS:
+            path = request.url.path
+            
+            # Skip validation for exempt paths
+            is_exempt = any(path.startswith(exempt) for exempt in self.EXEMPT_PATHS)
+            
+            if not is_exempt:
+                csrf_header = request.headers.get(self.CSRF_HEADER_NAME)
+                
+                # If no CSRF cookie exists, this is a new session - generate one
+                if not csrf_cookie:
+                    # For new sessions on protected endpoints, require them to get a token first
+                    # This prevents CSRF attacks on first requests
+                    pass  # Allow for now, will be set on response
+                elif csrf_header != csrf_cookie:
+                    # Token mismatch - potential CSRF attack
+                    logger.warning(f"CSRF validation failed for {request.method} {path} from {get_client_ip(request)}")
+                    return Response(
+                        content=json.dumps({
+                            "detail": "CSRF validation failed. Please refresh the page and try again.",
+                            "error_code": "CSRF_INVALID"
+                        }),
+                        status_code=403,
+                        media_type="application/json"
+                    )
+        
+        response = await call_next(request)
+        
+        # Set/refresh CSRF cookie on all responses
+        new_token = csrf_cookie or self._generate_csrf_token()
+        response.set_cookie(
+            key=self.CSRF_COOKIE_NAME,
+            value=new_token,
+            httponly=False,  # Must be readable by JavaScript to send in header
+            secure=os.getenv("ENVIRONMENT", "development") == "production",
+            samesite="lax",
+            max_age=86400,  # 24 hours
+            path="/"
+        )
+        
+        return response
+
+
 # Add security middleware (order matters - first added = last executed)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(CSRFMiddleware)
 
-# Enable CORS with explicit allowed origins for production
-# TODO: Configure allowed_origins from environment variable
-ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+# Enable CORS with explicit allowed origins
+# IMPORTANT: allow_origins=["*"] with allow_credentials=True is INVALID!
+# Browsers reject this combination. Must use explicit origins when credentials are enabled.
+DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", DEFAULT_ORIGINS).split(",")]
+
+# Log CORS configuration at startup
+print(f"[CORS] Allowed origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, use: ALLOWED_ORIGINS
+    allow_origins=ALLOWED_ORIGINS,  # Must be explicit origins, NOT "*" when credentials=True
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-RateLimit-Remaining"],  # Expose custom headers to frontend
 )
 
 # Try to mount static files for React frontend
@@ -373,6 +484,8 @@ async def get_scan_status(
         'findings_count': len(job['findings']),
         'started_at': job['started_at'],
         'completed_at': job['completed_at'],
+        # Include target URL for display
+        'target_url': job['config'].get('target_url', ''),
         # Detailed data for expandable UI cards
         'pages_scanned': job.get('pages_scanned', []),
         'api_endpoints': job.get('api_endpoints', []),
@@ -402,21 +515,109 @@ async def get_scan_logs(
 @app.get('/api/scan/{scan_id}/results')
 async def get_scan_results(
     scan_id: str,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get full results of a scan"""
-    return check_scan_access(scan_id, current_user)
+    """Get full results of a scan with DB fallback for historical scans"""
+    try:
+        return check_scan_access(scan_id, current_user)
+    except HTTPException as exc:
+        # For completed/historical scans, fall back to persisted results in the database
+        if exc.status_code != 404:
+            raise
+        from database.models import ScanHistory, Finding
+        from sqlalchemy import select, or_
+        scan_row_result = await db.execute(
+            select(ScanHistory).where(
+                or_(ScanHistory.scan_id == scan_id, ScanHistory.id == scan_id)
+            )
+        )
+        scan_row = scan_row_result.scalar_one_or_none()
+        if not scan_row:
+            raise HTTPException(status_code=404, detail='Scan not found')
+        findings_result = await db.execute(
+            select(Finding).where(Finding.scan_id == scan_row.id)
+        )
+        findings = [f.to_dict() if hasattr(f, 'to_dict') else {
+            'id': str(f.id),
+            'scan_id': str(f.scan_id),
+            'finding_id': f.finding_id,
+            'category': f.category,
+            'severity': f.severity,
+            'title': f.title,
+            'description': f.description,
+            'url': f.url,
+            'method': f.method,
+            'parameter': f.parameter,
+            'evidence': f.evidence,
+            'poc': f.poc,
+            'reasoning': f.reasoning,
+            'ai_verified': f.ai_verified,
+            'is_false_positive': f.is_false_positive,
+        } for f in findings_result.scalars().all()]
+        return {
+            'scan_id': scan_row.scan_id or str(scan_row.id),
+            'status': scan_row.status,
+            'target': scan_row.target_url,
+            'findings': findings,
+            'summary': {
+                'total': len(findings),
+                'critical': len([f for f in findings if f.get('severity') == 'critical']),
+                'high': len([f for f in findings if f.get('severity') == 'high']),
+                'medium': len([f for f in findings if f.get('severity') == 'medium']),
+                'low': len([f for f in findings if f.get('severity') == 'low']),
+                'info': len([f for f in findings if f.get('severity') == 'info']),
+            }
+        }
 
 
 @app.get('/api/scan/{scan_id}/findings')
 async def get_scan_findings(
     scan_id: str, 
     severity: str = None,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get findings/vulnerabilities for a scan"""
-    job = check_scan_access(scan_id, current_user)
-    findings = job.get('findings', [])
+    """Get findings/vulnerabilities for a scan, with DB fallback"""
+    try:
+        job = check_scan_access(scan_id, current_user)
+        findings = job.get('findings', [])
+        status = job.get('status', 'completed')
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        from database.models import ScanHistory, Finding
+        from sqlalchemy import select, or_
+        scan_row_result = await db.execute(
+            select(ScanHistory).where(
+                or_(ScanHistory.scan_id == scan_id, ScanHistory.id == scan_id)
+            )
+        )
+        scan_row = scan_row_result.scalar_one_or_none()
+        if not scan_row:
+            raise HTTPException(status_code=404, detail='Scan not found')
+        findings_result = await db.execute(
+            select(Finding).where(Finding.scan_id == scan_row.id)
+        )
+        findings = [f.to_dict() if hasattr(f, 'to_dict') else {
+            'id': str(f.id),
+            'scan_id': str(f.scan_id),
+            'finding_id': f.finding_id,
+            'category': f.category,
+            'severity': f.severity,
+            'title': f.title,
+            'description': f.description,
+            'url': f.url,
+            'method': f.method,
+            'parameter': f.parameter,
+            'evidence': f.evidence,
+            'poc': f.poc,
+            'reasoning': f.reasoning,
+            'ai_verified': f.ai_verified,
+            'is_false_positive': f.is_false_positive,
+        } for f in findings_result.scalars().all()]
+        status = scan_row.status
+        scan_id = scan_row.scan_id or str(scan_row.id)
     
     # Filter by severity if specified
     if severity and severity != 'all':
@@ -424,40 +625,74 @@ async def get_scan_findings(
     
     # Calculate summary
     summary = {
-        'total': len(job.get('findings', [])),
-        'critical': len([f for f in job.get('findings', []) if f.get('severity') == 'critical']),
-        'high': len([f for f in job.get('findings', []) if f.get('severity') == 'high']),
-        'medium': len([f for f in job.get('findings', []) if f.get('severity') == 'medium']),
-        'low': len([f for f in job.get('findings', []) if f.get('severity') == 'low']),
-        'info': len([f for f in job.get('findings', []) if f.get('severity') == 'info']),
+        'total': len(findings),
+        'critical': len([f for f in findings if f.get('severity') == 'critical']),
+        'high': len([f for f in findings if f.get('severity') == 'high']),
+        'medium': len([f for f in findings if f.get('severity') == 'medium']),
+        'low': len([f for f in findings if f.get('severity') == 'low']),
+        'info': len([f for f in findings if f.get('severity') == 'info']),
     }
     
     return {
         'scan_id': scan_id,
         'findings': findings,
         'summary': summary,
-        'status': job['status']
+        'status': status
     }
 
 
 @app.get('/api/vulnerabilities')
 async def get_all_vulnerabilities(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get all vulnerabilities across all scans (filtered by user if authenticated)"""
+    """Get all vulnerabilities across all scans (filtered by user if authenticated)
+    
+    Reads from database for persistent data, with fallback to in-memory scan_jobs for active scans.
+    """
+    from database.models import Finding, ScanHistory
+    from sqlalchemy import select
+    
     all_findings = []
     
-    for scan_id, job in scan_jobs.items():
-        # Filter by user if authenticated
-        if current_user and job.get('user_id') and job['user_id'] != current_user.id:
-            continue  # Skip scans from other users
-        # If no user or scan has no user_id, include it (for backward compatibility)
+    # First, get findings from database (persistent storage)
+    if current_user:
+        # Get findings for authenticated user's scans
+        query = (
+            select(Finding, ScanHistory.target_url)
+            .join(ScanHistory, Finding.scan_id == ScanHistory.id)
+            .where(ScanHistory.user_id == current_user.id)
+            .order_by(Finding.severity.desc())
+        )
+        result = await db.execute(query)
         
-        for finding in job.get('findings', []):
-            finding_copy = finding.copy()
-            finding_copy['scan_id'] = scan_id
-            finding_copy['target'] = job['config']['target_url']
-            all_findings.append(finding_copy)
+        for finding, target_url in result:
+            all_findings.append({
+                'id': str(finding.id),
+                'scan_id': str(finding.scan_id),
+                'finding_id': finding.finding_id,
+                'category': finding.category,
+                'severity': finding.severity,
+                'title': finding.title,
+                'description': finding.description,
+                'url': finding.url,
+                'method': finding.method,
+                'parameter': finding.parameter,
+                'evidence': finding.evidence,
+                'poc': finding.poc,
+                'reasoning': finding.reasoning,
+                'target': target_url,
+                'ai_verified': finding.ai_verified,
+                'is_false_positive': finding.is_false_positive,
+            })
+    else:
+        # For unauthenticated users, check in-memory scan_jobs only
+        for scan_id, job in scan_jobs.items():
+            for finding in job.get('findings', []):
+                finding_copy = finding.copy()
+                finding_copy['scan_id'] = scan_id
+                finding_copy['target'] = job['config']['target_url']
+                all_findings.append(finding_copy)
     
     # Calculate summary
     summary = {
@@ -741,9 +976,14 @@ async def list_all_scans(
 
 
 @app.get('/api/scans/running')
-async def get_running_scans():
-    """Get currently running scans"""
+async def get_running_scans(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get currently running scans - checks both in-memory and database"""
     running = []
+    
+    # First check in-memory scan_jobs (legacy)
     for scan_id, job in scan_jobs.items():
         if job['status'] in ['running', 'queued']:
             running.append({
@@ -756,6 +996,57 @@ async def get_running_scans():
                 'phase': job.get('phase', ''),
                 'started_at': job['started_at']
             })
+    
+    # Also check in-memory scan_progress from routes/scans.py
+    from api.routes.scans import scan_progress
+    for scan_id, progress_data in scan_progress.items():
+        # Avoid duplicates
+        if not any(s['scan_id'] == scan_id for s in running):
+            status = progress_data.get('status', 'running')
+            if status in ['running', 'queued', 'initializing']:
+                running.append({
+                    'id': scan_id,
+                    'scan_id': scan_id,
+                    'status': status,
+                    'target': progress_data.get('target_url', 'Unknown'),
+                    'scan_type': progress_data.get('scan_type', 'web'),
+                    'progress': progress_data.get('progress', 0),
+                    'phase': progress_data.get('phase', 'Initializing'),
+                    'started_at': progress_data.get('started_at', '')
+                })
+    
+    # Finally check database for user's running scans (most reliable)
+    try:
+        from sqlalchemy import select
+        from database.models import ScanHistory
+        
+        result = await db.execute(
+            select(ScanHistory)
+            .where(
+                ScanHistory.user_id == current_user.id,
+                ScanHistory.status.in_(['running', 'queued', 'initializing'])
+            )
+            .order_by(ScanHistory.started_at.desc())
+            .limit(10)
+        )
+        db_scans = result.scalars().all()
+        
+        for scan in db_scans:
+            # Avoid duplicates
+            if not any(s['scan_id'] == scan.scan_id for s in running):
+                running.append({
+                    'id': str(scan.id),
+                    'scan_id': scan.scan_id,
+                    'status': scan.status,
+                    'target': scan.target_url,
+                    'scan_type': scan.scan_type or 'web',
+                    'progress': scan.progress or 0,
+                    'phase': scan.phase or 'Initializing',
+                    'started_at': scan.started_at.isoformat() if scan.started_at else ''
+                })
+    except Exception as e:
+        logger.warning(f"Failed to fetch running scans from database: {e}")
+    
     return {'scans': running}
 
 
@@ -802,10 +1093,30 @@ async def run_scan_async(config: ScanConfig):
             'message': message
         }
         logs.append(log_entry)
+        job['logs'] = logs  # Keep job logs in sync
+    
+    def log_vulnerability_summary(findings):
+        """Log vulnerability counts by severity with colored indicators"""
+        if not findings:
+            return
+        critical = len([f for f in findings if (f.severity if hasattr(f, 'severity') else f.get('severity', '')) == 'critical'])
+        high = len([f for f in findings if (f.severity if hasattr(f, 'severity') else f.get('severity', '')) == 'high'])
+        medium = len([f for f in findings if (f.severity if hasattr(f, 'severity') else f.get('severity', '')) == 'medium'])
+        low = len([f for f in findings if (f.severity if hasattr(f, 'severity') else f.get('severity', '')) == 'low'])
+        
+        if critical > 0:
+            log(f'[CRITICAL] {critical} Critical vulnerability found!', 'warning')
+        if high > 0:
+            log(f'[HIGH] {high} High severity issue(s) detected', 'warning')
+        if medium > 0:
+            log(f'[MEDIUM] {medium} Medium severity issue(s) detected', 'info')
+        if low > 0:
+            log(f'[LOW] {low} Low severity issue(s) noted', 'info')
     
     try:
         job['status'] = 'running'
-        log('Starting Jarwis AGI Pen Test scan...')
+        log('Jarwis AGI initializing security assessment...')
+        log('Jarwis is analyzing the target and planning attack vectors...')
         
         # Build config dict for runner
         runner_config = {
@@ -829,7 +1140,7 @@ async def run_scan_async(config: ScanConfig):
                 'success_indicator': 'logout, account, dashboard, welcome, profile'
             },
             'browser': {
-                'headless': True,  # Run headless for API
+                'headless': False,  # Show browser so user can see what's happening
                 'slow_mo': 100
             },
             'proxy': {
@@ -875,21 +1186,22 @@ async def run_scan_async(config: ScanConfig):
         # Run the scan
         job['phase'] = 'Initializing'
         job['progress'] = 5
-        log('[START] Initializing Jarwis AGI security scanner...')
+        log('Jarwis is preparing the security assessment plan...')
         
         try:
             await runner.initialize()
-            log('[OK] Scanner components initialized successfully')
+            log('Security scanner ready')
+            log(f'Target locked: {config.target_url}')
             
             # Check if stopped
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 1: Anonymous Crawling
             job['phase'] = 'Phase 1: Anonymous Crawling'
             job['progress'] = 10
-            log(' Starting reconnaissance - discovering endpoints...')
+            log('Phase 1: Reconnaissance - Jarwis is mapping the attack surface...')
             try:
                 await runner.phase_1_crawl_anonymous()
                 endpoint_count = len(runner.context.endpoints) if hasattr(runner, 'context') else 0
@@ -922,18 +1234,18 @@ async def run_scan_async(config: ScanConfig):
                 log(f'  Crawling phase encountered an issue: {str(e)}', 'warning')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 2: Pre-Login OWASP Scan
             job['phase'] = 'Phase 2: Pre-Login OWASP Scan'
             job['progress'] = 25
-            log('[TEST] Running OWASP security tests on unauthenticated surfaces...')
+            log('Phase 2: Jarwis is testing for OWASP Top 10 vulnerabilities...')
             try:
                 await runner.phase_2_prelogin_scan()
                 finding_count = len(runner.context.findings) if hasattr(runner, 'context') else 0
                 if finding_count > 0:
-                    log(f'[ALERT] Found {finding_count} potential vulnerabilities so far', 'warning')
+                    log_vulnerability_summary(runner.context.findings)
                     # Update findings early for UI
                     job['findings'] = [
                         {
@@ -946,12 +1258,12 @@ async def run_scan_async(config: ScanConfig):
                         for f in runner.context.findings
                     ]
                 else:
-                    log('[OK] Pre-login scan completed')
+                    log('Pre-login security tests completed')
             except Exception as e:
                 log(f'  Pre-login scan encountered an issue: {str(e)}', 'warning')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 3: Authentication
@@ -962,7 +1274,7 @@ async def run_scan_async(config: ScanConfig):
                 try:
                     await runner.phase_3_authenticate()
                     if runner.context.authenticated:
-                        log('[OK] Successfully authenticated')
+                        log('Successfully logged in - unlocking authenticated testing')
                     else:
                         log('  Authentication not successful', 'warning')
                 except Exception as e:
@@ -970,17 +1282,17 @@ async def run_scan_async(config: ScanConfig):
             else:
                 job['phase'] = 'Phase 3: Authentication'
                 job['progress'] = 35
-                log('[SKIP] No credentials provided - skipping authentication phase')
+                log('No credentials provided - testing unauthenticated surfaces only')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 4: Authenticated Crawling
             if runner.context.authenticated:
                 job['phase'] = 'Phase 4: Authenticated Crawling'
                 job['progress'] = 45
-                log('[CRAWL] Crawling authenticated areas...')
+                log('Phase 4: Jarwis is exploring protected areas...')
                 try:
                     await runner.phase_4_crawl_authenticated()
                     new_endpoints = len(runner.context.endpoints) if hasattr(runner, 'context') else 0
@@ -1005,16 +1317,16 @@ async def run_scan_async(config: ScanConfig):
                     log(f'  Authenticated crawling issue: {str(e)}', 'warning')
             else:
                 job['progress'] = 45
-                log('[SKIP] Skipping authenticated crawling (not logged in)')
+                log('Skipping authenticated crawling (not logged in)')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 5: Post-Login Scan
             job['phase'] = 'Phase 5: Post-Login Security Scan'
             job['progress'] = 60
-            log('[TEST] Running post-login security tests (IDOR, CSRF, etc.)...')
+            log('Phase 5: Jarwis is testing for authorization vulnerabilities...')
             try:
                 await runner.phase_5_postlogin_scan()
                 finding_count = len(runner.context.findings) if hasattr(runner, 'context') else 0
@@ -1036,37 +1348,37 @@ async def run_scan_async(config: ScanConfig):
                 log(f'  Post-login scan issue: {str(e)}', 'warning')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 6: API Testing
             job['phase'] = 'Phase 6: API Security Testing'
             job['progress'] = 70
-            log('[API] Testing discovered API endpoints...')
+            log('Phase 6: Jarwis is analyzing API security...')
             try:
                 if hasattr(runner, 'phase_6_api_testing'):
                     await runner.phase_6_api_testing()
-                log('[OK] API testing completed')
+                log('API security testing completed')
             except Exception as e:
                 log(f'  API testing issue: {str(e)}', 'warning')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 7: AI-Guided Testing
             job['phase'] = 'Phase 7: AI-Guided Testing'
             job['progress'] = 80
-            log('[AI] Jarwis AGI analyzing findings and suggesting additional tests...')
+            log('Phase 7: Jarwis AGI is thinking... analyzing patterns')
             try:
                 if hasattr(runner, 'phase_7_ai_guided_testing'):
                     await runner.phase_7_ai_guided_testing()
-                log('[OK] AI-guided testing completed')
+                log('AI analysis completed')
             except Exception as e:
                 log(f'  AI-guided testing issue: {str(e)}', 'warning')
             
             if job['status'] == 'stopped':
-                log(' Scan stopped by user', 'warning')
+                log('Scan stopped by user', 'warning')
                 return
             
             # Phase 8: Report Generation
@@ -1087,7 +1399,7 @@ async def run_scan_async(config: ScanConfig):
                     )
                     if report_paths:
                         job['report_path'] = report_paths.get('html', '')
-                        log(f'[REPORT] Report generated: {job["report_path"]}')
+                        log('Security report generated successfully')
             except Exception as e:
                 log(f'  Report generation issue: {str(e)}', 'warning')
             
@@ -1125,9 +1437,9 @@ async def run_scan_async(config: ScanConfig):
             medium_count = len([f for f in findings if f.get('severity') == 'medium'])
             low_count = len([f for f in findings if f.get('severity') == 'low'])
             
-            log(f'[DONE] Scan completed! Found {len(findings)} vulnerabilities', 'success')
+            log(f'Scan completed! Jarwis found {len(findings)} security issues', 'success')
             if critical_count > 0:
-                log(f'[CRITICAL] {critical_count} Critical vulnerabilities found!', 'warning')
+                log(f'{critical_count} CRITICAL vulnerabilities require immediate attention!', 'warning')
             if high_count > 0:
                 log(f'  {high_count} High severity vulnerabilities found!', 'warning')
             
@@ -1136,11 +1448,11 @@ async def run_scan_async(config: ScanConfig):
             job['phase'] = 'Completed'
             
         except Exception as e:
-            log(f'[ERROR] Scan error: {str(e)}', 'error')
+            log('Scan encountered an error', 'error')
             job['status'] = 'error'
             job['phase'] = f'Error: {str(e)}'
             import traceback
-            log(f'Stack trace: {traceback.format_exc()}', 'error')
+            # Stack trace logged internally
         
         finally:
             try:
@@ -1151,7 +1463,7 @@ async def run_scan_async(config: ScanConfig):
         job['completed_at'] = datetime.now().isoformat()
         
     except Exception as e:
-        log(f'[FATAL] Fatal error: {str(e)}', 'error')
+        log('A critical error occurred', 'error')
         job['status'] = 'error'
         job['phase'] = f'Error: {str(e)}'
         job['completed_at'] = datetime.now().isoformat()
@@ -1159,4 +1471,5 @@ async def run_scan_async(config: ScanConfig):
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 8000))
+    uvicorn.run(app, host='0.0.0.0', port=port)

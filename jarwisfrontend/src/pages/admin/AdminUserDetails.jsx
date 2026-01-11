@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { AlertTriangle, AlertCircle, Info, List, Table, Shield } from "lucide-react";
 import MiftyAdminLayout from "../../components/layout/MiftyAdminLayout";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -93,15 +94,15 @@ const AdminUserDetails = () => {
   const getSeverityIcon = (severity) => {
     switch (severity) {
       case "Critical":
-        return "[ALERT]";
+        return <AlertTriangle className="w-4 h-4 text-red-500" />;
       case "High":
-        return "[!]";
+        return <AlertCircle className="w-4 h-4 text-orange-500" />;
       case "Medium":
-        return "[!]";
+        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
       case "Low":
-        return "ℹ";
+        return <Info className="w-4 h-4 text-blue-400" />;
       default:
-        return "[LIST]";
+        return <List className="w-4 h-4" />;
     }
   };
 
@@ -429,7 +430,7 @@ const AdminUserDetails = () => {
                 onClick={() => setViewMode("table")}
                 className={contentThemes.viewToggleButton(viewMode === "table")}
               >
-                [CHART] Table
+                <Table className="w-4 h-4 inline mr-1" /> Table
               </button>
               <button
                 onClick={() => setViewMode("cards")}
@@ -442,7 +443,7 @@ const AdminUserDetails = () => {
 
           {vulnerabilities.length === 0 ? (
             <div className="text-center py-8 sm:py-12">
-              <div className="text-4xl sm:text-6xl mb-4">[SHIELD]</div>
+              <div className="text-4xl sm:text-6xl mb-4"><Shield className="w-16 h-16 mx-auto text-green-400" /></div>
               <h4
                 className={
                   isDarkMode

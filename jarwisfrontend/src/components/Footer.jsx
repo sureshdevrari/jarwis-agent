@@ -159,7 +159,7 @@ const Footer = () => {
 
         <div className="border-t border-gray-800 mt-8 md:mt-12 pt-6 md:pt-8 text-center">
           <p className="text-gray-400 text-xs md:text-sm">
-            (C) 2025 Jarwis AGI. Created by BKD Labs
+            (C) 2026 Jarwis AGI. Created by BKD Labs
           </p>
         </div>
       </div>

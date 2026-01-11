@@ -8,9 +8,11 @@ import PlanUsageCard from "../subscription/PlanUsageCard";
 import { FeatureChip, ProBadge, EnterpriseBadge } from "../subscription/FeatureGate";
 import { initiatePayment, getUserCountry, getCurrencyInfo } from "../../services/paymentService";
 import TwoFactorSettings from "./TwoFactorSettings";
-import { getAccessToken } from "../../services/api";
+import AgentManagement from "./AgentManagement";
+import VerifiedDomainsSettings from "./VerifiedDomainsSettings";
+import { getAccessToken, authAPI, userSettingsAPI } from "../../services/api";
 
-const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) => {
+const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account", isInlinePage = false }) => {
   const navigate = useNavigate();
   const { user, userDoc, isPro, isEnterprise, getPlanInfo, logout } = useAuth();
   const { currentPlan, getAllFeatures, canPerformAction, getActionLimit } = useSubscription();
@@ -45,11 +47,166 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
     twoFactorAuth: false,
   });
   
+  // Account form state (controlled inputs)
+  const [accountForm, setAccountForm] = useState({
+    full_name: userDoc?.full_name || userDoc?.displayName || "",
+    email: userDoc?.email || user?.email || "",
+    company: userDoc?.company || "",
+    job_title: userDoc?.job_title || "",
+  });
+  
+  // Profile form state
+  const [profileForm, setProfileForm] = useState({
+    bio: userDoc?.bio || "",
+    linkedin_url: userDoc?.linkedin_url || "",
+    twitter_url: userDoc?.twitter_url || "",
+    github_url: userDoc?.github_url || "",
+  });
+  
+  // Preferences form state
+  const [preferencesForm, setPreferencesForm] = useState({
+    default_scan_type: userDoc?.scan_preferences?.default_scan_type || "full",
+    report_format: userDoc?.scan_preferences?.report_format || "html_json",
+    timezone: userDoc?.timezone || "Asia/Kolkata",
+    language: userDoc?.language || "en",
+    date_format: userDoc?.scan_preferences?.date_format || "DD/MM/YYYY",
+    data_retention_days: userDoc?.scan_preferences?.data_retention_days || 90,
+    auto_delete_old_scans: userDoc?.scan_preferences?.auto_delete_old_scans || false,
+    share_analytics: userDoc?.scan_preferences?.share_analytics !== false,
+  });
+  
+  // Password change form state
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
+  
+  // UI feedback states
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [deletingData, setDeletingData] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  
+  // Delete account modal state
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [showDeleteDataModal, setShowDeleteDataModal] = useState(false);
+  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  
+  // Track dirty state for unsaved changes warning
+  const [dirtyForms, setDirtyForms] = useState({
+    account: false,
+    profile: false,
+    notifications: false,
+    preferences: false,
+    password: false,
+  });
+  
+  // Check if any form has unsaved changes
+  const hasUnsavedChanges = Object.values(dirtyForms).some(Boolean);
+  
+  // Warn user about unsaved changes when leaving
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+  
+  // Mark form as dirty when values change
+  const markDirty = useCallback((formName) => {
+    setDirtyForms(prev => ({ ...prev, [formName]: true }));
+  }, []);
+  
+  // Clear dirty state after successful save
+  const clearDirty = useCallback((formName) => {
+    setDirtyForms(prev => ({ ...prev, [formName]: false }));
+  }, []);
+  
+  // Update form states when userDoc changes
+  useEffect(() => {
+    if (userDoc) {
+      setAccountForm({
+        full_name: userDoc.full_name || userDoc.displayName || "",
+        email: userDoc.email || user?.email || "",
+        company: userDoc.company || "",
+        job_title: userDoc.job_title || "",
+      });
+      setProfileForm({
+        bio: userDoc.bio || "",
+        linkedin_url: userDoc.linkedin_url || "",
+        twitter_url: userDoc.twitter_url || "",
+        github_url: userDoc.github_url || "",
+      });
+      if (userDoc.notification_settings) {
+        setNotifications(prev => ({ ...prev, ...userDoc.notification_settings }));
+      }
+      if (userDoc.scan_preferences) {
+        setPreferences(prev => ({ ...prev, ...userDoc.scan_preferences }));
+      }
+    }
+  }, [userDoc, user]);
+  
+  // Clear feedback after 5 seconds
+  useEffect(() => {
+    if (saveSuccess || saveError) {
+      const timer = setTimeout(() => {
+        setSaveSuccess(null);
+        setSaveError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveSuccess, saveError]);
+  
+  // Login history and sessions state
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
   // Payment states
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [currencyInfo, setCurrencyInfo] = useState(null);
+  
+  // Fetch login history and sessions when security tab is active
+  useEffect(() => {
+    const fetchSecurityData = async () => {
+      if (activeSection === 'security' && isOpen) {
+        setLoadingHistory(true);
+        try {
+          const [historyRes, sessionsRes] = await Promise.all([
+            authAPI.getLoginHistory(10),
+            authAPI.getActiveSessions()
+          ]);
+          
+          if (historyRes.success && historyRes.data) {
+            setLoginHistory(historyRes.data.history || []);
+          }
+          if (sessionsRes.success && sessionsRes.data) {
+            setActiveSessions(sessionsRes.data.sessions || []);
+          }
+        } catch (err) {
+          console.error("Failed to fetch security data:", err);
+        } finally {
+          setLoadingHistory(false);
+        }
+      }
+    };
+    fetchSecurityData();
+  }, [activeSection, isOpen]);
   
   // Fetch currency info on mount
   useEffect(() => {
@@ -103,8 +260,9 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
     }
   }, [user, userDoc, currencyInfo]);
 
-  // Close on outside click
+  // Close on outside click (only for modal mode)
   useEffect(() => {
+    if (isInlinePage) return; // Skip for inline page mode
     const handleClickOutside = (event) => {
       if (panelRef.current && !panelRef.current.contains(event.target)) {
         onClose();
@@ -114,10 +272,11 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isInlinePage]);
 
-  // Close on escape key
+  // Close on escape key (only for modal mode)
   useEffect(() => {
+    if (isInlinePage) return; // Skip for inline page mode
     const handleEscape = (e) => {
       if (e.key === "Escape") onClose();
     };
@@ -125,7 +284,7 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       document.addEventListener("keydown", handleEscape);
     }
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isInlinePage]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -152,15 +311,230 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       };
       reader.readAsDataURL(file);
 
-      // TODO: Upload to server
-      // await authAPI.uploadProfileImage(file);
+      // Upload to server
+      const result = await userSettingsAPI.uploadAvatar(file);
+      if (result.success) {
+        setSaveSuccess("Profile picture updated successfully!");
+      } else {
+        setSaveError(result.error || "Failed to upload image");
+      }
       
-      setTimeout(() => {
-        setIsUploading(false);
-      }, 1000);
+      setIsUploading(false);
     } catch (error) {
       console.error("Upload failed:", error);
+      setSaveError("Failed to upload image");
       setIsUploading(false);
+    }
+  };
+
+  // Save account settings
+  const handleSaveAccount = async () => {
+    setSavingAccount(true);
+    setSaveError(null);
+    try {
+      const result = await userSettingsAPI.updateProfile({
+        full_name: accountForm.full_name,
+        company: accountForm.company,
+        job_title: accountForm.job_title,
+      });
+      if (result.success) {
+        setSaveSuccess("Account settings saved successfully!");
+        clearDirty('account');
+      } else {
+        setSaveError(result.error || "Failed to save account settings");
+      }
+    } catch (error) {
+      console.error("Save account failed:", error);
+      setSaveError("Failed to save account settings");
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  // Save profile/bio settings
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    setSaveError(null);
+    try {
+      const result = await userSettingsAPI.updateProfile({
+        bio: profileForm.bio,
+        linkedin_url: profileForm.linkedin_url,
+        twitter_url: profileForm.twitter_url,
+        github_url: profileForm.github_url,
+      });
+      if (result.success) {
+        setSaveSuccess("Profile saved successfully!");
+        clearDirty('profile');
+      } else {
+        setSaveError(result.error || "Failed to save profile");
+      }
+    } catch (error) {
+      console.error("Save profile failed:", error);
+      setSaveError("Failed to save profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Save notification settings
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+    setSaveError(null);
+    try {
+      const result = await userSettingsAPI.updateNotifications(notifications);
+      if (result.success) {
+        setSaveSuccess("Notification settings saved!");
+        clearDirty('notifications');
+      } else {
+        setSaveError(result.error || "Failed to save notifications");
+      }
+    } catch (error) {
+      console.error("Save notifications failed:", error);
+      setSaveError("Failed to save notification settings");
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  // Save scan preferences
+  const handleSavePreferences = async () => {
+    setSavingPreferences(true);
+    setSaveError(null);
+    try {
+      const result = await userSettingsAPI.updatePreferences({
+        ...preferences,
+        default_scan_type: preferencesForm.default_scan_type,
+        report_format: preferencesForm.report_format,
+        timezone: preferencesForm.timezone,
+        language: preferencesForm.language,
+        date_format: preferencesForm.date_format,
+        data_retention_days: preferencesForm.data_retention_days,
+        auto_delete_old_scans: preferencesForm.auto_delete_old_scans,
+        share_analytics: preferencesForm.share_analytics,
+      });
+      if (result.success) {
+        setSaveSuccess("Preferences saved successfully!");
+        clearDirty('preferences');
+      } else {
+        setSaveError(result.error || "Failed to save preferences");
+      }
+    } catch (error) {
+      console.error("Save preferences failed:", error);
+      setSaveError("Failed to save preferences");
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
+  // Change password
+  const handleChangePassword = async () => {
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setSaveError("New passwords do not match");
+      return;
+    }
+    if (passwordForm.new_password.length < 8) {
+      setSaveError("Password must be at least 8 characters");
+      return;
+    }
+    
+    setSavingPassword(true);
+    setSaveError(null);
+    try {
+      const result = await authAPI.changePassword(
+        passwordForm.current_password,
+        passwordForm.new_password
+      );
+      if (result.success) {
+        setSaveSuccess("Password updated successfully!");
+        setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+        clearDirty('password');
+      } else {
+        setSaveError(result.error || "Failed to change password");
+      }
+    } catch (error) {
+      console.error("Change password failed:", error);
+      setSaveError("Failed to change password");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  // Export all user data (GDPR)
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      // Backend returns a ZIP blob directly
+      const blob = await userSettingsAPI.exportData();
+      if (blob && blob.size > 0) {
+        // Download the ZIP file
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `jarwis_data_export_${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setSaveSuccess("Data exported successfully!");
+      } else {
+        setSaveError("Failed to export data - empty response");
+      }
+    } catch (error) {
+      console.error("Export data failed:", error);
+      setSaveError("Failed to export data");
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  // Delete all user data (keeps account)
+  const handleDeleteAllData = async () => {
+    if (deleteConfirmText !== "DELETE ALL DATA") {
+      setSaveError("Please type 'DELETE ALL DATA' to confirm");
+      return;
+    }
+    
+    setDeletingData(true);
+    try {
+      const result = await userSettingsAPI.deleteAllData(deleteConfirmPassword);
+      if (result.success) {
+        setSaveSuccess("All scan data deleted successfully");
+        setShowDeleteDataModal(false);
+        setDeleteConfirmPassword("");
+        setDeleteConfirmText("");
+      } else {
+        setSaveError(result.error || "Failed to delete data");
+      }
+    } catch (error) {
+      console.error("Delete data failed:", error);
+      setSaveError("Failed to delete data");
+    } finally {
+      setDeletingData(false);
+    }
+  };
+
+  // Delete account entirely
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE MY ACCOUNT") {
+      setSaveError("Please type 'DELETE MY ACCOUNT' to confirm");
+      return;
+    }
+    
+    setDeletingData(true);
+    try {
+      const result = await userSettingsAPI.deleteAccount(deleteConfirmPassword);
+      if (result.success) {
+        // Log out and redirect to home
+        logout();
+        navigate("/");
+      } else {
+        setSaveError(result.error || "Failed to delete account");
+      }
+    } catch (error) {
+      console.error("Delete account failed:", error);
+      setSaveError("Failed to delete account");
+    } finally {
+      setDeletingData(false);
     }
   };
 
@@ -183,29 +557,47 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
 
   const planInfo = getPlanInfo();
   const canAccessTeam = isPro() || isEnterprise();
+  
+  // Map section IDs to their dirty form state keys
+  const sectionDirtyMap = {
+    account: ['account'],
+    profile: ['profile'],
+    security: ['password'],
+    notifications: ['notifications'],
+    preferences: ['preferences'],
+  };
+  
+  // Check if a section has unsaved changes
+  const isSectionDirty = (sectionId) => {
+    const formKeys = sectionDirtyMap[sectionId];
+    if (!formKeys) return false;
+    return formKeys.some(key => dirtyForms[key]);
+  };
 
-  // Settings sections configuration
+  // Settings sections configuration with proper icons
   const settingsSections = [
-    { id: "account", icon: "User", label: "Account", available: true },
-    { id: "profile", icon: "Profile", label: "Profile", available: true },
-    { id: "security", icon: "Lock", label: "Security", available: true },
-    { id: "notifications", icon: "Bell", label: "Notifications", available: true },
-    { id: "team", icon: "Team", label: "Team Access", available: canAccessTeam, proOnly: true },
-    { id: "integrations", icon: "Link", label: "Integrations", available: true },
-    { id: "billing", icon: "Card", label: "Billing", available: true },
-    { id: "preferences", icon: "Gear", label: "Preferences", available: true },
-    { id: "data", icon: "Data", label: "Data & Privacy", available: true },
-    { id: "help", icon: "Help", label: "Help & Support", available: true },
+    { id: "account", icon: "👤", label: "Account", available: true },
+    { id: "profile", icon: "🎨", label: "Profile", available: true },
+    { id: "security", icon: "🔒", label: "Security", available: true },
+    { id: "domains", icon: "🌐", label: "Verified Domains", available: true },
+    { id: "notifications", icon: "🔔", label: "Notifications", available: true },
+    { id: "data", icon: "📊", label: "Data Controls", available: true },
+    { id: "team", icon: "👥", label: "Team Access", available: canAccessTeam, proOnly: true },
+    { id: "agents", icon: "🖥️", label: "Network Agents", available: true },
+    { id: "integrations", icon: "🔗", label: "Integrations", available: true },
+    { id: "billing", icon: "💳", label: "Billing", available: true },
+    { id: "preferences", icon: "⚙️", label: "Preferences", available: true },
+    { id: "help", icon: "❓", label: "Help & Support", available: true },
   ];
 
-  // Theme classes
+  // Theme classes - ChatGPT-style centered modal
   const themeClasses = {
     overlay: isDarkMode
-      ? "fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-      : "fixed inset-0 bg-gray-500/40 backdrop-blur-sm z-50",
-    panel: isDarkMode
-      ? "fixed right-0 top-0 h-full w-full sm:w-[90vw] sm:max-w-2xl bg-gray-900 border-l border-gray-700 shadow-2xl z-50 overflow-hidden safe-area-inset-x"
-      : "fixed right-0 top-0 h-full w-full sm:w-[90vw] sm:max-w-2xl bg-white border-l border-gray-200 shadow-2xl z-50 overflow-hidden safe-area-inset-x",
+      ? "fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4"
+      : "fixed inset-0 bg-black/50 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4",
+    modal: isDarkMode
+      ? "relative w-full max-w-3xl h-[90vh] sm:h-[85vh] max-h-[700px] bg-gray-900 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in fade-in zoom-in-95 duration-200"
+      : "relative w-full max-w-3xl h-[90vh] sm:h-[85vh] max-h-[700px] bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in fade-in zoom-in-95 duration-200",
     header: isDarkMode
       ? "flex items-center justify-between p-4 sm:p-6 border-b border-gray-700"
       : "flex items-center justify-between p-4 sm:p-6 border-b border-gray-200",
@@ -216,16 +608,26 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       ? "p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors active:scale-95"
       : "p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors active:scale-95",
     sidebar: isDarkMode
-      ? "hidden md:block w-56 border-r border-gray-700 p-4 space-y-1 overflow-y-auto"
-      : "hidden md:block w-56 border-r border-gray-200 p-4 space-y-1 overflow-y-auto",
-    sidebarBtn: (active, available) => isDarkMode
-      ? `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all min-h-[44px] ${
-          !available ? "opacity-50 cursor-not-allowed" :
-          active ? "bg-blue-600/20 text-blue-400 border border-blue-500/30" : "text-gray-300 hover:bg-gray-800 hover:text-white"
+      ? "hidden sm:block w-52 border-r border-gray-700 py-3 flex-shrink-0 overflow-y-auto"
+      : "hidden sm:block w-52 border-r border-gray-200 py-3 flex-shrink-0 overflow-y-auto",
+    mobileTabs: isDarkMode
+      ? "sm:hidden flex items-center gap-2 p-3 border-b border-gray-700 overflow-x-auto scrollbar-hide"
+      : "sm:hidden flex items-center gap-2 p-3 border-b border-gray-200 overflow-x-auto scrollbar-hide",
+    mobileTab: (active) => isDarkMode
+      ? `flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+          active ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800"
         }`
-      : `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all min-h-[44px] ${
+      : `flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+          active ? "bg-gray-200 text-gray-900" : "text-gray-600 hover:bg-gray-100"
+        }`,
+    sidebarBtn: (active, available) => isDarkMode
+      ? `w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all text-sm ${
           !available ? "opacity-50 cursor-not-allowed" :
-          active ? "bg-blue-100 text-blue-700 border border-blue-300" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+          active ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+        }`
+      : `w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all text-sm ${
+          !available ? "opacity-50 cursor-not-allowed" :
+          active ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`,
     content: isDarkMode
       ? "flex-1 p-4 sm:p-6 overflow-y-auto"
@@ -273,6 +675,24 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       case "account":
         return (
           <div className="space-y-6">
+            {/* Success/Error feedback */}
+            {saveSuccess && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-green-500/20 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✓</span>
+                  <p>{saveSuccess}</p>
+                </div>
+              </div>
+            )}
+            {saveError && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-red-500/20 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✕</span>
+                  <p>{saveError}</p>
+                </div>
+              </div>
+            )}
+            
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Account Information</h3>
               <div className="space-y-4">
@@ -280,7 +700,8 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                   <label className={themeClasses.label}>Full Name</label>
                   <input
                     type="text"
-                    defaultValue={userDoc?.full_name || userDoc?.displayName || ""}
+                    value={accountForm.full_name}
+                    onChange={(e) => { setAccountForm({...accountForm, full_name: e.target.value}); markDirty('account'); }}
                     className={themeClasses.input}
                     placeholder="Enter your full name"
                   />
@@ -289,7 +710,7 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                   <label className={themeClasses.label}>Email Address</label>
                   <input
                     type="email"
-                    defaultValue={userDoc?.email || user?.email || ""}
+                    value={accountForm.email}
                     className={themeClasses.input}
                     disabled
                   />
@@ -301,7 +722,8 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                   <label className={themeClasses.label}>Company / Organization</label>
                   <input
                     type="text"
-                    defaultValue={userDoc?.company || ""}
+                    value={accountForm.company}
+                    onChange={(e) => { setAccountForm({...accountForm, company: e.target.value}); markDirty('account'); }}
                     className={themeClasses.input}
                     placeholder="Your company name"
                   />
@@ -310,14 +732,22 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                   <label className={themeClasses.label}>Job Title</label>
                   <input
                     type="text"
-                    defaultValue={userDoc?.job_title || ""}
+                    value={accountForm.job_title}
+                    onChange={(e) => { setAccountForm({...accountForm, job_title: e.target.value}); markDirty('account'); }}
                     className={themeClasses.input}
                     placeholder="e.g., Security Engineer"
                   />
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
-                <button className={themeClasses.btnPrimary}>Save Changes</button>
+                <button 
+                  onClick={handleSaveAccount}
+                  disabled={savingAccount}
+                  className={themeClasses.btnPrimary}
+                  aria-label="Save account changes"
+                >
+                  {savingAccount ? "Saving..." : "Save Changes"}
+                </button>
               </div>
             </div>
 
@@ -349,8 +779,67 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <p className={`${themeClasses.textMuted} mb-4`}>
                 Once you delete your account, there is no going back. Please be certain.
               </p>
-              <button className={themeClasses.btnDanger}>Delete Account</button>
+              <button 
+                onClick={() => setShowDeleteAccountModal(true)}
+                className={themeClasses.btnDanger}
+                aria-label="Delete account permanently"
+              >
+                Delete Account
+              </button>
             </div>
+            
+            {/* Delete Account Confirmation Modal */}
+            {showDeleteAccountModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className={`w-full max-w-md mx-4 p-6 rounded-xl ${isDarkMode ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200"} shadow-2xl`}>
+                  <h3 className={`text-xl font-bold mb-4 text-red-500`}>Delete Your Account?</h3>
+                  <p className={`${themeClasses.textMuted} mb-4`}>
+                    This action is <strong>permanent and irreversible</strong>. All your data, scans, and reports will be deleted.
+                  </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className={themeClasses.label}>Type "DELETE MY ACCOUNT" to confirm</label>
+                      <input
+                        type="text"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        className={themeClasses.input}
+                        placeholder="DELETE MY ACCOUNT"
+                      />
+                    </div>
+                    <div>
+                      <label className={themeClasses.label}>Enter your password</label>
+                      <input
+                        type="password"
+                        value={deleteConfirmPassword}
+                        onChange={(e) => setDeleteConfirmPassword(e.target.value)}
+                        className={themeClasses.input}
+                        placeholder="Your password"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex gap-3 justify-end">
+                    <button
+                      onClick={() => {
+                        setShowDeleteAccountModal(false);
+                        setDeleteConfirmPassword("");
+                        setDeleteConfirmText("");
+                      }}
+                      className={themeClasses.btnSecondary}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deletingData || deleteConfirmText !== "DELETE MY ACCOUNT"}
+                      className={`${themeClasses.btnDanger} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {deletingData ? "Deleting..." : "Delete Forever"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -398,13 +887,11 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <h3 className={themeClasses.cardTitle}>Bio</h3>
               <textarea
                 rows={4}
-                defaultValue={userDoc?.bio || ""}
+                value={profileForm.bio}
+                onChange={(e) => { setProfileForm({...profileForm, bio: e.target.value}); markDirty('profile'); }}
                 className={themeClasses.input}
                 placeholder="Tell us a bit about yourself..."
               />
-              <div className="mt-4 flex justify-end">
-                <button className={themeClasses.btnPrimary}>Save Bio</button>
-              </div>
             </div>
 
             <div className={themeClasses.card}>
@@ -412,19 +899,44 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <div className="space-y-4">
                 <div>
                   <label className={themeClasses.label}>LinkedIn</label>
-                  <input type="url" className={themeClasses.input} placeholder="https://linkedin.com/in/..." />
+                  <input 
+                    type="url" 
+                    value={profileForm.linkedin_url}
+                    onChange={(e) => { setProfileForm({...profileForm, linkedin_url: e.target.value}); markDirty('profile'); }}
+                    className={themeClasses.input} 
+                    placeholder="https://linkedin.com/in/..." 
+                  />
                 </div>
                 <div>
                   <label className={themeClasses.label}>Twitter / X</label>
-                  <input type="url" className={themeClasses.input} placeholder="https://twitter.com/..." />
+                  <input 
+                    type="url" 
+                    value={profileForm.twitter_url}
+                    onChange={(e) => { setProfileForm({...profileForm, twitter_url: e.target.value}); markDirty('profile'); }}
+                    className={themeClasses.input} 
+                    placeholder="https://twitter.com/..." 
+                  />
                 </div>
                 <div>
                   <label className={themeClasses.label}>GitHub</label>
-                  <input type="url" className={themeClasses.input} placeholder="https://github.com/..." />
+                  <input 
+                    type="url" 
+                    value={profileForm.github_url}
+                    onChange={(e) => { setProfileForm({...profileForm, github_url: e.target.value}); markDirty('profile'); }}
+                    className={themeClasses.input} 
+                    placeholder="https://github.com/..." 
+                  />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
-                <button className={themeClasses.btnPrimary}>Save Links</button>
+                <button 
+                  onClick={handleSaveProfile}
+                  disabled={savingProfile}
+                  className={themeClasses.btnPrimary}
+                  aria-label="Save profile changes"
+                >
+                  {savingProfile ? "Saving..." : "Save Profile"}
+                </button>
               </div>
             </div>
           </div>
@@ -433,24 +945,66 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       case "security":
         return (
           <div className="space-y-6">
+            {saveSuccess && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-green-500/20 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✓</span>
+                  <p>{saveSuccess}</p>
+                </div>
+              </div>
+            )}
+            {saveError && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-red-500/20 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✕</span>
+                  <p>{saveError}</p>
+                </div>
+              </div>
+            )}
+            
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Password</h3>
               <div className="space-y-4">
                 <div>
                   <label className={themeClasses.label}>Current Password</label>
-                  <input type="password" className={themeClasses.input} placeholder="********" />
+                  <input 
+                    type="password" 
+                    value={passwordForm.current_password}
+                    onChange={(e) => { setPasswordForm({...passwordForm, current_password: e.target.value}); markDirty('password'); }}
+                    className={themeClasses.input} 
+                    placeholder="********" 
+                  />
                 </div>
                 <div>
                   <label className={themeClasses.label}>New Password</label>
-                  <input type="password" className={themeClasses.input} placeholder="********" />
+                  <input 
+                    type="password" 
+                    value={passwordForm.new_password}
+                    onChange={(e) => { setPasswordForm({...passwordForm, new_password: e.target.value}); markDirty('password'); }}
+                    className={themeClasses.input} 
+                    placeholder="********" 
+                  />
                 </div>
                 <div>
                   <label className={themeClasses.label}>Confirm New Password</label>
-                  <input type="password" className={themeClasses.input} placeholder="********" />
+                  <input 
+                    type="password" 
+                    value={passwordForm.confirm_password}
+                    onChange={(e) => { setPasswordForm({...passwordForm, confirm_password: e.target.value}); markDirty('password'); }}
+                    className={themeClasses.input} 
+                    placeholder="********" 
+                  />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
-                <button className={themeClasses.btnPrimary}>Update Password</button>
+                <button 
+                  onClick={handleChangePassword}
+                  disabled={savingPassword || !passwordForm.current_password || !passwordForm.new_password}
+                  className={`${themeClasses.btnPrimary} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  aria-label="Update password"
+                >
+                  {savingPassword ? "Updating..." : "Update Password"}
+                </button>
               </div>
             </div>
 
@@ -460,48 +1014,90 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Active Sessions</h3>
               <div className="space-y-3">
-                <div className={`flex items-center justify-between p-3 rounded-lg ${isDarkMode ? "bg-gray-700/50" : "bg-white border border-gray-200"}`}>
-                  <div className="flex items-center gap-3">
-                    <span></span>
-                    <div>
-                      <p className={isDarkMode ? "text-white font-medium" : "text-gray-900 font-medium"}>
-                        Current Session
-                      </p>
-                      <p className={isDarkMode ? "text-gray-400 text-sm" : "text-gray-600 text-sm"}>
-                        This device
-                      </p>
+                {activeSessions.length > 0 ? activeSessions.map((session, idx) => (
+                  <div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${isDarkMode ? "bg-gray-700/50" : "bg-white border border-gray-200"}`}>
+                    <div className="flex items-center gap-3">
+                      <span>💻</span>
+                      <div>
+                        <p className={isDarkMode ? "text-white font-medium" : "text-gray-900 font-medium"}>
+                          {session.is_current ? 'Current Session' : session.user_agent?.substring(0, 30) || 'Unknown Device'}
+                        </p>
+                        <p className={isDarkMode ? "text-gray-400 text-sm" : "text-gray-600 text-sm"}>
+                          {session.ip_address || 'Unknown IP'}
+                        </p>
+                      </div>
                     </div>
+                    <span className={`px-2 py-1 text-xs font-medium ${session.is_current ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'} rounded-full`}>
+                      {session.is_current ? 'Active' : 'Other'}
+                    </span>
                   </div>
-                  <span className="px-2 py-1 text-xs font-medium bg-green-500/20 text-green-500 rounded-full">Active</span>
-                </div>
+                )) : (
+                  <div className={`flex items-center justify-between p-3 rounded-lg ${isDarkMode ? "bg-gray-700/50" : "bg-white border border-gray-200"}`}>
+                    <div className="flex items-center gap-3">
+                      <span>💻</span>
+                      <div>
+                        <p className={isDarkMode ? "text-white font-medium" : "text-gray-900 font-medium"}>
+                          Current Session
+                        </p>
+                        <p className={isDarkMode ? "text-gray-400 text-sm" : "text-gray-600 text-sm"}>
+                          This device
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-1 text-xs font-medium bg-green-500/20 text-green-500 rounded-full">Active</span>
+                  </div>
+                )}
               </div>
-              <button className={`${themeClasses.btnDanger} mt-4`}>Sign Out All Devices</button>
+              <button className={`${themeClasses.btnDanger} mt-4`} onClick={() => authAPI.logoutAll && authAPI.logoutAll()}>Sign Out All Devices</button>
             </div>
 
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Login History</h3>
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
               <div className="space-y-2">
-                {[
-                  { date: "Today, 10:30 AM", location: "Mumbai, India", device: "Chrome on Windows" },
-                  { date: "Yesterday, 2:15 PM", location: "Mumbai, India", device: "Safari on iPhone" },
-                  { date: "Jan 1, 2026", location: "Delhi, India", device: "Firefox on Mac" },
-                ].map((login, i) => (
+                {loginHistory.length > 0 ? loginHistory.map((login, i) => (
                   <div key={i} className={`flex items-center justify-between py-2 ${i > 0 ? `border-t ${isDarkMode ? "border-gray-700" : "border-gray-200"}` : ""}`}>
                     <div>
-                      <p className={themeClasses.text}>{login.device}</p>
-                      <p className={`text-sm ${themeClasses.textMuted}`}>{login.location}</p>
+                      <p className={themeClasses.text}>{login.device || 'Unknown Device'}</p>
+                      <p className={`text-sm ${themeClasses.textMuted}`}>{login.ip_address || login.location || 'Unknown'}</p>
                     </div>
-                    <span className={`text-sm ${themeClasses.textMuted}`}>{login.date}</span>
+                    <div className="text-right">
+                      <span className={`text-sm ${themeClasses.textMuted}`}>
+                        {login.timestamp ? new Date(login.timestamp).toLocaleString() : login.date}
+                      </span>
+                      {login.success === false && (
+                        <p className="text-xs text-red-500">Failed</p>
+                      )}
+                    </div>
                   </div>
-                ))}
+                )) : (
+                  <p className={`text-sm ${themeClasses.textMuted}`}>No login history available yet.</p>
+                )}
               </div>
+              )}
             </div>
           </div>
         );
 
+      case "domains":
+        return <VerifiedDomainsSettings isDarkMode={isDarkMode} />;
+
       case "notifications":
         return (
           <div className="space-y-6">
+            {saveSuccess && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-green-500/20 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✓</span>
+                  <p>{saveSuccess}</p>
+                </div>
+              </div>
+            )}
+            
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Email Notifications</h3>
               <div className="space-y-4">
@@ -517,8 +1113,10 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                       <p className={`text-sm ${themeClasses.textMuted}`}>{item.desc}</p>
                     </div>
                     <button
-                      onClick={() => setNotifications({...notifications, [item.key]: !notifications[item.key]})}
+                      onClick={() => { setNotifications({...notifications, [item.key]: !notifications[item.key]}); markDirty('notifications'); }}
                       className={themeClasses.toggle(notifications[item.key])}
+                      aria-label={`Toggle ${item.label}`}
+                      aria-pressed={notifications[item.key]}
                     >
                       <span className={themeClasses.toggleKnob(notifications[item.key])} />
                     </button>
@@ -535,8 +1133,10 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                   <p className={`text-sm ${themeClasses.textMuted}`}>Receive real-time alerts in your browser</p>
                 </div>
                 <button
-                  onClick={() => setNotifications({...notifications, push: !notifications.push})}
+                  onClick={() => { setNotifications({...notifications, push: !notifications.push}); markDirty('notifications'); }}
                   className={themeClasses.toggle(notifications.push)}
+                  aria-label="Toggle browser notifications"
+                  aria-pressed={notifications.push}
                 >
                   <span className={themeClasses.toggleKnob(notifications.push)} />
                 </button>
@@ -550,6 +1150,18 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               </p>
               <button className={themeClasses.btnSecondary}>
                 <span></span> Connect Slack
+              </button>
+            </div>
+            
+            {/* Save Notifications Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveNotifications}
+                disabled={savingNotifications}
+                className={themeClasses.btnPrimary}
+                aria-label="Save notification settings"
+              >
+                {savingNotifications ? "Saving..." : "Save Notification Settings"}
               </button>
             </div>
           </div>
@@ -652,29 +1264,60 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
           </div>
         );
 
+      case "agents":
+        return (
+          <div className="space-y-6">
+            <AgentManagement />
+          </div>
+        );
+
       case "integrations":
         return (
           <div className="space-y-6">
+            {/* Coming Soon Notice */}
+            <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-blue-50 border-blue-200 text-blue-700"}`}>
+              <div className="flex items-center gap-3">
+                <span>🚧</span>
+                <div>
+                  <p className="font-medium">Integrations Coming Soon</p>
+                  <p className={`text-sm ${isDarkMode ? "text-blue-400/80" : "text-blue-600"}`}>
+                    We're working on bringing these integrations to Jarwis. Stay tuned!
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Connected Services</h3>
               <div className="space-y-4">
                 {[
-                  { name: "GitHub", icon: "Icon", status: false, desc: "Import repositories for scanning" },
-                  { name: "GitLab", icon: "Icon", status: false, desc: "Connect GitLab projects" },
-                  { name: "Jira", icon: "Icon", status: false, desc: "Create tickets from vulnerabilities" },
-                  { name: "Slack", icon: "Icon", status: false, desc: "Receive notifications in Slack" },
-                  { name: "Microsoft Teams", icon: "Icon", status: false, desc: "Team notifications" },
-                  { name: "AWS", icon: "Icon", status: false, desc: "Scan AWS infrastructure" },
+                  { name: "GitHub", icon: "🐙", status: false, desc: "Import repositories for scanning", comingSoon: true },
+                  { name: "GitLab", icon: "🦊", status: false, desc: "Connect GitLab projects", comingSoon: true },
+                  { name: "Jira", icon: "📋", status: false, desc: "Create tickets from vulnerabilities", comingSoon: true },
+                  { name: "Slack", icon: "💬", status: false, desc: "Receive notifications in Slack", comingSoon: true },
+                  { name: "Microsoft Teams", icon: "👥", status: false, desc: "Team notifications", comingSoon: true },
+                  { name: "AWS", icon: "☁️", status: false, desc: "Scan AWS infrastructure", comingSoon: true },
                 ].map((service) => (
-                  <div key={service.name} className={`flex items-center justify-between p-4 rounded-lg ${isDarkMode ? "bg-gray-700/50" : "bg-white border border-gray-200"}`}>
+                  <div key={service.name} className={`flex items-center justify-between p-4 rounded-lg ${isDarkMode ? "bg-gray-700/50" : "bg-white border border-gray-200"} ${service.comingSoon ? "opacity-75" : ""}`}>
                     <div className="flex items-center gap-4">
                       <span className="text-3xl">{service.icon}</span>
                       <div>
-                        <p className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>{service.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>{service.name}</p>
+                          {service.comingSoon && (
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${isDarkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                              Coming Soon
+                            </span>
+                          )}
+                        </div>
                         <p className={`text-sm ${themeClasses.textMuted}`}>{service.desc}</p>
                       </div>
                     </div>
-                    <button className={service.status ? themeClasses.btnDanger : themeClasses.btnSecondary}>
+                    <button 
+                      className={`${service.status ? themeClasses.btnDanger : themeClasses.btnSecondary} ${service.comingSoon ? "cursor-not-allowed opacity-50" : ""}`}
+                      disabled={service.comingSoon}
+                      title={service.comingSoon ? "This integration is coming soon" : ""}
+                    >
                       {service.status ? "Disconnect" : "Connect"}
                     </button>
                   </div>
@@ -683,15 +1326,25 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
             </div>
 
             <div className={themeClasses.card}>
-              <h3 className={themeClasses.cardTitle}>Webhooks</h3>
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className={themeClasses.cardTitle}>Webhooks</h3>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${isDarkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                  Coming Soon
+                </span>
+              </div>
               <p className={`${themeClasses.textMuted} mb-4`}>
                 Send scan results to your own endpoints
               </p>
-              <div className="space-y-3">
-                <input type="url" className={themeClasses.input} placeholder="https://your-webhook-endpoint.com/jarwis" />
+              <div className="space-y-3 opacity-50">
+                <input 
+                  type="url" 
+                  className={themeClasses.input} 
+                  placeholder="https://your-webhook-endpoint.com/jarwis" 
+                  disabled
+                />
                 <div className="flex gap-3">
-                  <button className={themeClasses.btnPrimary}>Add Webhook</button>
-                  <button className={themeClasses.btnSecondary}>Test</button>
+                  <button className={themeClasses.btnPrimary} disabled>Add Webhook</button>
+                  <button className={themeClasses.btnSecondary} disabled>Test</button>
                 </div>
               </div>
             </div>
@@ -937,6 +1590,15 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       case "preferences":
         return (
           <div className="space-y-6">
+            {saveSuccess && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-green-500/20 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✓</span>
+                  <p>{saveSuccess}</p>
+                </div>
+              </div>
+            )}
+            
             <div className={themeClasses.card}>
               <h3 className={themeClasses.cardTitle}>Scan Preferences</h3>
               <div className="space-y-4">
@@ -951,8 +1613,10 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                       <p className={`text-sm ${themeClasses.textMuted}`}>{item.desc}</p>
                     </div>
                     <button
-                      onClick={() => setPreferences({...preferences, [item.key]: !preferences[item.key]})}
+                      onClick={() => { setPreferences({...preferences, [item.key]: !preferences[item.key]}); markDirty('preferences'); }}
                       className={themeClasses.toggle(preferences[item.key])}
+                      aria-label={`Toggle ${item.label}`}
+                      aria-pressed={preferences[item.key]}
                     >
                       <span className={themeClasses.toggleKnob(preferences[item.key])} />
                     </button>
@@ -966,34 +1630,49 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <div className="space-y-4">
                 <div>
                   <label className={themeClasses.label}>Default Scan Type</label>
-                  <select className={themeClasses.input}>
-                    <option>Full OWASP Top 10 Scan</option>
-                    <option>Quick Scan</option>
-                    <option>API Security Scan</option>
-                    <option>Authenticated Scan</option>
+                  <select 
+                    value={preferencesForm.default_scan_type}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, default_scan_type: e.target.value}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Default scan type"
+                  >
+                    <option value="full">Full OWASP Top 10 Scan</option>
+                    <option value="quick">Quick Scan</option>
+                    <option value="api">API Security Scan</option>
+                    <option value="authenticated">Authenticated Scan</option>
                   </select>
                 </div>
                 <div>
                   <label className={themeClasses.label}>Report Format</label>
-                  <select className={themeClasses.input}>
-                    <option>HTML + JSON</option>
-                    <option>PDF</option>
-                    <option>SARIF</option>
-                    <option>All Formats</option>
+                  <select 
+                    value={preferencesForm.report_format}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, report_format: e.target.value}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Report format"
+                  >
+                    <option value="html_json">HTML + JSON</option>
+                    <option value="pdf">PDF</option>
+                    <option value="sarif">SARIF</option>
+                    <option value="all">All Formats</option>
                   </select>
                 </div>
                 <div>
                   <label className={themeClasses.label}>Timezone</label>
-                  <select className={themeClasses.input}>
-                    <option>Asia/Kolkata (IST)</option>
-                    <option>UTC</option>
-                    <option>America/New_York (EST)</option>
-                    <option>Europe/London (GMT)</option>
+                  <select 
+                    value={preferencesForm.timezone}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, timezone: e.target.value}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Timezone"
+                  >
+                    <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">America/New_York (EST)</option>
+                    <option value="Europe/London">Europe/London (GMT)</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                    <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
                   </select>
                 </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button className={themeClasses.btnPrimary}>Save Preferences</button>
               </div>
             </div>
 
@@ -1002,23 +1681,47 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <div className="space-y-4">
                 <div>
                   <label className={themeClasses.label}>Language</label>
-                  <select className={themeClasses.input}>
-                    <option>English</option>
-                    <option>Hindi</option>
-                    <option>Spanish</option>
-                    <option>French</option>
-                    <option>German</option>
+                  <select 
+                    value={preferencesForm.language}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, language: e.target.value}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Language"
+                  >
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="ja">Japanese</option>
+                    <option value="zh">Chinese</option>
                   </select>
                 </div>
                 <div>
                   <label className={themeClasses.label}>Date Format</label>
-                  <select className={themeClasses.input}>
-                    <option>DD/MM/YYYY</option>
-                    <option>MM/DD/YYYY</option>
-                    <option>YYYY-MM-DD</option>
+                  <select 
+                    value={preferencesForm.date_format}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, date_format: e.target.value}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Date format"
+                  >
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                   </select>
                 </div>
               </div>
+            </div>
+            
+            {/* Save Preferences Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSavePreferences}
+                disabled={savingPreferences}
+                className={themeClasses.btnPrimary}
+                aria-label="Save all preferences"
+              >
+                {savingPreferences ? "Saving..." : "Save All Preferences"}
+              </button>
             </div>
           </div>
         );
@@ -1026,14 +1729,36 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
       case "data":
         return (
           <div className="space-y-6">
+            {saveSuccess && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-green-500/20 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✓</span>
+                  <p>{saveSuccess}</p>
+                </div>
+              </div>
+            )}
+            {saveError && (
+              <div className={`p-4 rounded-lg border ${isDarkMode ? "bg-red-500/20 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-700"}`}>
+                <div className="flex items-center gap-3">
+                  <span>✕</span>
+                  <p>{saveError}</p>
+                </div>
+              </div>
+            )}
+            
             <div className={themeClasses.card}>
-              <h3 className={themeClasses.cardTitle}>Data Export</h3>
+              <h3 className={themeClasses.cardTitle}>Data Export (GDPR)</h3>
               <p className={`${themeClasses.textMuted} mb-4`}>
-                Download all your data including scans, reports, and settings
+                Download all your data including scans, reports, and settings. This may take a few moments.
               </p>
               <div className="flex gap-3">
-                <button className={themeClasses.btnPrimary}>Export All Data</button>
-                <button className={themeClasses.btnSecondary}>Export Scans Only</button>
+                <button 
+                  onClick={handleExportData}
+                  disabled={exportingData}
+                  className={themeClasses.btnPrimary}
+                >
+                  {exportingData ? "Exporting..." : "Export All Data"}
+                </button>
               </div>
             </div>
 
@@ -1043,11 +1768,16 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
               <div className="space-y-4">
                 <div>
                   <label className={themeClasses.label}>Keep scan history for</label>
-                  <select className={themeClasses.input}>
-                    <option>30 days</option>
-                    <option>90 days</option>
-                    <option>1 year</option>
-                    <option>Forever</option>
+                  <select 
+                    value={preferencesForm.data_retention_days}
+                    onChange={(e) => { setPreferencesForm({...preferencesForm, data_retention_days: parseInt(e.target.value)}); markDirty('preferences'); }}
+                    className={themeClasses.input}
+                    aria-label="Data retention period"
+                  >
+                    <option value={30}>30 days</option>
+                    <option value={90}>90 days</option>
+                    <option value={365}>1 year</option>
+                    <option value={-1}>Forever</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between">
@@ -1055,10 +1785,24 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                     <p className={themeClasses.text}>Auto-delete old scans</p>
                     <p className={`text-sm ${themeClasses.textMuted}`}>Automatically remove scans older than retention period</p>
                   </div>
-                  <button className={themeClasses.toggle(false)}>
-                    <span className={themeClasses.toggleKnob(false)} />
+                  <button
+                    onClick={() => { setPreferencesForm({...preferencesForm, auto_delete_old_scans: !preferencesForm.auto_delete_old_scans}); markDirty('preferences'); }}
+                    className={themeClasses.toggle(preferencesForm.auto_delete_old_scans)}
+                    aria-label="Toggle auto-delete old scans"
+                    aria-pressed={preferencesForm.auto_delete_old_scans}
+                  >
+                    <span className={themeClasses.toggleKnob(preferencesForm.auto_delete_old_scans)} />
                   </button>
                 </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleSavePreferences}
+                  disabled={savingPreferences}
+                  className={themeClasses.btnPrimary}
+                >
+                  {savingPreferences ? "Saving..." : "Save Retention Settings"}
+                </button>
               </div>
             </div>
 
@@ -1070,20 +1814,83 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                     <p className={themeClasses.text}>Analytics & Usage Data</p>
                     <p className={`text-sm ${themeClasses.textMuted}`}>Help improve Jarwis by sharing anonymous usage data</p>
                   </div>
-                  <button className={themeClasses.toggle(true)}>
-                    <span className={themeClasses.toggleKnob(true)} />
+                  <button
+                    onClick={() => { setPreferencesForm({...preferencesForm, share_analytics: !preferencesForm.share_analytics}); markDirty('preferences'); }}
+                    className={themeClasses.toggle(preferencesForm.share_analytics)}
+                    aria-label="Toggle analytics sharing"
+                    aria-pressed={preferencesForm.share_analytics}
+                  >
+                    <span className={themeClasses.toggleKnob(preferencesForm.share_analytics)} />
                   </button>
                 </div>
               </div>
             </div>
 
             <div className={themeClasses.card}>
-              <h3 className={`${themeClasses.cardTitle} text-red-500`}>Delete All Data</h3>
+              <h3 className={`${themeClasses.cardTitle} text-red-500`}>Delete All Scan Data</h3>
               <p className={`${themeClasses.textMuted} mb-4`}>
-                Permanently delete all your scans, reports, and history. This action cannot be undone.
+                Permanently delete all your scans, reports, and history. Your account will remain active.
               </p>
-              <button className={themeClasses.btnDanger}>Delete All My Data</button>
+              <button 
+                onClick={() => setShowDeleteDataModal(true)}
+                className={themeClasses.btnDanger}
+              >
+                Delete All My Data
+              </button>
             </div>
+            
+            {/* Delete Data Confirmation Modal */}
+            {showDeleteDataModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className={`w-full max-w-md mx-4 p-6 rounded-xl ${isDarkMode ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200"} shadow-2xl`}>
+                  <h3 className={`text-xl font-bold mb-4 text-red-500`}>Delete All Scan Data?</h3>
+                  <p className={`${themeClasses.textMuted} mb-4`}>
+                    This will permanently delete all your scans, reports, and vulnerability findings. Your account will remain active.
+                  </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className={themeClasses.label}>Type "DELETE ALL DATA" to confirm</label>
+                      <input
+                        type="text"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        className={themeClasses.input}
+                        placeholder="DELETE ALL DATA"
+                      />
+                    </div>
+                    <div>
+                      <label className={themeClasses.label}>Enter your password</label>
+                      <input
+                        type="password"
+                        value={deleteConfirmPassword}
+                        onChange={(e) => setDeleteConfirmPassword(e.target.value)}
+                        className={themeClasses.input}
+                        placeholder="Your password"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex gap-3 justify-end">
+                    <button
+                      onClick={() => {
+                        setShowDeleteDataModal(false);
+                        setDeleteConfirmPassword("");
+                        setDeleteConfirmText("");
+                      }}
+                      className={themeClasses.btnSecondary}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAllData}
+                      disabled={deletingData || deleteConfirmText !== "DELETE ALL DATA"}
+                      className={`${themeClasses.btnDanger} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {deletingData ? "Deleting..." : "Delete All Data"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -1161,56 +1968,136 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
     }
   };
 
+  // Inline page mode - renders directly without modal overlay
+  if (isInlinePage) {
+    return (
+      <div className={`w-full ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} rounded-xl overflow-hidden`}>
+        {/* Page Header */}
+        <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+          <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Account Settings
+          </h1>
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            Manage your account settings and preferences
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row min-h-[600px]">
+          {/* Left Sidebar */}
+          <div className={`w-full sm:w-56 border-b sm:border-b-0 sm:border-r ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'} py-3 flex-shrink-0`}>
+            {/* Mobile Tabs - horizontal scroll */}
+            <div className={`sm:hidden flex items-center gap-2 px-3 overflow-x-auto scrollbar-hide`}>
+              {settingsSections.filter(s => s.available).map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`${themeClasses.mobileTab(activeSection === section.id)} relative`}
+                >
+                  <span className="mr-1.5">{section.icon}</span>
+                  {section.label}
+                  {isSectionDirty(section.id) && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Desktop Navigation Items */}
+            <div className="hidden sm:block space-y-0.5">
+              {settingsSections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => section.available && setActiveSection(section.id)}
+                  className={themeClasses.sidebarBtn(activeSection === section.id, section.available)}
+                  disabled={!section.available}
+                >
+                  <span className="text-base opacity-70">{section.icon}</span>
+                  <span className="flex-1">{section.label}</span>
+                  {isSectionDirty(section.id) && (
+                    <span className="w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />
+                  )}
+                  {section.proOnly && !section.available && (
+                    <span className={themeClasses.badge}>PRO</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            {/* Content Header with section title - desktop only */}
+            <div className={`hidden sm:block px-6 py-4 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {settingsSections.find(s => s.id === activeSection)?.label || 'Settings'}
+              </h3>
+            </div>
+            
+            {/* Scrollable Content */}
+            <div className={`flex-1 overflow-y-auto p-4 sm:p-6 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+              {renderContent()}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      {/* Overlay */}
-      <div className={themeClasses.overlay} onClick={onClose} />
-      
-      {/* Panel */}
+    <div className={themeClasses.overlay} onClick={onClose}>
+      {/* Modal - ChatGPT style centered */}
       <div 
         ref={panelRef}
-        className={`${themeClasses.panel} transform transition-transform duration-300 ease-out`}
-        style={{ transform: isOpen ? "translateX(0)" : "translateX(100%)" }}
+        className={themeClasses.modal}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
+        {/* Mobile Header with close button and title */}
+        <div className={`sm:hidden flex items-center gap-2 px-4 py-3 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <button 
             onClick={onClose}
-            className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`p-1.5 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400 hover:text-white' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'} transition-colors`}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+          <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
         </div>
 
-        {/* Mobile Section Selector - visible only on mobile */}
-        <div className={`md:hidden flex overflow-x-auto gap-2 p-3 border-b ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+        {/* Mobile Tabs - horizontal scroll */}
+        <div className={themeClasses.mobileTabs}>
           {settingsSections.filter(s => s.available).map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all min-h-[40px] ${
-                activeSection === section.id
-                  ? isDarkMode 
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
-                    : 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : isDarkMode 
-                    ? 'bg-gray-700 text-gray-300' 
-                    : 'bg-white text-gray-700 border border-gray-200'
-              }`}
+              className={`${themeClasses.mobileTab(activeSection === section.id)} relative`}
             >
-              <span>{section.icon}</span>
-              <span className="whitespace-nowrap">{section.label}</span>
+              <span className="mr-1.5">{section.icon}</span>
+              {section.label}
+              {isSectionDirty(section.id) && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />
+              )}
             </button>
           ))}
         </div>
 
-        {/* Body */}
-        <div className="flex h-[calc(100%-80px)] md:h-[calc(100%-80px)]" style={{ height: 'calc(100% - 80px - 56px)', '@media (min-width: 768px)': { height: 'calc(100% - 80px)' } }}>
-          {/* Sidebar Navigation - hidden on mobile */}
-          <div className={themeClasses.sidebar}>
+        {/* Desktop Left Sidebar */}
+        <div className={themeClasses.sidebar}>
+          {/* Close button and title */}
+          <div className={`flex items-center gap-2 px-4 pb-3 mb-2 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <button 
+              onClick={onClose}
+              className={`p-1.5 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400 hover:text-white' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'} transition-colors`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
+          </div>
+
+          {/* Navigation Items */}
+          <div className="space-y-0.5">
             {settingsSections.map((section) => (
               <button
                 key={section.id}
@@ -1218,22 +2105,35 @@ const SettingsPanel = ({ isOpen, onClose, isDarkMode, initialTab = "account" }) 
                 className={themeClasses.sidebarBtn(activeSection === section.id, section.available)}
                 disabled={!section.available}
               >
-                <span className="text-lg">{section.icon}</span>
-                <span className="text-sm font-medium flex-1">{section.label}</span>
+                <span className="text-base opacity-70">{section.icon}</span>
+                <span className="flex-1">{section.label}</span>
+                {isSectionDirty(section.id) && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500" title="Unsaved changes" />
+                )}
                 {section.proOnly && !section.available && (
                   <span className={themeClasses.badge}>PRO</span>
                 )}
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Content Area */}
-          <div className={themeClasses.content}>
+        {/* Right Content Area */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Content Header with section title - desktop only */}
+          <div className={`hidden sm:block px-6 py-4 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              {settingsSections.find(s => s.id === activeSection)?.label || 'Settings'}
+            </h3>
+          </div>
+          
+          {/* Scrollable Content */}
+          <div className={`flex-1 overflow-y-auto p-4 sm:p-6 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
             {renderContent()}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

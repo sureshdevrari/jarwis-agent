@@ -8,3 +8,5 @@ export { default as StatsSection } from './StatsSection';
 export { default as CTASection } from './CTASection';
 export { default as TrustedBy } from './TrustedBy';
 export { default as FooterNew } from './FooterNew';
+export { default as UseCasesSlider } from './UseCasesSlider';
+export { default as PrivacyClaim } from './PrivacyClaim';

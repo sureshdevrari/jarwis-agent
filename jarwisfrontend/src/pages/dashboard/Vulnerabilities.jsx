@@ -1,8 +1,9 @@
 // src/pages/dashboard/Vulnerabilities.jsx - With Real API Integration
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
-import { scanAPI } from "../../services/api";
+import { Search, BarChart3, FileText, List, Lock, MessageSquare, RefreshCw } from "lucide-react";
+import DashboardPageLayout from "../../components/dashboardTheme/DashboardPageLayout";
+import { scanAPI, networkScanAPI, mobileScanAPI, cloudScanAPI } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 
 const Vulnerabilities = () => {
@@ -10,6 +11,7 @@ const Vulnerabilities = () => {
   const location = useLocation();
   const { isDarkMode } = useTheme();
   const scanId = location.state?.scanId;
+  const scanType = location.state?.scanType || 'web';
 
   // State for vulnerabilities from API
   const [vulnerabilities, setVulnerabilities] = useState([]);
@@ -17,34 +19,56 @@ const Vulnerabilities = () => {
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState({ total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 });
 
-  // Fetch vulnerabilities from API
+  // Fetch vulnerabilities from API - USING CENTRALIZED API CLIENT
   const fetchVulnerabilities = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       let data;
       if (scanId) {
-        // Fetch findings for specific scan
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/scan/${scanId}/findings`);
-        data = await response.json();
-        setVulnerabilities(data.findings || []);
-        setSummary(data.summary || { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 });
+        // Fetch findings for specific scan based on scan type
+        if (scanType === 'network') {
+          data = await networkScanAPI.getScanFindings(scanId);
+        } else if (scanType === 'mobile') {
+          data = await mobileScanAPI.getScanFindings(scanId);
+        } else if (scanType === 'cloud') {
+          data = await cloudScanAPI.getScanFindings(scanId);
+        } else {
+          // Web scan - use centralized scanAPI
+          data = await scanAPI.getScanFindings(scanId);
+        }
+        
+        // Handle findings format
+        const findings = data.findings || [];
+        setVulnerabilities(findings);
+        
+        // Use summary from response or calculate from findings
+        if (data.summary) {
+          setSummary(data.summary);
+        } else {
+          setSummary({
+            total: findings.length,
+            critical: findings.filter(f => f.severity === 'critical').length,
+            high: findings.filter(f => f.severity === 'high').length,
+            medium: findings.filter(f => f.severity === 'medium').length,
+            low: findings.filter(f => f.severity === 'low').length,
+            info: findings.filter(f => f.severity === 'info').length,
+          });
+        }
       } else {
-        // Fetch all vulnerabilities
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/vulnerabilities`);
-        data = await response.json();
+        // Fetch all vulnerabilities using centralized API
+        data = await scanAPI.getAllVulnerabilities();
         setVulnerabilities(data.vulnerabilities || []);
         setSummary(data.summary || { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 });
       }
     } catch (err) {
       console.error('Failed to fetch vulnerabilities:', err);
       setError('Failed to load vulnerabilities');
-      // Fall back to empty state
       setVulnerabilities([]);
     } finally {
       setLoading(false);
     }
-  }, [scanId]);
+  }, [scanId, scanType]);
 
   useEffect(() => {
     fetchVulnerabilities();
@@ -191,18 +215,39 @@ const Vulnerabilities = () => {
 
   const stats = getStats();
 
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchVulnerabilities();
+  };
+
   return (
-    <MiftyJarwisLayout>
+    <DashboardPageLayout>
       <div className="p-6">
-      <h2
-        className={
-          isDarkMode
-            ? "text-2xl font-bold text-white mb-6"
-            : "text-2xl font-bold text-gray-900 mb-6"
-        }
-      >
-        Vulnerabilities
-      </h2>
+      {/* Header with Refresh Button */}
+      <div className="flex items-center justify-between mb-6">
+        <h2
+          className={
+            isDarkMode
+              ? "text-2xl font-bold text-white"
+              : "text-2xl font-bold text-gray-900"
+          }
+        >
+          Vulnerabilities
+        </h2>
+        <button
+          onClick={handleRefresh}
+          disabled={loading}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            isDarkMode
+              ? "bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+              : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm disabled:opacity-50"
+          }`}
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -565,7 +610,7 @@ const Vulnerabilities = () => {
 
         {filteredVulnerabilities.length === 0 && (
           <div className="text-center py-10">
-            <div className="text-5xl mb-4">[SEARCH]</div>
+            <div className="text-5xl mb-4"><Search className="w-12 h-12 mx-auto text-gray-400" /></div>
             <h3
               className={
                 isDarkMode
@@ -657,7 +702,7 @@ const Vulnerabilities = () => {
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md w-full mt-4 transition-colors shadow-sm"
             onClick={() => navigate("/dashboard/chatbot")}
           >
-            [BOT] Get Remediation Help
+            <MessageSquare className="w-4 h-4 inline mr-1" /> Get Remediation Help
           </button>
         </div>
 
@@ -694,7 +739,7 @@ const Vulnerabilities = () => {
                   : "bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md w-full text-sm transition-colors"
               }
             >
-              [CHART] Executive Summary
+              <BarChart3 className="w-4 h-4 inline mr-1" /> Executive Summary
             </button>
             <button
               className={
@@ -703,7 +748,7 @@ const Vulnerabilities = () => {
                   : "bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md w-full text-sm transition-colors"
               }
             >
-              [LIST] Technical Report
+              <List className="w-4 h-4 inline mr-1" /> Technical Report
             </button>
             <button
               className={
@@ -712,7 +757,7 @@ const Vulnerabilities = () => {
                   : "bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md w-full text-sm transition-colors"
               }
             >
-              [DOC] CSV Export
+              <FileText className="w-4 h-4 inline mr-1" /> CSV Export
             </button>
             <button
               className={
@@ -721,7 +766,7 @@ const Vulnerabilities = () => {
                   : "bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md w-full text-sm transition-colors"
               }
             >
-              [LOCK] SARIF Export
+              <Lock className="w-4 h-4 inline mr-1" /> SARIF Export
             </button>
           </div>
         </div>
@@ -802,7 +847,7 @@ const Vulnerabilities = () => {
         </div>
       </div>
       </div>
-    </MiftyJarwisLayout>
+    </DashboardPageLayout>
   );
 };
 

@@ -8,9 +8,13 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-# Get the absolute path to the jarwis-ai-pentest directory (database always lives here)
+# Get the absolute path to the jarwis-ai-pentest directory (database now lives in data/)
 _PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-_DEFAULT_SQLITE_PATH = str(_PROJECT_ROOT / "jarwis.db")
+# Database location: always use data/jarwis.db
+_SQLITE_PATH = _PROJECT_ROOT / "data" / "jarwis.db"
+# Ensure data folder exists
+_SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
+_DEFAULT_SQLITE_PATH = str(_SQLITE_PATH)
 
 
 class DatabaseSettings(BaseSettings):

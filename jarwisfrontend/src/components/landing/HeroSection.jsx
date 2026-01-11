@@ -148,8 +148,8 @@ const HeroSection = () => {
                     </span>
                   </div>
                   <div className="space-y-1.5 sm:space-y-2 font-mono text-[10px] sm:text-xs">
-                    <div className="text-green-400">[OK] Discovering endpoints...</div>
-                    <div className="text-green-400">[OK] Testing authentication flows...</div>
+                    <div className="text-green-400">✓ Discovering endpoints...</div>
+                    <div className="text-green-400">✓ Testing authentication flows...</div>
                     <div className="text-cyan-400">&gt; Analyzing for SQL injection...</div>
                     <div className="text-gray-500 hidden xs:block">o XSS detection pending</div>
                     <div className="text-gray-500 hidden sm:block">o CSRF validation pending</div>

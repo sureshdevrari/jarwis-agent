@@ -40,9 +40,19 @@ class JarwisMITMProxy:
     """
     MITM Proxy for intercepting HTTPS traffic.
     Uses mitmproxy under the hood with automatic certificate generation.
+    
+    Callbacks:
+        on_request: Called when a request is captured (url, method, headers, body)
+        on_response: Called when a response is captured (request_id, status, headers, body)
     """
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 8080):
+    def __init__(
+        self, 
+        host: str = "127.0.0.1", 
+        port: int = 8080,
+        on_request: Optional[Callable] = None,
+        on_response: Optional[Callable] = None
+    ):
         self.host = host
         self.port = port
         self.running = False
@@ -52,6 +62,12 @@ class JarwisMITMProxy:
         self._process = None
         self._cert_dir = Path.home() / ".jarwis" / "certs"
         self._mitm_script_path = Path(__file__).parent / "mitm_addon.py"
+        
+        # Callbacks for request/response capture
+        self._on_request = on_request
+        self._on_response = on_response
+        self._traffic_log_path = self._cert_dir / "traffic_log.json"
+        self._last_processed_index = 0
         
     @property
     def ca_cert_path(self) -> Path:
@@ -158,19 +174,27 @@ addons = [JarwisAddon()]
         self._ensure_cert_directory()
         self._create_mitm_addon_script()
         
-        # Check if mitmproxy is installed
+        # Check if mitmproxy is installed (with timeout)
         try:
             result = subprocess.run(
                 ["mitmdump", "--version"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10  # 10 second timeout
             )
             if result.returncode != 0:
                 logger.warning("mitmproxy not found. Installing...")
-                subprocess.run([sys.executable, "-m", "pip", "install", "mitmproxy"], check=True)
+                subprocess.run([sys.executable, "-m", "pip", "install", "mitmproxy"], check=True, timeout=120)
         except FileNotFoundError:
             logger.warning("mitmdump not found. Installing mitmproxy...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "mitmproxy"], check=True)
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "mitmproxy"], check=True, timeout=120)
+            except subprocess.TimeoutExpired:
+                logger.error("Timeout installing mitmproxy")
+                return False
+        except subprocess.TimeoutExpired:
+            logger.error("Timeout checking mitmproxy version")
+            return False
         except Exception as e:
             logger.error(f"Failed to check/install mitmproxy: {e}")
             return False
@@ -237,14 +261,74 @@ addons = [JarwisAddon()]
     
     def get_captured_traffic(self) -> List[Dict]:
         """Read captured traffic from log file"""
-        traffic_log_path = self._cert_dir / "traffic_log.json"
-        if traffic_log_path.exists():
+        if self._traffic_log_path.exists():
             try:
-                with open(traffic_log_path) as f:
+                with open(self._traffic_log_path) as f:
                     return json.load(f)
             except:
                 return []
         return []
+    
+    def process_new_traffic(self) -> int:
+        """
+        Process new traffic entries and invoke callbacks.
+        Returns the number of new entries processed.
+        
+        This should be called periodically during crawling to populate RequestStore.
+        """
+        if not self._traffic_log_path.exists():
+            return 0
+        
+        try:
+            with open(self._traffic_log_path) as f:
+                all_traffic = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return 0
+        
+        new_entries = all_traffic[self._last_processed_index:]
+        processed_count = 0
+        
+        # Track request IDs for matching responses
+        request_id_map = {}  # flow_id -> our_request_id
+        
+        for entry in new_entries:
+            entry_type = entry.get('type')
+            
+            if entry_type == 'request' and self._on_request:
+                try:
+                    request_id = self._on_request(
+                        url=entry.get('url', ''),
+                        method=entry.get('method', 'GET'),
+                        headers=entry.get('headers', {}),
+                        body=entry.get('body', '')
+                    )
+                    if request_id:
+                        request_id_map[entry.get('id')] = request_id
+                    processed_count += 1
+                except Exception as e:
+                    logger.error(f"Error processing request callback: {e}")
+            
+            elif entry_type == 'response' and self._on_response:
+                try:
+                    flow_id = entry.get('id')
+                    our_request_id = request_id_map.get(flow_id, '')
+                    if our_request_id:
+                        self._on_response(
+                            request_id=our_request_id,
+                            status=entry.get('status', 0),
+                            headers=entry.get('headers', {}),
+                            body=entry.get('body', '')
+                        )
+                    processed_count += 1
+                except Exception as e:
+                    logger.error(f"Error processing response callback: {e}")
+        
+        self._last_processed_index = len(all_traffic)
+        return processed_count
+    
+    def get_traffic_log_path(self) -> Path:
+        """Get the path to the traffic log file"""
+        return self._traffic_log_path
 
 
 class PlaywrightMITMIntegration:

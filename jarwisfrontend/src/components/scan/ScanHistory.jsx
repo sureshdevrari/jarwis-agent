@@ -66,11 +66,18 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
           return dateA - dateB;
         case "status":
           return (a.status || "").localeCompare(b.status || "");
-        case "severity":
+        case "severity": {
           const sevOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-          const aMax = a.findings?.reduce((max, f) => Math.min(max, sevOrder[f.severity] ?? 5), 5) ?? 5;
-          const bMax = b.findings?.reduce((max, f) => Math.min(max, sevOrder[f.severity] ?? 5), 5) ?? 5;
-          return aMax - bMax;
+          const aCounts = a.results || {};
+          const bCounts = b.results || {};
+          const aScore = Object.entries(sevOrder).reduce((score, [sev, order]) => {
+            return aCounts[sev] > 0 ? Math.min(score, order) : score;
+          }, 5);
+          const bScore = Object.entries(sevOrder).reduce((score, [sev, order]) => {
+            return bCounts[sev] > 0 ? Math.min(score, order) : score;
+          }, 5);
+          return aScore - bScore;
+        }
         case "date_desc":
         default:
           return dateB - dateA;
@@ -97,29 +104,29 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
   const getScanIcon = (scan) => {
     switch (scan.type || scan.scan_type) {
       case "mobile":
-        return "[MOBILE]";
+        return "📱";
       case "cloud":
-        return "";
+        return "☁️";
       case "web":
       default:
-        return "[WEB]";
+        return "🌐";
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
       case "completed":
-        return "[OK]";
+        return "✅";
       case "running":
-        return "";
+        return "🔄";
       case "error":
-        return "[X]";
+        return "❌";
       case "stopped":
-        return "⏹";
+        return "⏹️";
       case "queued":
-        return "[WAIT]";
+        return "⏳";
       default:
-        return "";
+        return "📊";
     }
   };
 
@@ -154,6 +161,16 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
     return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
   };
 
+  // Check if a running scan is stale (no progress for more than 1 hour)
+  const isStaleScan = (scan) => {
+    if (scan.status !== "running") return false;
+    const startedAt = new Date(scan.started_at || scan.start_time);
+    const now = new Date();
+    const hoursSinceStart = (now - startedAt) / (1000 * 60 * 60);
+    // If running for more than 1 hour and still at initial progress, it's stale
+    return hoursSinceStart > 1 && (scan.progress || 0) <= 10;
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
@@ -183,7 +200,7 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
   if (error) {
     return (
       <div className={`${cardClass} p-6 text-center`}>
-        <p className="text-red-400 mb-4">[X] {error}</p>
+        <p className="text-red-400 mb-4">❌ {error}</p>
         <button
           onClick={fetchScans}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
@@ -199,13 +216,13 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         {[
-          { label: "Total", value: displayStats.total, icon: "[CHART]" },
-          { label: "Web", value: displayStats.web, icon: "[WEB]" },
-          { label: "Mobile", value: displayStats.mobile, icon: "[MOBILE]" },
-          { label: "Cloud", value: displayStats.cloud, icon: "" },
-          { label: "Running", value: displayStats.running, icon: "", highlight: true },
-          { label: "Completed", value: displayStats.completed, icon: "[OK]" },
-          { label: "Failed", value: displayStats.failed, icon: "[X]" },
+          { label: "Total", value: displayStats.total, icon: "📊" },
+          { label: "Web", value: displayStats.web, icon: "🌐" },
+          { label: "Mobile", value: displayStats.mobile, icon: "📱" },
+          { label: "Cloud", value: displayStats.cloud, icon: "☁️" },
+          { label: "Running", value: displayStats.running, icon: "🔄", highlight: true },
+          { label: "Completed", value: displayStats.completed, icon: "✅" },
+          { label: "Failed", value: displayStats.failed, icon: "❌" },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -261,7 +278,7 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
       {/* Scan List */}
       {paginatedScans.length === 0 ? (
         <div className={`${cardClass} p-12 text-center`}>
-          <div className="text-4xl mb-4">[SEARCH]</div>
+          <div className="text-4xl mb-4">🔍</div>
           <p className={isDarkMode ? "text-gray-400" : "text-gray-600"}>No scans found</p>
           {onNewScan && (
             <button
@@ -303,10 +320,25 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
                     </span>
                   ))}
 
-                  {/* Status badge */}
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(scan.status)}`}>
-                    {getStatusIcon(scan.status)} {scan.status || "unknown"}
-                  </span>
+                  {/* Status badge - show stale warning for stuck scans */}
+                  {isStaleScan(scan) ? (
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                      isDarkMode ? "bg-orange-900/30 text-orange-400 border-orange-700" : "bg-orange-100 text-orange-700 border-orange-300"
+                    }`}>
+                      ⚠️ Stale (stuck)
+                    </span>
+                  ) : (
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(scan.status)}`}>
+                      {getStatusIcon(scan.status)} {scan.status || "unknown"}
+                    </span>
+                  )}
+
+                  {/* Progress for running scans */}
+                  {scan.status === "running" && (
+                    <span className={isDarkMode ? "text-blue-400 text-sm" : "text-blue-600 text-sm"}>
+                      {scan.progress || 0}% • {scan.phase || "Initializing"}
+                    </span>
+                  )}
 
                   {/* Duration */}
                   <span className={isDarkMode ? "text-gray-400 text-sm" : "text-gray-600 text-sm"}>
@@ -325,6 +357,7 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
                       View Live
                     </button>
                   )}
+                  {/* Only show report buttons for COMPLETED scans - not for error/stopped */}
                   {scan.status === "completed" && (
                     <>
                       <button
@@ -334,7 +367,7 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
                         }}
                         className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm transition-colors"
                       >
-                        [DOC] Report
+                        📄 Report
                       </button>
                       <button
                         onClick={async (e) => {
@@ -350,7 +383,58 @@ const ScanHistory = ({ onViewScan, onResumeScan, onNewScan, currentScanId }) => 
                         className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors"
                         title="Download PDF Report"
                       >
-                        [RECEIVE] PDF
+                        📥 PDF
+                      </button>
+                    </>
+                  )}
+                  {/* Show status message and retry button for failed/stopped scans */}
+                  {(scan.status === "error" || scan.status === "stopped") && (
+                    <>
+                      <span className={`px-3 py-1 rounded text-xs ${
+                        isDarkMode ? "bg-slate-700/50 text-gray-400" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {scan.status === "error" ? "Scan failed" : "Scan stopped"}
+                      </span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const response = await scanAPI.retryScan(scan.scan_id || scan.id);
+                            if (response.new_scan_id) {
+                              // Refresh the list and show success
+                              fetchScans();
+                              alert(`Scan retry started! New scan ID: ${response.new_scan_id}`);
+                            }
+                          } catch (err) {
+                            console.error("Retry failed:", err);
+                            alert("Failed to retry scan: " + (err.response?.data?.detail || err.message || "Unknown error"));
+                          }
+                        }}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors"
+                        title="Retry this scan with the same configuration"
+                      >
+                        🔄 Retry
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const diagnostics = await scanAPI.getScanDiagnostics(scan.scan_id || scan.id);
+                            const msg = `Error: ${diagnostics.error_message || "Unknown"}\n\nLast Phase: ${diagnostics.last_successful_phase || diagnostics.current_phase || "Unknown"}\n\nSuggestions:\n${(diagnostics.suggestions || []).join('\n')}`;
+                            alert(msg);
+                          } catch (err) {
+                            console.error("Diagnostics failed:", err);
+                            alert("Failed to load diagnostics: " + (err.message || "Unknown error"));
+                          }
+                        }}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${
+                          isDarkMode 
+                            ? "bg-slate-700 hover:bg-slate-600 text-gray-300" 
+                            : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                        }`}
+                        title="View error details and suggestions"
+                      >
+                        🔍 Why?
                       </button>
                     </>
                   )}

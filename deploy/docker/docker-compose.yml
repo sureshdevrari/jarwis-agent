@@ -1,0 +1,132 @@
+# Jarwis Docker Compose Configuration
+# Production deployment with all services
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: jarwis-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jarwis}
+      POSTGRES_USER: ${POSTGRES_USER:-jarwis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jarwis_secure_password_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jarwis} -d ${POSTGRES_DB:-jarwis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - jarwis-network
+
+  # Redis Cache (optional, for session storage and caching)
+  redis:
+    image: redis:7-alpine
+    container_name: jarwis-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - jarwis-network
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: jarwis-backend
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jarwis}:${POSTGRES_PASSWORD:-jarwis_secure_password_change_me}@postgres:5432/${POSTGRES_DB:-jarwis}
+      # Security
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:3000}
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      # AI/LLM
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - ../../data/uploads:/app/data/uploads
+      - ../../data/reports:/app/data/reports
+      - ../../data/logs:/app/data/logs
+      - ../../config/secrets:/app/config/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - jarwis-network
+
+  # Frontend (React via Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: jarwis-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - jarwis-network
+
+  # Database Admin (optional, for development/debugging)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: jarwis-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@jarwis.ai}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    profiles:
+      - debug
+    networks:
+      - jarwis-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  jarwis-network:
+    driver: bridge

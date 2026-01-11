@@ -1,10 +1,21 @@
 // src/pages/dashboard/JarwisChatbot.jsx - Premium Jarwis AGI Chatbot with History
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
+import DOMPurify from "dompurify";
 import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { chatAPI } from "../../services/api";
+
+// Configure DOMPurify to prevent XSS attacks
+const sanitizeHtml = (html) => {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'span', 'div'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+    ALLOW_DATA_ATTR: false,
+    ADD_ATTR: ['target'],
+  });
+};
 
 // Jarwis Logo Component (SVG - Transparent)
 const JarwisLogo = ({ className = "w-8 h-8", animated = false }) => (
@@ -221,17 +232,15 @@ const JarwisChatbot = () => {
   const [chatSessions, setChatSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
-  // Load chat sessions from localStorage
+  // Load chat sessions from localStorage - but always start with new chat
   useEffect(() => {
     const saved = localStorage.getItem("jarwis_chat_sessions");
     if (saved) {
       try {
         const sessions = JSON.parse(saved);
         setChatSessions(sessions);
-        if (sessions.length > 0) {
-          setCurrentSessionId(sessions[0].id);
-          setMessages(sessions[0].messages || []);
-        }
+        // Always start fresh - don't load previous chat
+        // User can select previous chats from sidebar
       } catch (e) {
         console.error("Failed to load chat sessions:", e);
       }
@@ -505,37 +514,6 @@ const JarwisChatbot = () => {
                 </div>
               </div>
             </div>
-
-            {/* Model Selector */}
-            <div className={`flex items-center gap-1 p-1.5 rounded-2xl ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-gray-100 border border-gray-200"}`}>
-              <button
-                onClick={() => setSelectedModel("suru")}
-                className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                  selectedModel === "suru"
-                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30"
-                    : isDarkMode ? "text-gray-400 hover:text-white hover:bg-slate-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-                }`}
-              >
-                <span className="text-lg">⚡</span>
-                <span>Suru 1.1</span>
-              </button>
-              <button
-                onClick={() => isEnterprise ? setSelectedModel("savi") : navigate("/pricing")}
-                className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                  selectedModel === "savi"
-                    ? "bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg shadow-purple-500/30"
-                    : isDarkMode ? "text-gray-400 hover:text-white hover:bg-slate-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-                } ${!isEnterprise ? "opacity-60" : ""}`}
-              >
-                <span className="text-lg">🧠</span>
-                <span>Savi 3.1</span>
-                {!isEnterprise && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDarkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
-                    ENT
-                  </span>
-                )}
-              </button>
-            </div>
           </div>
 
           {/* Messages Area */}
@@ -640,7 +618,7 @@ const JarwisChatbot = () => {
                         <div className="p-4">
                           <div 
                             className={`prose prose-sm max-w-none ${isDarkMode ? "prose-invert" : ""} ${message.type === "user" ? "text-white" : ""}`}
-                            dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMessage(message.content)) }}
                           />
                           {message.type === "user" && (
                             <div className="text-xs mt-2 text-blue-200">
@@ -673,7 +651,7 @@ const JarwisChatbot = () => {
                           </span>
                         </div>
                         <div className="p-4">
-                          <div className={`prose prose-sm max-w-none ${isDarkMode ? "prose-invert" : ""}`} dangerouslySetInnerHTML={{ __html: formatMessage(currentResponse) }} />
+                          <div className={`prose prose-sm max-w-none ${isDarkMode ? "prose-invert" : ""}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMessage(currentResponse)) }} />
                         </div>
                       </div>
                     </div>
@@ -706,6 +684,38 @@ const JarwisChatbot = () => {
           {/* Input Area */}
           <div className={`flex-shrink-0 p-4 border-t backdrop-blur-sm ${isDarkMode ? "border-slate-700/50 bg-slate-900/80" : "border-gray-200 bg-white/80"}`}>
             <div className="max-w-4xl mx-auto">
+              {/* Model Selector - Above Input */}
+              <div className="flex justify-center mb-3">
+                <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${isDarkMode ? "bg-slate-800/60 border border-slate-700/50" : "bg-gray-100/80 border border-gray-200"}`}>
+                  <button
+                    onClick={() => setSelectedModel("suru")}
+                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      selectedModel === "suru"
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md"
+                        : isDarkMode ? "text-gray-400 hover:text-white hover:bg-slate-700/50" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                    }`}
+                  >
+                    <span>⚡</span>
+                    <span>Suru 1.1</span>
+                  </button>
+                  <button
+                    onClick={() => isEnterprise ? setSelectedModel("savi") : navigate("/pricing")}
+                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      selectedModel === "savi"
+                        ? "bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-md"
+                        : isDarkMode ? "text-gray-400 hover:text-white hover:bg-slate-700/50" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                    } ${!isEnterprise ? "opacity-60" : ""}`}
+                  >
+                    <span>🧠</span>
+                    <span>Savi 3.1</span>
+                    {!isEnterprise && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${isDarkMode ? "bg-amber-500/20 text-amber-400" : "bg-amber-100 text-amber-700"}`}>
+                        ENT
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
               <div className={`flex items-end gap-3 p-3 rounded-2xl ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-gray-100 border border-gray-200"}`}>
                 {/* File Upload */}
                 <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.json,.log,.xml,.html,.js,.py,.yaml,.yml" />

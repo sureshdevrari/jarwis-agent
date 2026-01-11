@@ -1,13 +1,38 @@
 // src/pages/dashboard/ScanHistory.jsx - Scan History Page
-import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
+import { useNavigate } from "react-router-dom";
+import DashboardPageLayout from "../../components/dashboardTheme/DashboardPageLayout";
 import { useTheme } from "../../context/ThemeContext";
 import ScanHistoryComponent from "../../components/scan/ScanHistory";
 
 const ScanHistory = () => {
   const { isDarkMode } = useTheme();
+  const navigate = useNavigate();
+
+  // Handler for viewing a scan (navigates to scanning page for running, or vulnerabilities for completed)
+  const handleViewScan = (scan) => {
+    const scanId = scan.scan_id || scan.id;
+    const scanType = scan.type || scan.scan_type || "web";
+    
+    if (scan.status === "running") {
+      // Navigate to live scanning page
+      navigate(`/dashboard/scanning?scan_id=${scanId}&type=${scanType}`, {
+        state: { scanId, scanType, target_url: scan.target_url || scan.target }
+      });
+    } else if (scan.status === "completed") {
+      // Navigate to vulnerabilities/results page
+      navigate(`/dashboard/vulnerabilities`, {
+        state: { scanId, scanType }
+      });
+    }
+  };
+
+  // Handler for starting a new scan
+  const handleNewScan = () => {
+    navigate("/dashboard/new-scan");
+  };
 
   return (
-    <MiftyJarwisLayout>
+    <DashboardPageLayout>
       <div className="space-y-6 p-6">
         {/* Header */}
         <div>
@@ -30,9 +55,12 @@ const ScanHistory = () => {
         </div>
 
         {/* Scan History Component */}
-        <ScanHistoryComponent />
+        <ScanHistoryComponent 
+          onViewScan={handleViewScan}
+          onNewScan={handleNewScan}
+        />
       </div>
-    </MiftyJarwisLayout>
+    </DashboardPageLayout>
   );
 };
 

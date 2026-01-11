@@ -19,6 +19,7 @@ lxml>=5.0.0
 pyyaml>=6.0.1
 pydantic>=2.5.0
 jinja2>=3.1.2
+tomli>=2.0.0  # TOML parser for SAST scanner
 
 # Security Tools Integration
 sqlmap>=1.7
@@ -35,19 +36,48 @@ androguard>=3.4.0a1
 frida>=16.0.0
 frida-tools>=12.0.0
 
-# Cloud Security SDKs
+# Cloud Security SDKs - AWS
 boto3>=1.34.0
+botocore>=1.34.0
+
+# Cloud Security SDKs - Azure (Complete Suite)
 azure-identity>=1.15.0
 azure-mgmt-resource>=23.0.0
 azure-mgmt-storage>=21.0.0
 azure-mgmt-compute>=30.0.0
 azure-mgmt-network>=25.0.0
-azure-mgmt-sql>=3.0.0
+azure-mgmt-sql>=4.0.0
+azure-mgmt-monitor>=6.0.0
 azure-mgmt-keyvault>=10.0.0
+azure-mgmt-containerservice>=29.0.0
+azure-mgmt-web>=7.0.0
+azure-mgmt-security>=5.0.0
+
+# Cloud Security SDKs - GCP
 google-cloud-storage>=2.14.0
 google-cloud-compute>=1.15.0
+google-cloud-container>=2.35.0
+google-cloud-sql>=1.8.0
+google-cloud-logging>=3.9.0
+google-cloud-asset>=3.19.0
+google-cloud-iam>=2.14.0
 google-cloud-resource-manager>=1.11.0
 google-api-python-client>=2.110.0
+
+# Container Security (Trivy integration)
+# Note: Trivy CLI should be installed separately
+# Linux: wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add - && echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list && sudo apt-get update && sudo apt-get install trivy
+# Windows: choco install trivy
+# macOS: brew install aquasecurity/trivy/trivy
+
+# Graph Analysis & Visualization
+networkx>=3.2
+matplotlib>=3.8.0
+
+# IaC Parsing
+pyhcl2>=0.3.5  # Terraform HCL parser
+ruamel.yaml>=0.18.0  # Advanced YAML parsing
+cfn-lint>=0.85.0  # CloudFormation linter
 
 # Testing
 pytest>=7.4.0
@@ -59,6 +89,7 @@ rich>=13.7.0
 python-dotenv>=1.0.0
 tqdm>=4.66.0
 dnspython>=2.4.0  # For domain TXT record verification
+psutil>=5.9.0  # System monitoring for scan recovery
 
 # FastAPI Server
 fastapi>=0.109.0

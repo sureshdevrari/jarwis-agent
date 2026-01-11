@@ -26,17 +26,9 @@ from enum import Enum
 from typing import Dict, List, Optional, Set, Any
 from datetime import datetime
 
-from .base import ScanPhase, ScanResult, Finding, Severity, ScannerRegistry
-
-# Import all scanners
-from .scanners import (
-    NmapScanner, MasscanScanner, RustScanScanner,
-    NucleiScanner, OpenVASScanner, VulnersNmapScanner,
-    NetdiscoverScanner, SNMPScanner, DNSReconScanner, ARPScanScanner,
-    SSLScanScanner, TestSSLScanner, SSLyzeScanner,
-    CrackMapExecScanner, ImpacketScanner, MetasploitScanner,
-    ZeekScanner, SuricataScanner, SnortScanner, TSharkScanner,
-)
+from .base import ScanPhase, ScanResult, Finding, Severity, ScannerRegistry as NetworkScannerRegistry
+# Import scanners to trigger decorator registration
+from .scanners import ALL_SCANNERS
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +70,7 @@ class ScanState:
 class PhaseConfig:
     """Configuration for a scan phase"""
     phase: ScanPhase
-    scanners: List[type]
+    scanners: List[str]  # Scanner names (not classes)
     enabled: bool = True
     timeout: int = 300
     parallel: bool = False
@@ -93,49 +85,49 @@ class NetworkOrchestrator:
     and making intelligent decisions about what to scan next.
     """
     
-    # Default phase configurations
+    # Default phase configurations (using scanner names for registry lookup)
     PHASE_CONFIG = {
         ScanProfile.QUICK: [
-            PhaseConfig(ScanPhase.DISCOVERY, [ARPScanScanner, NetdiscoverScanner], timeout=60),
-            PhaseConfig(ScanPhase.PORT_SCAN, [MasscanScanner], timeout=120),
-            PhaseConfig(ScanPhase.SERVICE_ENUM, [NmapScanner], timeout=180),
+            PhaseConfig(ScanPhase.DISCOVERY, ["ARPScanScanner", "NetdiscoverScanner"], timeout=60),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["MasscanScanner"], timeout=120),
+            PhaseConfig(ScanPhase.SERVICE_ENUM, ["NmapScanner"], timeout=180),
         ],
         ScanProfile.STANDARD: [
-            PhaseConfig(ScanPhase.DISCOVERY, [ARPScanScanner, NetdiscoverScanner], timeout=120),
-            PhaseConfig(ScanPhase.PORT_SCAN, [NmapScanner], timeout=300),
-            PhaseConfig(ScanPhase.SERVICE_ENUM, [NmapScanner, DNSReconScanner], timeout=300),
-            PhaseConfig(ScanPhase.VULN_SCAN, [NucleiScanner, VulnersNmapScanner], timeout=600),
-            PhaseConfig(ScanPhase.SSL_AUDIT, [SSLyzeScanner], timeout=300),
+            PhaseConfig(ScanPhase.DISCOVERY, ["ARPScanScanner", "NetdiscoverScanner"], timeout=120),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["NmapScanner"], timeout=300),
+            PhaseConfig(ScanPhase.SERVICE_ENUM, ["NmapScanner", "DNSReconScanner"], timeout=300),
+            PhaseConfig(ScanPhase.VULN_SCAN, ["NucleiScanner", "VulnersNmapScanner"], timeout=600),
+            PhaseConfig(ScanPhase.SSL_AUDIT, ["SSLyzeScanner"], timeout=300),
         ],
         ScanProfile.COMPREHENSIVE: [
-            PhaseConfig(ScanPhase.DISCOVERY, [ARPScanScanner, NetdiscoverScanner], timeout=180),
-            PhaseConfig(ScanPhase.PORT_SCAN, [NmapScanner, MasscanScanner], parallel=True, timeout=600),
-            PhaseConfig(ScanPhase.SERVICE_ENUM, [NmapScanner, SNMPScanner, DNSReconScanner], timeout=600),
-            PhaseConfig(ScanPhase.VULN_SCAN, [NucleiScanner, OpenVASScanner, VulnersNmapScanner], timeout=1800),
-            PhaseConfig(ScanPhase.SSL_AUDIT, [SSLScanScanner, TestSSLScanner, SSLyzeScanner], timeout=600),
-            PhaseConfig(ScanPhase.EXPLOITATION, [CrackMapExecScanner, ImpacketScanner], timeout=900),
+            PhaseConfig(ScanPhase.DISCOVERY, ["ARPScanScanner", "NetdiscoverScanner"], timeout=180),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["NmapScanner", "MasscanScanner"], parallel=True, timeout=600),
+            PhaseConfig(ScanPhase.SERVICE_ENUM, ["NmapScanner", "SNMPScanner", "DNSReconScanner"], timeout=600),
+            PhaseConfig(ScanPhase.VULN_SCAN, ["NucleiScanner", "OpenVASScanner", "VulnersNmapScanner"], timeout=1800),
+            PhaseConfig(ScanPhase.SSL_AUDIT, ["SSLScanScanner", "TestSSLScanner", "SSLyzeScanner"], timeout=600),
+            PhaseConfig(ScanPhase.EXPLOITATION, ["CrackMapExecScanner", "ImpacketScanner"], timeout=900),
         ],
         ScanProfile.STEALTH: [
-            PhaseConfig(ScanPhase.PORT_SCAN, [NmapScanner], timeout=1800),  # -T1 profile
-            PhaseConfig(ScanPhase.VULN_SCAN, [NucleiScanner], timeout=1200),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["NmapScanner"], timeout=1800),  # -T1 profile
+            PhaseConfig(ScanPhase.VULN_SCAN, ["NucleiScanner"], timeout=1200),
         ],
         ScanProfile.CREDENTIAL: [
-            PhaseConfig(ScanPhase.DISCOVERY, [NmapScanner], timeout=60),
-            PhaseConfig(ScanPhase.PORT_SCAN, [NmapScanner], timeout=300),
-            PhaseConfig(ScanPhase.CREDENTIAL, [CrackMapExecScanner, ImpacketScanner, SNMPScanner], timeout=600),
-            PhaseConfig(ScanPhase.EXPLOITATION, [MetasploitScanner], timeout=900),
+            PhaseConfig(ScanPhase.DISCOVERY, ["NmapScanner"], timeout=60),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["NmapScanner"], timeout=300),
+            PhaseConfig(ScanPhase.CREDENTIAL, ["CrackMapExecScanner", "ImpacketScanner", "SNMPScanner"], timeout=600),
+            PhaseConfig(ScanPhase.EXPLOITATION, ["MetasploitScanner"], timeout=900),
         ],
         ScanProfile.WEB: [
-            PhaseConfig(ScanPhase.PORT_SCAN, [NmapScanner], timeout=180),  # Web ports only
-            PhaseConfig(ScanPhase.SSL_AUDIT, [SSLyzeScanner, TestSSLScanner], timeout=300),
-            PhaseConfig(ScanPhase.VULN_SCAN, [NucleiScanner], timeout=600),  # Web templates
+            PhaseConfig(ScanPhase.PORT_SCAN, ["NmapScanner"], timeout=180),  # Web ports only
+            PhaseConfig(ScanPhase.SSL_AUDIT, ["SSLyzeScanner", "TestSSLScanner"], timeout=300),
+            PhaseConfig(ScanPhase.VULN_SCAN, ["NucleiScanner"], timeout=600),  # Web templates
         ],
         ScanProfile.INTERNAL: [
-            PhaseConfig(ScanPhase.DISCOVERY, [ARPScanScanner, NetdiscoverScanner], timeout=300),
-            PhaseConfig(ScanPhase.PORT_SCAN, [MasscanScanner, NmapScanner], timeout=600),
-            PhaseConfig(ScanPhase.SERVICE_ENUM, [NmapScanner, SNMPScanner], timeout=600),
-            PhaseConfig(ScanPhase.CREDENTIAL, [CrackMapExecScanner], timeout=600),
-            PhaseConfig(ScanPhase.VULN_SCAN, [NucleiScanner, VulnersNmapScanner], timeout=1200),
+            PhaseConfig(ScanPhase.DISCOVERY, ["ARPScanScanner", "NetdiscoverScanner"], timeout=300),
+            PhaseConfig(ScanPhase.PORT_SCAN, ["MasscanScanner", "NmapScanner"], timeout=600),
+            PhaseConfig(ScanPhase.SERVICE_ENUM, ["NmapScanner", "SNMPScanner"], timeout=600),
+            PhaseConfig(ScanPhase.CREDENTIAL, ["CrackMapExecScanner"], timeout=600),
+            PhaseConfig(ScanPhase.VULN_SCAN, ["NucleiScanner", "VulnersNmapScanner"], timeout=1200),
         ],
     }
     
@@ -149,7 +141,19 @@ class NetworkOrchestrator:
         self.config = config or {}
         self.state: Optional[ScanState] = None
         self._available_tools: Set[str] = set()
+        # Use the network-specific registry with decorator-registered scanners
+        self._network_registry = NetworkScannerRegistry
+        self._scanner_map = self._build_scanner_map()
         self._check_available_tools()
+    
+    def _build_scanner_map(self) -> Dict[str, type]:
+        """Build a name→class map from the network scanner registry"""
+        scanner_map = {}
+        for phase, scanners in self._network_registry.get_all_scanners().items():
+            for scanner_class in scanners:
+                scanner_map[scanner_class.__name__] = scanner_class
+        logger.info(f"🔍 Network scanner registry: {len(scanner_map)} scanners mapped")
+        return scanner_map
     
     def _check_available_tools(self):
         """Check which tools are available on the system"""
@@ -248,10 +252,18 @@ class NetworkOrchestrator:
     async def _run_phase(self, phase_config: PhaseConfig):
         """Execute a single scan phase"""
         
-        # Filter to available scanners
+        # Filter to available scanners using the scanner map
         available_scanners = []
-        for scanner_class in phase_config.scanners:
-            tool_name = scanner_class.TOOL_NAME
+        for scanner_name in phase_config.scanners:
+            # Get scanner class from our pre-built map
+            scanner_class = self._scanner_map.get(scanner_name)
+            
+            if not scanner_class:
+                logger.warning(f"Scanner {scanner_name} not found in registry")
+                continue
+            
+            tool_name = getattr(scanner_class, 'TOOL_NAME', scanner_name.lower().replace('scanner', ''))
+            
             # Map tool names to executable names
             tool_map = {
                 'testssl': 'testssl.sh',

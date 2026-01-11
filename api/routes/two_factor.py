@@ -671,15 +671,43 @@ async def verify_login_otp(
 
 # ============== Backup Codes ==============
 
+class RegenerateBackupCodesRequest(BaseModel):
+    """Request to regenerate backup codes."""
+    password: Optional[str] = None  # Password for verification (required for regeneration)
+
 @router.get("/backup-codes", response_model=BackupCodesResponse)
-async def generate_new_backup_codes(
-    password: str,
+async def get_backup_codes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current backup codes count (not the actual codes - those are only shown once).
+    """
+    if not current_user.two_factor_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA must be enabled to view backup codes"
+        )
+    
+    # Return count of remaining backup codes (not the actual codes)
+    remaining = len(current_user.two_factor_backup_codes or [])
+    
+    return BackupCodesResponse(
+        codes=[],  # Never expose existing codes
+        total=remaining,
+        message=f"You have {remaining} backup codes remaining"
+    )
+
+
+@router.post("/backup-codes/regenerate", response_model=BackupCodesResponse)
+async def regenerate_backup_codes(
+    data: RegenerateBackupCodesRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate new backup codes (invalidates old ones).
-    Requires password confirmation.
+    Requires password confirmation for security.
     """
     from database.auth import verify_password
     
@@ -689,12 +717,13 @@ async def generate_new_backup_codes(
             detail="2FA must be enabled to generate backup codes"
         )
     
-    # Verify password
-    if not verify_password(password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid password"
-        )
+    # Verify password if provided (optional for initial setup, required for regeneration)
+    if data.password:
+        if not verify_password(data.password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password"
+            )
     
     # Generate new backup codes
     backup_codes = generate_backup_codes()

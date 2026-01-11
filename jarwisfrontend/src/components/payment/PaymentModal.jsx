@@ -2,6 +2,7 @@
 // Modal for Razorpay payment processing
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
   getUserCountry,
@@ -24,7 +25,7 @@ const PaymentModal = ({ isOpen, onClose, selectedPlan, onPaymentSuccess }) => {
     individual: {
       name: "Individual",
       color: "blue",
-      icon: "[STAR]",
+      icon: "⭐",
       features: [
         "1 User Only",
         "1 Website scan per month",
@@ -173,7 +174,7 @@ const PaymentModal = ({ isOpen, onClose, selectedPlan, onPaymentSuccess }) => {
           <ul className="space-y-1.5 sm:space-y-2">
             {plan?.features.map((feature, i) => (
               <li key={i} className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
-                <span className="text-green-400 flex-shrink-0">[OK]</span>
+                <span className="text-green-400 flex-shrink-0"><Check className="w-4 h-4" /></span>
                 {feature}
               </li>
             ))}

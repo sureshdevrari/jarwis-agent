@@ -1,13 +1,14 @@
 // src/pages/auth/Login.jsx
 // Login page using FastAPI + PostgreSQL backend with Firebase email verification
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams, useLocation } from "react-router-dom";
-import { Eye, EyeOff, Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
+import { Eye, EyeOff, Shield, ArrowLeft } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import EscapingButton from "../../components/EscapingButton";
 import { firebaseAuthService } from "../../services/firebaseAuth";
+import { authAPI, twoFactorAPI } from "../../services/api";
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -36,6 +37,17 @@ const Login = () => {
     success: "",
     loading: false,
   });
+
+  // 2FA state
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState("");
+  const [twoFactorMethod, setTwoFactorMethod] = useState("email");
+  const [twoFactorCode, setTwoFactorCode] = useState(["", "", "", "", "", ""]);
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [backupCode, setBackupCode] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const codeInputRefs = useRef([]);
 
   // Check for state message (e.g., from signup redirect)
   useEffect(() => {
@@ -132,63 +144,208 @@ const Login = () => {
 
     try {
       // Step 1: Check email verification with Firebase (only for users who signed up with Firebase)
-      let skipFirebaseCheck = false;
-      try {
-        const firebaseResult = await firebaseAuthService.signIn(
-          loginForm.emailOrUsername,
-          loginForm.password
-        );
-        
-        if (firebaseResult.user) {
-          // Check if email is verified
-          const isVerified = await firebaseAuthService.isEmailVerified();
+      let firebaseBlocked = false;
+      
+      // Debug: Log Firebase availability
+      const firebaseAvailable = firebaseAuthService.isAvailable();
+      console.log("[LOGIN DEBUG] Firebase available:", firebaseAvailable);
+      console.log("[LOGIN DEBUG] Attempting login for:", loginForm.emailOrUsername);
+      
+      // Only attempt Firebase check if the service is available
+      if (firebaseAvailable) {
+        try {
+          console.log("[LOGIN DEBUG] Attempting Firebase signIn...");
+          const firebaseResult = await firebaseAuthService.signIn(
+            loginForm.emailOrUsername,
+            loginForm.password
+          );
           
-          if (!isVerified) {
-            // Sign out from Firebase
-            await firebaseAuthService.signOut();
+          if (firebaseResult.user) {
+            // Check if email is verified
+            const isVerified = await firebaseAuthService.isEmailVerified();
             
-            setStatus({
-              error: "Please verify your email before logging in. Check your inbox for the verification link.",
-              success: "",
-              loading: false,
-            });
-            setShowResendVerification(true);
-            return;
+            if (!isVerified) {
+              // Sign out from Firebase
+              await firebaseAuthService.signOut();
+              
+              setStatus({
+                error: "Please verify your email before logging in. Check your inbox for the verification link.",
+                success: "",
+                loading: false,
+              });
+              setShowResendVerification(true);
+              firebaseBlocked = true;
+              return;
+            }
+            
+            // Sign out from Firebase after verification check
+            await firebaseAuthService.signOut();
           }
-          
-          // Sign out from Firebase after verification check
-          await firebaseAuthService.signOut();
+        } catch (firebaseError) {
+          // If Firebase fails for ANY reason, continue with backend login
+          console.log("[LOGIN DEBUG] Firebase error (proceeding to backend):", 
+            firebaseError.code || 'no-code', 
+            firebaseError.message || firebaseError
+          );
         }
-      } catch (firebaseError) {
-        // If Firebase user doesn't exist or credentials don't match, 
-        // continue with backend login (existing users before Firebase was added)
-        const ignoredCodes = [
-          'auth/user-not-found',
-          'auth/invalid-credential', 
-          'auth/wrong-password',
-          'auth/invalid-email'
-        ];
-        if (!ignoredCodes.includes(firebaseError.code)) {
-          console.warn("Firebase check warning:", firebaseError.code, firebaseError.message);
-        }
-        skipFirebaseCheck = true;
+      } else {
+        // Firebase not configured, skip check
+        console.log("[LOGIN DEBUG] Firebase not configured, skipping to backend login");
+      }
+      
+      if (firebaseBlocked) {
+        return; // Already showed error, don't proceed
       }
 
       // Step 2: Login with backend
+      console.log("[LOGIN DEBUG] Calling backend login API...");
       const result = await loginWithEmail(loginForm.emailOrUsername, loginForm.password);
+      
+      // Check if 2FA is required
+      if (result.two_factor_required) {
+        console.log("[LOGIN DEBUG] 2FA required, method:", result.two_factor_method);
+        setTwoFactorRequired(true);
+        setTwoFactorToken(result.two_factor_token);
+        setTwoFactorMethod(result.two_factor_method || 'email');
+        setStatus({ error: "", success: "Please enter your verification code", loading: false });
+        
+        // Auto-send code for email method
+        if (result.two_factor_method === 'email') {
+          handleSend2FACode();
+        }
+        return;
+      }
+      
+      console.log("[LOGIN DEBUG] Backend login successful!", result);
       setStatus({ error: "", success: result.message, loading: false });
 
       if (result.userDoc) {
         navigate(getRedirectPathFromUserDoc(result.userDoc));
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("[LOGIN DEBUG] Login error:", err);
+      
+      // Provide better error messages for common issues
+      let errorMessage = err.message || "Login failed. Please try again.";
+      
+      // Check for network errors (axios ERR_NETWORK or generic "Network Error")
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error' || err.message?.includes('Network Error')) {
+        errorMessage = "Unable to connect to server. Please ensure the backend is running on port 8000.";
+        console.error("[LOGIN DEBUG] Network error - backend may not be running or CORS issue");
+      }
+      
       setStatus({
-        error: err.message || "Login failed. Please try again.",
+        error: errorMessage,
         success: "",
         loading: false,
       });
     }
+  };
+
+  // Send 2FA code
+  const handleSend2FACode = async () => {
+    setSendingCode(true);
+    try {
+      await twoFactorAPI.sendCode(twoFactorMethod);
+      setCodeSent(true);
+      setStatus({
+        error: "",
+        success: `Verification code sent to your ${twoFactorMethod === 'email' ? 'email' : 'phone'}`,
+        loading: false,
+      });
+    } catch (err) {
+      setStatus({
+        error: err.message || "Failed to send verification code",
+        success: "",
+        loading: false,
+      });
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  // Handle OTP code input
+  const handleCodeChange = (index, value) => {
+    // Only allow numbers
+    if (value && !/^\d$/.test(value)) return;
+    
+    const newCode = [...twoFactorCode];
+    newCode[index] = value;
+    setTwoFactorCode(newCode);
+    
+    // Auto-focus next input
+    if (value && index < 5) {
+      codeInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  // Handle backspace in OTP input
+  const handleCodeKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !twoFactorCode[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Handle paste for OTP
+  const handleCodePaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const newCode = [...twoFactorCode];
+    for (let i = 0; i < pastedData.length; i++) {
+      newCode[i] = pastedData[i];
+    }
+    setTwoFactorCode(newCode);
+    // Focus last filled or next empty
+    const focusIndex = Math.min(pastedData.length, 5);
+    codeInputRefs.current[focusIndex]?.focus();
+  };
+
+  // Verify 2FA code
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    setStatus({ error: "", success: "", loading: true });
+    
+    const code = useBackupCode ? backupCode : twoFactorCode.join('');
+    
+    if (!useBackupCode && code.length !== 6) {
+      setStatus({
+        error: "Please enter the complete 6-digit code",
+        success: "",
+        loading: false,
+      });
+      return;
+    }
+    
+    try {
+      await authAPI.loginWith2FA(twoFactorToken, code, useBackupCode);
+      
+      // Get profile and complete login
+      const profile = await authAPI.getProfile();
+      setStatus({ error: "", success: "Login successful!", loading: false });
+      navigate(getRedirectPathFromUserDoc(profile));
+    } catch (err) {
+      setStatus({
+        error: err.message || "Invalid verification code",
+        success: "",
+        loading: false,
+      });
+      // Clear code on error
+      if (!useBackupCode) {
+        setTwoFactorCode(["", "", "", "", "", ""]);
+        codeInputRefs.current[0]?.focus();
+      }
+    }
+  };
+
+  // Go back from 2FA to login
+  const handleBack2FA = () => {
+    setTwoFactorRequired(false);
+    setTwoFactorToken("");
+    setTwoFactorCode(["", "", "", "", "", ""]);
+    setBackupCode("");
+    setUseBackupCode(false);
+    setCodeSent(false);
+    setStatus({ error: "", success: "", loading: false });
   };
 
   // Resend verification email
@@ -226,6 +383,143 @@ const Login = () => {
         className="w-full max-w-[440px] bg-gray-900/80 backdrop-blur-2xl rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-gray-700/50 shadow-2xl hover:shadow-cyan-500/20 transition-all duration-500"
         style={{ overflow: "visible" }}
       >
+        <AnimatePresence mode="wait">
+          {twoFactorRequired ? (
+            // 2FA Verification Screen
+            <motion.div
+              key="2fa"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              {/* Back Button */}
+              <button
+                onClick={handleBack2FA}
+                className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+              >
+                <ArrowLeft size={16} />
+                <span className="text-sm">Back to login</span>
+              </button>
+              
+              {/* Header */}
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cyan-500/20 border border-cyan-500/30 mb-4">
+                  <Shield className="w-8 h-8 text-cyan-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Two-Factor Authentication
+                </h2>
+                <p className="text-gray-400 text-sm">
+                  {twoFactorMethod === 'email' 
+                    ? "Enter the 6-digit code sent to your email"
+                    : "Enter the 6-digit code sent to your phone"}
+                </p>
+              </div>
+              
+              {/* Success/Error Messages */}
+              {status.success && (
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-xl">
+                  <p className="text-green-400 text-sm text-center">{status.success}</p>
+                </div>
+              )}
+              {status.error && (
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl">
+                  <p className="text-red-400 text-sm text-center">{status.error}</p>
+                </div>
+              )}
+              
+              <form onSubmit={handleVerify2FA} className="space-y-6">
+                {!useBackupCode ? (
+                  <>
+                    {/* OTP Code Input */}
+                    <div className="flex justify-center gap-2">
+                      {twoFactorCode.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => (codeInputRefs.current[index] = el)}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleCodeChange(index, e.target.value)}
+                          onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                          onPaste={index === 0 ? handleCodePaste : undefined}
+                          className="w-12 h-14 text-center text-2xl font-bold bg-gray-800/50 border border-gray-600 rounded-xl text-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all"
+                          disabled={status.loading}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Resend Code */}
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={handleSend2FACode}
+                        disabled={sendingCode}
+                        className="text-cyan-400 hover:text-cyan-300 text-sm disabled:opacity-50"
+                      >
+                        {sendingCode ? "Sending..." : codeSent ? "Code Sent! Resend" : "Send Code"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  /* Backup Code Input */
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Backup Code
+                    </label>
+                    <input
+                      type="text"
+                      value={backupCode}
+                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                      placeholder="XXXX-XXXX-XXXX"
+                      className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all font-mono text-center tracking-wider"
+                      disabled={status.loading}
+                    />
+                  </div>
+                )}
+                
+                {/* Toggle Backup Code */}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseBackupCode(!useBackupCode);
+                      setStatus({ error: "", success: "", loading: false });
+                    }}
+                    className="text-gray-400 hover:text-white text-sm"
+                  >
+                    {useBackupCode ? "Use verification code instead" : "Use backup code"}
+                  </button>
+                </div>
+                
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={status.loading || (!useBackupCode && twoFactorCode.join('').length !== 6)}
+                  className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {status.loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Verifying...
+                    </span>
+                  ) : (
+                    "Verify & Login"
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          ) : (
+            // Normal Login Form
+            <motion.div
+              key="login"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8">
           <motion.div
@@ -492,6 +786,9 @@ const Login = () => {
             Forgot your password?
           </Link>
         </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

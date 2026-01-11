@@ -1,350 +1,305 @@
-# Jarwis AGI Pen Test - Project Memory
+# Jarwis AGI Pen Test - Current State
 
-> Last Updated: January 6, 2026 (Evening)
-
-## 🎯 Project Overview
-
-**Jarwis** is an AI-powered OWASP Top 10 penetration testing framework with comprehensive security scanning capabilities for web applications, networks, mobile apps, and cloud infrastructure.
-
-### Current Development Status
-- **Backend**: FastAPI server via `api/server.py` (uvicorn on port 8000)
-- **Frontend**: React 19 app in `jarwisfrontend/` (port 3000)
-- **Virtual Env**: `.venv/` (Python)
-- **AI Backend**: Ollama at localhost:11434 (llama3/llama3.1)
-- **Database**: SQLite with async SQLAlchemy
-
-### Key Features
-- AI-powered vulnerability detection using Ollama/OpenAI LLMs
-- OWASP Top 10 comprehensive coverage
-- Multi-phase scanning (anonymous crawl → pre-login → auth → post-login)
-- Browser-based JavaScript rendering via Playwright
-- MITM proxy for HTTPS interception
-- Professional PDF/HTML/SARIF report generation
-- React frontend with Firebase authentication
-- Subscription-based access with Stripe payments
+> **Last Updated**: January 10, 2026  
+> **Status**: ✅ Production Ready - All systems operational
 
 ---
 
-## 📁 Project Structure
+## ⚠️ FIRST: Read These Files
+
+| File | Purpose |
+|------|---------|
+| `.copilot_memory/ARCHITECTURE.md` | Complete project architecture |
+| `.copilot_memory/SCAN_FLOW.md` | MITM-based scan execution flow |
+| `.copilot_memory/SESSION_LOG.md` | Development session history |
+| `docs/implementation_rules/` | Detailed implementation guides |
+| `.github/copilot-instructions.md` | Full AI assistant context |
+
+---
+
+## 🎯 Project Summary
+
+**Jarwis** is an AI-powered OWASP Top 10 penetration testing framework with:
+- **100+ security scanners** across web, mobile, network, and cloud
+- **AI-powered analysis** via Ollama/OpenAI/Gemini LLMs
+- **React 19 frontend** with Firebase authentication
+- **FastAPI backend** with SQLite database
+- **MITM-based scanning** for comprehensive request/response analysis
+- **WebSocket real-time updates** for instant scan progress (NEW!)
+
+---
+
+## 📅 January 10, 2026 - WebSocket Real-Time Updates
+
+### What Was Done
+
+1. **WebSocket Implementation** (Real-Time Scan Progress)
+   - Created `api/websocket.py` - Connection manager with broadcast functions
+   - Created `api/routes/websocket_routes.py` - WebSocket endpoints
+   - Created `jarwisfrontend/src/hooks/useWebSocket.js` - React hooks
+   - Integrated into `Scanning.jsx` with "Live" / "Polling" indicator
+   - HTTP polling fallback when WebSocket disconnected
+
+2. **Security Hardening**
+   - Added CSRF middleware to server.py
+   - Added CSRF token handling to frontend api.js
+
+3. **Dashboard Fixes**
+   - VerifyDomain now uses real API
+   - Billing page error visibility
+   - Vulnerabilities refresh button
+
+4. **Bug Fixes**
+   - Fixed ScanWizard.jsx API imports (domainsAPI→domainAPI, scansAPI→scanAPI)
+   - Fixed WebScanPage.jsx import order
+   - Enhanced useScanWebSocket hook with enabled/callback options
+
+### WebSocket Architecture
+```
+Frontend (Scanning.jsx)
+    │
+    │ ws://localhost:8000/ws/scans/{scan_id}
+    ▼
+WebSocket Routes (websocket_routes.py)
+    │
+    ▼
+ConnectionManager (websocket.py)
+    │  - scan_connections: {scan_id: [ws1, ws2, ...]}
+    │  - user_connections: {user_id: [ws1, ws2, ...]}
+    ▼
+Scan Runner (scans.py)
+    │  - status_callback() → broadcast_scan_progress()
+    │  - on completion   → broadcast_scan_complete()
+    │  - on error        → broadcast_scan_error()
+```
+
+---
+
+## 📅 January 9, 2026 - Project Reorganization Complete
+
+### What Was Done
+
+1. **Cleaned Root Level**
+   - Removed duplicate `jarwis.db` files (root, database/)
+   - Database now ONLY in `data/jarwis.db`
+   - Removed backup files (`.backup`, `.bak`)
+   - Moved Python files from docs/ to scripts/
+
+2. **Created Implementation Rules** (`docs/implementation_rules/`)
+   - `README.md` - Overview
+   - `01_ROOT_ARCHITECTURE.md` - Folder structure
+   - `02_SCAN_FLOW.md` - Scan phases
+   - `03_LAYERED_RULES.md` - Import rules (CRITICAL!)
+   - `04_FRONTEND_INTEGRATION.md` - React patterns
+   - `05_EXTENSION_PLAYBOOK.md` - How to add features
+   - `06_AI_CHECKLIST.md` - Pre-commit validation
+
+3. **Updated Copilot Memory**
+   - Created comprehensive `ARCHITECTURE.md` (new!)
+   - Updated this `CURRENT_STATE.md`
+   - Existing `SCAN_FLOW.md` still valid
+
+4. **Validated Structure**
+   - Ran `scripts/validate_restructure.py` - all checks pass
+   - No duplicate files
+   - Correct folder hierarchy
+
+---
+
+## 🏗️ Verified Folder Structure
 
 ```
-jarwis-ai-pentest/
-├── core/                    # Core scanning engine
-│   ├── runner.py           # Main orchestrator (PenTestRunner)
-│   ├── browser.py          # Playwright browser automation (2509 lines)
-│   ├── ai_planner.py       # LLM integration (AIPlanner)
-│   ├── reporters.py        # PDF/HTML/SARIF reports
-│   ├── mitm_proxy.py       # MITM HTTPS interception
-│   ├── scope.py            # Domain scope management
-│   └── ai_verifier.py      # AI request watcher
+D:\jarwis-ai-pentest\
 │
-├── attacks/                 # Attack modules
-│   ├── pre_login/          # Unauthenticated scanners (20+ modules)
-│   ├── post_login/         # Authenticated scanners
-│   ├── network/            # Network security scanning
-│   ├── mobile/             # Android/iOS testing (Frida, ADB)
-│   └── cloud/              # AWS/Azure/GCP scanners
+├── main.py                 # CLI entry point (ONLY Python file at root!)
+├── requirements.txt        # Python dependencies
+├── package.json            # Node dependencies
+├── README.md               # Project readme
+├── .env                    # Environment variables
 │
-├── api/                     # FastAPI backend
-│   ├── app.py              # Main FastAPI app
-│   └── routes/             # API endpoints (14 route modules)
+├── api/                    # FastAPI routes (19 route files)
+│   └── routes/             # All API endpoints
 │
-├── database/               # SQLAlchemy models
-│   ├── models.py           # User, Scan, Report models
-│   ├── connection.py       # Async DB connection
-│   └── auth.py             # Authentication logic
+├── attacks/                # Scanner modules (100+ total)
+│   ├── web/
+│   │   ├── pre_login/      # 49 pre-login scanners
+│   │   └── post_login/     # 5 post-login scanners
+│   ├── cloud/              # 18 cloud scanners
+│   ├── network/            # 10 network scanners
+│   └── mobile/             # 22 mobile modules
 │
-├── jarwisfrontend/         # React frontend
+├── assets/                 # Logos and AI training data
+├── config/                 # YAML configs, OAuth credentials
+│
+├── core/                   # 27 core engine modules
+│   ├── runner.py           # Main orchestrator
+│   ├── web_scan_runner.py  # MITM-based web scanning
+│   ├── browser.py          # Playwright automation
+│   ├── ai_planner.py       # LLM integration
+│   └── reporters.py        # Report generation
+│
+├── data/                   # ← ALL generated data here!
+│   ├── jarwis.db           # ← ONLY database location!
+│   ├── logs/
+│   ├── reports/
+│   ├── temp/
+│   └── uploads/
+│
+├── database/               # SQLAlchemy models, migrations
+├── deploy/                 # Docker, deployment scripts
+│
+├── docs/                   # All documentation
+│   └── implementation_rules/  # Architecture guides (7 files)
+│
+├── jarwisfrontend/         # React 19 application
 │   └── src/
-│       ├── components/     # UI components
+│       ├── services/api.js # SINGLE API client
+│       ├── context/        # 7 React contexts
 │       ├── pages/          # Page components
-│       ├── services/       # API services
-│       └── firebase/       # Firebase config
+│       └── components/     # Reusable components
 │
-├── config/                  # Configuration
-│   └── config.yaml         # Default config template
+├── scripts/                # Utility scripts (40+ files)
+│   ├── startup/            # Server startup scripts
+│   └── utilities/          # Diagnostic scripts
 │
-├── main.py                  # CLI entry point
-└── start_server.py          # API server launcher
+├── services/               # 13 business logic services
+├── shared/                 # Contracts (single source of truth)
+├── templates/              # HTML report templates
+└── tests/                  # Pytest tests
 ```
 
 ---
 
-## 🔧 Core Components
+## ✅ System Status
 
-### 1. PenTestRunner (`core/runner.py`)
-Main orchestrator that coordinates all scanning phases:
-
-```python
-@dataclass
-class ScanContext:
-    target_url: str
-    endpoints: List[Dict]
-    cookies: Dict
-    headers: Dict
-    findings: List[ScanResult]
-    authenticated: bool
-    api_endpoints: List[Dict]
-    upload_endpoints: List[Dict]
-```
-
-**Key Methods:**
-- `run_scan()` - Main scan orchestration
-- `_normalize_config()` - Config merging with defaults
-- Manages 6 phases: Crawl → Pre-login → Auth → Post-login → AI Planning → Report
-
-### 2. BrowserController (`core/browser.py`)
-Playwright-based browser automation:
-- Headless/headed browser modes
-- MITM proxy support for HTTPS interception
-- AI-powered request/response analysis
-- 2FA/OTP handling during scans
-- Traffic capture and analysis
-
-### 3. AIPlanner (`core/ai_planner.py`)
-LLM integration for intelligent test planning:
-- Supports: Ollama (default), OpenAI, Anthropic
-- Analyzes website structure to recommend attacks
-- OWASP detection knowledge built into prompts
-- Returns `TestRecommendation` dataclass
-
-### 4. ReportGenerator (`core/reporters.py`)
-Professional security reports:
-- PDF with cover page (via WeasyPrint)
-- HTML interactive reports
-- SARIF for IDE integration
-- OWASP category mapping
-- Executive summary generation
+| Component | Status | Port/Details |
+|-----------|--------|--------------|
+| Backend API | ✅ Running | Port 8000 |
+| Frontend | ✅ Running | Port 3000 |
+| Database | ✅ Ready | `data/jarwis.db` |
+| Web Scanning | ✅ Active | 54 scanners |
+| Mobile Scanning | ✅ Active | 22 modules |
+| Network Scanning | ✅ Active | 10 scanners |
+| Cloud Scanning | ✅ Active | 18 scanners |
+| AI Chatbot | ✅ Active | Gemini-powered |
+| Rate Limiting | ✅ Fixed | Auth users bypass for scans |
+| Stuck Scans | ✅ Fixed | Auto-cleanup applied |
 
 ---
 
-## 🛡️ Attack Scanners
+## 🔑 Quick Access
 
-### Pre-Login Scanners (`attacks/pre_login/`)
-| Scanner | OWASP | Purpose |
-|---------|-------|---------|
-| `InjectionScanner` | A03 | SQL, NoSQL, Command injection |
-| `XSSScanner` | A03 | Reflected XSS |
-| `StoredXSSScanner` | A03 | Persistent XSS with delayed execution detection |
-| `XSSReflectedScanner` | A03 | Browser-verified XSS with comprehensive payloads |
-| `PostMethodScanner` | A03 | Form discovery and POST endpoint testing |
-| `MisconfigScanner` | A05 | Security headers, configs |
-| `SensitiveDataScanner` | A02 | Data exposure |
-| `SSRFScanner` | A10 | Server-side request forgery |
-| `AccessControlScanner` | A01 | Broken access control |
-| `AuthBypassScanner` | A07 | Auth bypass techniques |
-| `SessionScanner` | A07 | Session security |
-| `RateLimitScanner` | A07 | Rate limiting bypass |
-| `OAuthScanner` | A07 | OAuth vulnerabilities |
-| `CaptchaScanner` | A07 | CAPTCHA bypass |
-| `UploadScanner` | A04 | File upload vulns |
-| `APIScanner` | A01 | API security |
-| `ResponseManipulationScanner` | A08 | Response tampering |
-| `ResponseSwapScanner` | A08 | Response swapping |
-| `MobileSecurityScanner` | A05 | Mobile API security |
-
-### Post-Login Scanners (`attacks/post_login/`)
-| Scanner | OWASP | Purpose |
-|---------|-------|---------|
-| `PostLoginAttacks` | All | Comprehensive post-login testing |
-| `PostLoginStoredXSSScanner` | A03 | Stored XSS on authenticated pages |
-| `PostLoginReflectedXSSScanner` | A03 | Reflected XSS with auth context |
-| `PostLoginPostMethodScanner` | A03 | Authenticated form testing |
-
-### Network Scanners (`attacks/network/`)
-- `PortScanner` - Port discovery
-- `ServiceDetector` - Service fingerprinting
-- `VulnScanner` - CVE detection
-- `CredentialScanner` - Default creds
-- `MetasploitScanner` - Metasploit integration for exploitation (Added 5 Jan 2026)
-- `NetworkOrchestrator` - Coordinates all
-
-### Mobile Scanners (`attacks/mobile/`)
-- Android attacks via ADB/Frida
-- iOS attacks via iOS simulator
-- SSL pinning bypass
-- Runtime analysis
-- Static APK/IPA analysis
-- `MobileXSSScanner` - WebView/Hybrid app XSS (Added 5 Jan 2026)
-- `MobilePostMethodScanner` - Mobile API POST testing (Added 5 Jan 2026)
-
-### Cloud Scanners (`attacks/cloud/`)
-- `AWSScanner` - S3, IAM, EC2 misconfigs
-- `AzureScanner` - Azure security
-- `GCPScanner` - GCP security
-
----
-
-## 🌐 API Routes (`api/routes/`)
-
-| Route | Purpose |
-|-------|---------|
-| `auth.py` | Login, register, password reset |
-| `users.py` | User profile management |
-| `scans.py` | Scan CRUD operations |
-| `network.py` | Network scan endpoints |
-| `chat.py` | AI chatbot endpoint |
-| `payments.py` | Stripe subscription |
-| `oauth.py` | Google/GitHub OAuth |
-| `two_factor.py` | 2FA setup/verify |
-| `scan_otp.py` | OTP during scans |
-| `whitelisting.py` | WAF bypass headers |
-| `domain_verification.py` | Domain ownership |
-| `api_keys.py` | API key management |
-| `admin.py` | Admin operations |
-| `contact.py` | Contact form |
-
----
-
-## 💾 Database Models (`database/models.py`)
-
-### User Model
-```python
-class User(Base):
-    id: UUID
-    email: str
-    username: str
-    hashed_password: str
-    plan: str  # free, individual, professional, enterprise
-    max_websites: int
-    scans_this_month: int
-    has_api_testing: bool
-    has_mobile_pentest: bool
-    has_chatbot_access: bool
-```
-
-### Subscription Plans
-- **Free**: 1 website, 7-day dashboard
-- **Individual**: More websites, 30-day access
-- **Professional**: API testing, mobile pentest
-- **Enterprise**: Full features, dedicated support
-
----
-
-## ⚙️ Configuration (`config/config.yaml`)
-
-```yaml
-target:
-  url: "https://example.com"
-  scope:
-    include: ["https://example.com/*"]
-    exclude: ["/logout", "/api/health"]
-
-auth:
-  enabled: true
-  type: "form"  # form, basic, bearer, oauth2
-  selectors:
-    username_field: "#username"
-    password_field: "#password"
-    submit_button: "#login-btn"
-
-ai:
-  provider: "ollama"
-  model: "llama3"
-  base_url: "http://localhost:11434"
-
-attacks:
-  rate_limit: 10
-  js_rendering: true
-  owasp:
-    injection: {enabled: true}
-    xss: {enabled: true}
-    ssrf: {enabled: true}
-```
-
----
-
-## 🖥️ Frontend (`jarwisfrontend/`)
-
-**Tech Stack:**
-- React 19 with TypeScript/JSX
-- Tailwind CSS + Framer Motion
-- React Router v7
-- Firebase Authentication
-- Axios for API calls
-
-**Key Pages:**
-- Dashboard with scan history
-- New scan configuration
-- Report viewer
-- User profile/settings
-- Subscription management
-
----
-
-## 🚀 Running the Project
-
-### Quick Start (PowerShell)
+### Start Services
 ```powershell
-# Activate virtual environment
-& D:/jarwis-ai-pentest/.venv/Scripts/Activate.ps1
-
-# Start Backend API
+# Backend (port 8000)
+cd D:\jarwis-ai-pentest
 .\.venv\Scripts\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
 
-# Start Frontend (separate terminal)
-cd jarwisfrontend
+# Frontend (port 3000)
+cd D:\jarwis-ai-pentest\jarwisfrontend
 npm start
 ```
 
-### Alternative: Use start_dev.ps1
-```powershell
-.\start_dev.ps1
+### Test Login
+- **URL**: http://localhost:3000/login
+- **Email**: user2@jarwis.ai
+- **Password**: 12341234
+
+### API Endpoints
+- **Health**: http://localhost:8000/api/health
+- **Docs**: http://localhost:8000/docs
+
+---
+
+## 🔐 Test Credentials
+
+| Type | Email | Password | Plan |
+|------|-------|----------|------|
+| **Super Admin** | akshaydevrari@gmail.com | Parilove@1 | enterprise |
+| **Admin** | admin@jarwis.ai | admin123 | enterprise |
+| **Individual** | user1@jarwis.ai | 12341234 | individual |
+| **Professional** | user2@jarwis.ai | 12341234 | professional |
+| **Enterprise** | user3@jarwis.ai | 12341234 | enterprise |
+
+---
+
+## ⚠️ Critical Reminders
+
+### 1. Database Location
+```
+✅ data/jarwis.db (ONLY here!)
+❌ Never: root/jarwis.db, database/jarwis.db
 ```
 
-### Backend (API)
-```bash
-# Activate venv
-.\.venv\Scripts\Activate.ps1
-
-# Start FastAPI server
-python start_server.py
-# or
-uvicorn api.server:app --reload --host 0.0.0.0 --port 8000
+### 2. Import Rules (CRITICAL!)
+```python
+# Core modules NEVER import from api/
+✅ from services.scan_service import ...
+❌ from api.routes.scans import ...
 ```
 
-### Frontend
-```bash
-cd jarwisfrontend
-npm install
-npm start
+### 3. Frontend API (CRITICAL!)
+```javascript
+// Use ONLY services/api.js
+✅ import api from '../services/api';
+❌ Creating new API files
 ```
 
-### CLI Scan
+### 4. After Contract Changes
 ```bash
-python main.py
-# or with config
-python main.py --config config/config.local.yaml
+python shared/generate_frontend_types.py
 ```
 
 ---
 
-## 📝 Code Conventions
+## 📊 Scanner Count Summary
 
-1. **Async everywhere** - All scanners use `async def scan()`
-2. **Rate limiting** - Respect `config['rate_limit']`
-3. **Scope checking** - Always validate URLs against target domain
-4. **Rich console** - Use `rich.console.Console` for CLI output
-5. **Dataclass results** - All findings use `ScanResult` dataclass
-6. **OWASP categories** - Use A01-A10 for category field
+| Category | Count | Location |
+|----------|-------|----------|
+| Web Pre-Login | 49 | `attacks/web/pre_login/` |
+| Web Post-Login | 5 | `attacks/web/post_login/` |
+| Cloud | 18 | `attacks/cloud/` |
+| Network | 10 | `attacks/network/` |
+| Mobile | 22 | `attacks/mobile/` |
+| **Total** | **104+** | |
 
 ---
 
-## 🔑 Environment Variables
+## 🏛️ Layered Architecture
 
-```env
-# Database
-DATABASE_URL=sqlite+aiosqlite:///jarwis.db
-
-# Firebase (frontend)
-REACT_APP_FIREBASE_API_KEY=xxx
-REACT_APP_FIREBASE_AUTH_DOMAIN=xxx
-
-# Stripe
-STRIPE_SECRET_KEY=sk_test_xxx
-STRIPE_WEBHOOK_SECRET=whsec_xxx
-
-# OAuth
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
 ```
+Frontend (React) → API Routes → Services → Core Engines → Database
+                       ↑              ↑
+                 Shared Contracts (schemas, endpoints, constants)
+```
+
+- **API Routes**: HTTP handling only (NO business logic!)
+- **Services**: ALL business logic lives here
+- **Core**: Scanner logic, AI, reports (NO api imports!)
+- **Shared**: Single source of truth for contracts
+
+---
+
+## 📝 Recent Session History
+
+### Jan 9, 2026
+- ✅ Project reorganization completed
+- ✅ Created ARCHITECTURE.md
+- ✅ Created implementation rules docs
+- ✅ Fixed duplicate database files
+- ✅ All systems verified operational
+
+### Jan 8, 2026
+- ✅ Created SCAN_FLOW.md
+- ✅ Fixed post-login scanning to run ALL scanners
+- ✅ MITM-based architecture documented
+
+### Jan 7, 2026
+- ✅ Cloud integration completed (18 scanners)
+- ✅ Fixed subscription enforcement
+- ✅ Rate limiting bypass for auth users
+
+---
+
+*For detailed architecture, see `.copilot_memory/ARCHITECTURE.md`*  
+*For scan flow details, see `.copilot_memory/SCAN_FLOW.md`*

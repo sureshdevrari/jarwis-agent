@@ -1,0 +1,92 @@
+/* Typography System - Single Source of Truth for all landing pages */
+/* Use these classes to ensure consistent typography across all pages */
+
+/* ============================================= */
+/* HEADING STYLES                               */
+/* ============================================= */
+
+/* Hero Heading - Largest, used for main page titles */
+.heading-hero {
+  @apply text-4xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl font-bold leading-tight;
+}
+
+/* Section Heading - Used for major section titles */
+.heading-section {
+  @apply text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl font-bold leading-tight;
+}
+
+/* Subsection Heading - Used for card titles, feature names */
+.heading-subsection {
+  @apply text-xl sm:text-2xl font-semibold;
+}
+
+/* Card Title - Used inside cards and boxes */
+.heading-card {
+  @apply text-lg font-semibold;
+}
+
+/* ============================================= */
+/* BODY TEXT STYLES                             */
+/* ============================================= */
+
+/* Body Large - Main paragraph text */
+.text-body-lg {
+  @apply text-base sm:text-lg lg:text-xl leading-relaxed;
+}
+
+/* Body Regular - Secondary text */
+.text-body {
+  @apply text-base sm:text-lg leading-relaxed;
+}
+
+/* Body Small - Descriptions, captions */
+.text-body-sm {
+  @apply text-sm sm:text-base leading-relaxed;
+}
+
+/* Text Muted - Less important info */
+.text-muted {
+  @apply text-gray-400 text-base sm:text-lg lg:text-xl leading-relaxed;
+}
+
+/* Text Secondary - Secondary content */
+.text-secondary {
+  @apply text-gray-300 text-base sm:text-lg lg:text-xl leading-relaxed;
+}
+
+/* ============================================= */
+/* BUTTON TEXT STYLES                           */
+/* ============================================= */
+
+/* Button Primary - Standard button text */
+.btn-text {
+  @apply text-sm sm:text-base font-medium;
+}
+
+/* ============================================= */
+/* LABEL/META TEXT                              */
+/* ============================================= */
+
+/* Label - Small uppercase labels */
+.text-label {
+  @apply text-sm font-medium tracking-wider uppercase;
+}
+
+/* Meta - Timestamps, small info */
+.text-meta {
+  @apply text-sm sm:text-base font-medium;
+}
+
+/* ============================================= */
+/* GRADIENT TEXT                                */
+/* ============================================= */
+
+/* Blue-Cyan gradient for highlighted words */
+.gradient-text {
+  @apply bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent;
+}
+
+/* Blue-Cyan gradient for subtitles */
+.gradient-text-subtle {
+  @apply bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent;
+}

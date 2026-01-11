@@ -289,6 +289,70 @@ export const PLAN_LIMITS = {
     ],
     limitations: [],
   },
+  
+  // TODO: REMOVE BEFORE PRODUCTION - Developer testing account
+  developer: {
+    id: "developer",
+    name: "Developer",
+    badge: "🛠️",
+    price: "Internal",
+    priceMonthly: 0,
+    color: "green",
+    gradientFrom: "from-green-500",
+    gradientTo: "to-emerald-500",
+    
+    // Scan Limits - ALL UNLIMITED
+    maxWebsitesPerMonth: -1,
+    maxScansPerMonth: -1,
+    maxPagesPerScan: -1,
+    maxTeamMembers: -1,
+    
+    // Time Limits
+    dashboardAccessDays: -1,
+    reportRetentionDays: -1,
+    
+    // Feature Access - ALL ENABLED
+    features: {
+      basicDAST: true,
+      owaspTop10: true,
+      sansTop25: true,
+      apiTesting: true,
+      credentialScanning: true,
+      authenticatedScanning: true,
+      mobileAppTesting: true,
+      cloudScanning: true,
+      chatbotAccess: true,
+      chatbotQuestionsPerDay: -1,
+      complianceReports: true,
+      ciCdIntegration: true,
+      webhooks: true,
+      apiAccess: true,
+      customBranding: true,
+      ssoIntegration: true,
+      dedicatedSupport: true,
+      slackIntegration: true,
+      jiraIntegration: true,
+      priorityScanning: true,
+      advancedReporting: true,
+      exportFormats: ["html", "json", "pdf", "sarif", "xml", "csv"],
+      scheduledScans: true,
+      realTimeAlerts: true,
+    },
+    
+    // Support
+    supportLevel: "internal",
+    supportResponseTime: "instant",
+    hasDedicatedPentester: true,
+    hasDedicatedAuditor: true,
+    has24x7Support: true,
+    
+    // Display
+    displayFeatures: [
+      "DEVELOPER ACCESS - UNLIMITED EVERYTHING",
+      "For internal testing only",
+    ],
+    limitations: [],
+  },
 };
 
 // Helper function to get plan by ID
@@ -340,7 +404,7 @@ export const getSortedPlans = () => {
 
 // Check if plan A is higher than plan B
 export const isPlanHigher = (planA, planB) => {
-  const order = ["trial", "free", "individual", "professional", "enterprise"];
+  const order = ["trial", "free", "individual", "professional", "enterprise", "developer"];
   return order.indexOf(planA) > order.indexOf(planB);
 };
 

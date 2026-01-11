@@ -642,9 +642,10 @@
             color: #065f46;
         }
         
-        /* HTTP Data */
+        /* HTTP Data - Improved for PDF rendering */
         .http-section {
             margin: 12px 0;
+            page-break-inside: avoid;
         }
         
         .http-title {
@@ -654,22 +655,60 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 8px;
+            background: #f1f5f9;
+            padding: 6px 10px;
+            border-radius: 4px 4px 0 0;
         }
         
         .http-content {
             background: #1e293b;
-            border-radius: 6px;
+            border-radius: 0 0 6px 6px;
             padding: 12px;
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 8pt;
             color: #cbd5e1;
-            overflow-x: auto;
             white-space: pre-wrap;
             word-break: break-all;
-            line-height: 1.4;
-            max-height: 150px;
-            overflow-y: auto;
+            line-height: 1.5;
             border: 1px solid #334155;
+            /* Removed max-height and overflow for PDF - show all content */
+        }
+        
+        /* HTTP Header Line Formatting */
+        .http-line {
+            display: block;
+            margin: 2px 0;
+            word-break: break-word;
+        }
+        
+        .http-line-method {
+            color: #22d3ee;
+            font-weight: bold;
+        }
+        
+        .http-line-status {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .http-line-header {
+            color: #a78bfa;
+        }
+        
+        .http-line-value {
+            color: #cbd5e1;
+        }
+        
+        .http-body-separator {
+            border-top: 1px dashed #475569;
+            margin: 8px 0;
+            padding-top: 8px;
+        }
+        
+        .http-body {
+            color: #fdba74;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
         
         /* ============================================
@@ -794,34 +833,106 @@
         }
         
         /* ============================================
-           PRINT OPTIMIZATION
+           PRINT OPTIMIZATION - Enhanced for PDF Quality
            ============================================ */
         @media print {
             body {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }
             
+            /* Force cover page on its own page */
             .cover-page {
                 min-height: 100vh;
+                page-break-after: always;
             }
             
+            /* Each major section starts on new page */
+            .section-title {
+                page-break-before: auto;
+                page-break-after: avoid;
+            }
+            
+            /* Findings should not be split across pages */
             .finding {
+                page-break-inside: avoid;
+                break-inside: avoid;
+                margin-bottom: 20px;
+            }
+            
+            /* Keep finding header with body */
+            .finding-header {
+                page-break-after: avoid;
+            }
+            
+            /* Keep remediation with finding */
+            .remediation-box {
+                page-break-before: avoid;
                 page-break-inside: avoid;
             }
             
+            /* HTTP sections shouldn't break */
+            .http-section {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            
+            /* Evidence boxes stay together */
+            .evidence-box {
+                page-break-inside: avoid;
+            }
+            
+            /* Tables should not be orphaned */
+            .summary-table {
+                page-break-inside: avoid;
+            }
+            
+            .summary-table thead {
+                display: table-header-group;
+            }
+            
+            /* Methodology grid items */
+            .methodology-card {
+                page-break-inside: avoid;
+            }
+            
+            /* Ensure section pages break properly */
             .content-page {
                 page-break-after: always;
             }
+            
+            /* Prevent widows and orphans */
+            p, .content-text {
+                orphans: 3;
+                widows: 3;
+            }
+            
+            /* Hide any interactive elements in PDF */
+            .tab-button, .tab-switch {
+                display: none !important;
+            }
         }
         
-        /* Utility */
+        /* Utility classes for manual control */
         .page-break {
             page-break-before: always;
+            break-before: page;
+        }
+        
+        .page-break-after {
+            page-break-after: always;
+            break-after: page;
         }
         
         .avoid-break {
             page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        
+        .keep-together {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
     </style>
 </head>

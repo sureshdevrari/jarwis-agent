@@ -341,54 +341,72 @@ async def update_user(
 # Plan features configuration
 PLAN_FEATURES = {
     "free": {
-        "max_websites": 1,
+        "max_websites": 0,  # Admin assigns after approval
+        "max_scans_per_month": 0,  # Admin assigns quota
         "max_users": 1,
         "dashboard_access_days": 7,
         "has_api_testing": False,
         "has_credential_scanning": False,
         "has_chatbot_access": False,
         "has_mobile_pentest": False,
+        "has_cloud_scanning": False,
+        "has_network_scanning": False,
         "has_compliance_audits": False,
         "has_dedicated_support": False,
     },
     "individual": {
-        "max_websites": 3,
+        "max_websites": 1,  # 1 website only
+        "max_scans_per_month": 1,
         "max_users": 1,
-        "dashboard_access_days": 30,
-        "has_api_testing": True,
-        "has_credential_scanning": True,
-        "has_chatbot_access": True,
-        "has_mobile_pentest": False,
+        "dashboard_access_days": 7,
+        "has_api_testing": False,  # No API testing
+        "has_credential_scanning": False,  # No credential-based scanning
+        "has_chatbot_access": False,  # No Jarwis AGI
+        "has_mobile_pentest": False,  # Web only
+        "has_cloud_scanning": False,  # Web only
+        "has_network_scanning": False,  # Web only
         "has_compliance_audits": False,
         "has_dedicated_support": False,
     },
     "professional": {
         "max_websites": 10,
-        "max_users": 5,
-        "dashboard_access_days": 90,
+        "max_scans_per_month": 10,
+        "max_users": 3,
+        "dashboard_access_days": 0,  # Until plan active
         "has_api_testing": True,
         "has_credential_scanning": True,
         "has_chatbot_access": True,
         "has_mobile_pentest": True,
+        "has_cloud_scanning": True,
+        "has_network_scanning": True,
         "has_compliance_audits": True,
         "has_dedicated_support": False,
     },
     "enterprise": {
-        "max_websites": 999,
-        "max_users": 999,
-        "dashboard_access_days": 365,
+        "max_websites": 999999,
+        "max_scans_per_month": 999999,
+        "max_users": 999999,
+        "dashboard_access_days": 0,  # Until plan active (365 days for compliance)
         "has_api_testing": True,
         "has_credential_scanning": True,
         "has_chatbot_access": True,
         "has_mobile_pentest": True,
+        "has_cloud_scanning": True,
+        "has_network_scanning": True,
         "has_compliance_audits": True,
         "has_dedicated_support": True,
     },
 }
 
 
-def apply_plan_features(user: User, plan: str) -> None:
-    """Apply plan features to user"""
+def apply_plan_features(user: User, plan: str, custom_scan_quota: int = None) -> None:
+    """Apply plan features to user
+    
+    Args:
+        user: User object to update
+        plan: Plan name (free, individual, professional, enterprise)
+        custom_scan_quota: For free users, admin can set custom scan quota
+    """
     features = PLAN_FEATURES.get(plan, PLAN_FEATURES["free"])
     user.plan = plan
     user.max_websites = features["max_websites"]
@@ -398,8 +416,20 @@ def apply_plan_features(user: User, plan: str) -> None:
     user.has_credential_scanning = features["has_credential_scanning"]
     user.has_chatbot_access = features["has_chatbot_access"]
     user.has_mobile_pentest = features["has_mobile_pentest"]
-    user.has_compliance_audits = features["has_compliance_audits"]
+    user.has_compliance_audits = features["has_dedicated_support"]
     user.has_dedicated_support = features["has_dedicated_support"]
+    
+    # Set scan quota - for free users, use custom_scan_quota if provided
+    if custom_scan_quota is not None and plan == "free":
+        user.max_scans_per_month = custom_scan_quota
+    else:
+        user.max_scans_per_month = features.get("max_scans_per_month", 0)
+    
+    # Set cloud and network scanning (check if user model has these fields)
+    if hasattr(user, 'has_cloud_scanning'):
+        user.has_cloud_scanning = features.get("has_cloud_scanning", False)
+    if hasattr(user, 'has_network_scanning'):
+        user.has_network_scanning = features.get("has_network_scanning", False)
 
 
 @router.post("/users/{user_id}/approve", response_model=MessageResponse)

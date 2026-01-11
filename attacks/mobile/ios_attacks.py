@@ -48,6 +48,12 @@ class IOSAttackScanner:
     Scanner for iOS-specific vulnerabilities
     """
     
+    # Scanner registry metadata
+    CATEGORY = "M1"  # OWASP Mobile: Improper Platform Usage
+    DESCRIPTION = "iOS-specific vulnerability scanner (Keychain, URL schemes, etc.)"
+    ENABLED_BY_DEFAULT = True
+    REQUIRES_AUTH = False
+    
     # Dangerous Info.plist settings
     DANGEROUS_PLIST_KEYS = {
         'NSAllowsArbitraryLoads': ('high', 'App Transport Security disabled for all connections'),

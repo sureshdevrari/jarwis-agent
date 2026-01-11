@@ -1,0 +1,104 @@
+# Jarwis AI Training Sources
+# Add cybersecurity websites to crawl for training data
+# The crawler will extract vulnerability definitions, examples, and remediation steps
+
+# Configuration
+config:
+  rate_limit: 1.0  # Requests per second (be respectful)
+  max_pages_per_site: 100  # Maximum pages to crawl per site
+  timeout: 30  # Request timeout in seconds
+  user_agent: "JarwisAI-Trainer/1.0 (Security Research)"
+  respect_robots_txt: true
+  save_raw_html: false  # Save raw HTML for debugging
+
+# Output settings
+output:
+  learned_knowledge_path: "data/learned_knowledge.json"
+  patterns_path: "data/learned_patterns.json"
+  crawl_cache_path: "data/crawl_cache"
+
+# Websites to crawl
+# Each entry has:
+#   - url: Starting URL
+#   - type: Site type for parser selection (owasp, cwe, nvd, portswigger, hackerone, custom)
+#   - max_depth: How deep to follow links (1 = start page only)
+#   - include_patterns: URL patterns to include (regex)
+#   - exclude_patterns: URL patterns to exclude (regex)
+
+sources:
+  # OWASP - Primary source for vulnerability definitions
+  - name: "OWASP Top 10"
+    url: "https://owasp.org/Top10/"
+    type: owasp
+    max_depth: 2
+    include_patterns:
+      - "/Top10/"
+      - "/www-project-"
+    exclude_patterns:
+      - "/membership"
+      - "/donate"
+      - "/events"
+
+  - name: "OWASP Cheat Sheets"
+    url: "https://cheatsheetseries.owasp.org/"
+    type: owasp
+    max_depth: 2
+    include_patterns:
+      - "cheatsheets/"
+    exclude_patterns: []
+
+  # CWE - Common Weakness Enumeration
+  - name: "CWE Top 25"
+    url: "https://cwe.mitre.org/top25/archive/2023/2023_top25_list.html"
+    type: cwe
+    max_depth: 2
+    include_patterns:
+      - "/data/definitions/"
+    exclude_patterns:
+      - "/slices/"
+      - "/views/"
+
+  # PortSwigger Web Security Academy
+  - name: "PortSwigger Web Security Academy"
+    url: "https://portswigger.net/web-security/all-topics"
+    type: portswigger
+    max_depth: 2
+    include_patterns:
+      - "/web-security/"
+    exclude_patterns:
+      - "/burp/"
+      - "/daily-swig/"
+      - "/blog/"
+
+  # HackerOne Vulnerability Types
+  - name: "HackerOne Vulnerability Types"
+    url: "https://www.hackerone.com/vulnerability-management"
+    type: hackerone
+    max_depth: 1
+    include_patterns:
+      - "/vulnerability"
+    exclude_patterns:
+      - "/pricing"
+      - "/contact"
+
+# Custom sites - Add your 10 cybersecurity websites here
+# Example:
+#   - name: "My Security Blog"
+#     url: "https://myblog.com/security"
+#     type: custom
+#     max_depth: 3
+#     include_patterns:
+#       - "/security/"
+#       - "/vulnerability/"
+#     exclude_patterns:
+#       - "/about"
+#       - "/contact"
+
+custom_sources:
+  # Add your websites here:
+  # - name: "Website 1"
+  #   url: "https://example1.com"
+  #   type: custom
+  #   max_depth: 2
+  #   include_patterns: []
+  #   exclude_patterns: []

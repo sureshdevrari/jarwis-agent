@@ -12,7 +12,7 @@ const Privacy = () => {
             </h1>
             <p className="text-gray-200">
               Last updated:{" "}
-              <span className="font-semibold">August 3, 2025</span>
+              <span className="font-semibold">January 8, 2026</span>
             </p>
             <p className="mt-4 text-gray-100 text-sm sm:text-base">
               Jarwis AGI (jarwis.ai) is a service provided by{" "}

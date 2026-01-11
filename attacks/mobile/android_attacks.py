@@ -46,6 +46,12 @@ class AndroidAttackScanner:
     Scanner for Android-specific vulnerabilities
     """
     
+    # Scanner registry metadata
+    CATEGORY = "M1"  # OWASP Mobile: Improper Platform Usage
+    DESCRIPTION = "Android-specific vulnerability scanner (Intent injection, WebView, etc.)"
+    ENABLED_BY_DEFAULT = True
+    REQUIRES_AUTH = False
+    
     # Dangerous permissions that indicate attack surface
     DANGEROUS_PERMISSIONS = {
         'android.permission.READ_SMS': ('high', 'Can read SMS messages - phishing risk'),

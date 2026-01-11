@@ -1,6 +1,7 @@
 // src/components/subscription/PlanUsageCard.jsx
 // Displays current plan usage and limits
 import { useNavigate } from "react-router-dom";
+import { AlertTriangle, Clock } from "lucide-react";
 import { useSubscription } from "../../context/SubscriptionContext";
 
 const PlanUsageCard = ({ isDarkMode, showUpgrade = true, compact = false }) => {
@@ -128,7 +129,7 @@ const PlanUsageCard = ({ isDarkMode, showUpgrade = true, compact = false }) => {
             : (isDarkMode ? "bg-gray-700/50" : "bg-gray-50")
         }`}>
           <div className="flex items-center gap-2">
-            <span>{subscriptionStatus.isExpiringSoon ? "[!]" : ""}</span>
+            <span>{subscriptionStatus.isExpiringSoon ? <AlertTriangle className="w-4 h-4 text-yellow-500" /> : <Clock className="w-4 h-4" />}</span>
             <span className={themeClasses.text}>
               {subscriptionStatus.isExpiringSoon 
                 ? `Expires in ${subscriptionStatus.daysRemaining} days` 

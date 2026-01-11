@@ -63,6 +63,29 @@ export const SubscriptionProvider = ({ children }) => {
     fetchSubscriptionData();
   }, [fetchSubscriptionData]);
 
+  // Auto-refresh subscription data every 30 seconds to keep UI in sync with database
+  useEffect(() => {
+    if (!token) return;
+    
+    const intervalId = setInterval(() => {
+      fetchSubscriptionData();
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [token, fetchSubscriptionData]);
+
+  // Refresh when window gains focus (user switches back to tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (token) {
+        fetchSubscriptionData();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [token, fetchSubscriptionData]);
+
   // Check if user can perform an action (server-side check)
   const checkActionAllowed = useCallback(async (action) => {
     if (!token) return { allowed: false, message: "Not authenticated" };
@@ -86,6 +109,26 @@ export const SubscriptionProvider = ({ children }) => {
     const planId = userDoc?.plan || "trial";
     return getPlanById(planId);
   }, [userDoc?.plan]);
+
+  // Convenient subscription object with all key info
+  const subscription = useMemo(() => {
+    const planId = userDoc?.plan || "trial";
+    const plan = getPlanById(planId);
+    
+    // Get limits from server or plan defaults
+    const scansLimit = serverUsage?.usage?.scans?.limit ?? plan.maxScansPerMonth;
+    const scansUsed = serverUsage?.usage?.scans?.used ?? userDoc?.scans_this_month ?? 0;
+    
+    return {
+      plan: planId,
+      planName: plan.name,
+      scansUsed: scansUsed,
+      scansLimit: scansLimit,
+      scansRemaining: scansLimit === -1 ? Infinity : Math.max(0, scansLimit - scansUsed),
+      isUnlimited: scansLimit === -1,
+      lastUpdated: new Date().toISOString(),
+    };
+  }, [userDoc, serverUsage]);
 
   // Get current usage from server or userDoc
   const usage = useMemo(() => {
@@ -134,6 +177,9 @@ export const SubscriptionProvider = ({ children }) => {
       
       case "useCloudScanning":
         return plan.features.cloudScanning || plan.features.mobileAppTesting; // Cloud requires same tier as mobile
+      
+      case "useSASTScanning":
+        return plan.features.sastScanning || plan.features.cloudScanning; // SAST requires pro+ tier
       
       case "useChatbot":
         return plan.features.chatbotAccess;
@@ -335,6 +381,7 @@ export const SubscriptionProvider = ({ children }) => {
     // Current plan info
     currentPlan,
     planId: userDoc?.plan || "trial",
+    subscription, // Convenient subscription object with scansUsed, scansLimit, scansRemaining
     
     // Usage tracking
     usage,

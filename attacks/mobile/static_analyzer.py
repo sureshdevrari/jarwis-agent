@@ -68,6 +68,12 @@ class StaticAnalyzer:
     Extracts and analyzes APK/IPA files without execution
     """
     
+    # Scanner registry metadata
+    CATEGORY = "M2"  # OWASP Mobile: Inadequate Supply Chain Security
+    DESCRIPTION = "Static analysis for mobile app binaries (APK/IPA)"
+    ENABLED_BY_DEFAULT = True
+    REQUIRES_AUTH = False
+    
     # Dangerous Android permissions
     DANGEROUS_PERMISSIONS = [
         "android.permission.READ_SMS",

@@ -1,8 +1,28 @@
 // src/components/scan/ScanForm.jsx
 // Comprehensive scan form supporting Web, Mobile, and Cloud scans
 import { useState, useEffect } from "react";
+import { Globe, Smartphone, Upload, XCircle, List, Mail, Link, Cloud, Rocket, AlertTriangle, Lock, Unlock, Target, Wrench, Settings, Key, Phone, User, ExternalLink } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { cloudScanAPI } from "../../services/api";
+
+// Auth method options for target app authentication
+const AUTH_METHODS = [
+  { id: "none", name: "No Authentication", description: "Test unauthenticated surfaces only", icon: Unlock },
+  { id: "username_password", name: "Username & Password", description: "Traditional login form", icon: Lock },
+  { id: "social_login", name: "Social Login", description: "Google, Facebook, LinkedIn, Apple", icon: ExternalLink },
+  { id: "phone_otp", name: "Phone OTP", description: "Login with phone number + SMS code", icon: Phone },
+  { id: "manual_session", name: "Provide Session", description: "I'll provide cookies/token", icon: Key },
+];
+
+// Social provider options
+const SOCIAL_PROVIDERS = [
+  { id: "google", name: "Google", color: "#4285F4" },
+  { id: "facebook", name: "Facebook", color: "#1877F2" },
+  { id: "linkedin", name: "LinkedIn", color: "#0A66C2" },
+  { id: "apple", name: "Apple", color: "#000000" },
+  { id: "github", name: "GitHub", color: "#333333" },
+  { id: "microsoft", name: "Microsoft", color: "#00A4EF" },
+];
 
 const ScanForm = ({ onStartScan, isLoading }) => {
   const { isDarkMode } = useTheme();
@@ -11,6 +31,8 @@ const ScanForm = ({ onStartScan, isLoading }) => {
     // Web scan fields
     target_url: "",
     scan_type: "web",
+    // Authentication method for target app
+    auth_method: "none",  // none, username_password, social_login, phone_otp, manual_session
     login_url: "",
     username: "",
     password: "",
@@ -19,6 +41,13 @@ const ScanForm = ({ onStartScan, isLoading }) => {
     submit_selector: 'button[type="submit"]',
     success_indicator: "",
     headless: false,
+    // Social login options
+    social_providers: [],  // ["google", "facebook", etc.]
+    // Phone OTP options
+    phone_number: "",
+    // Manual session options
+    session_cookie: "",
+    session_token: "",
     // Mobile scan fields
     app_path: "",
     runtime_analysis: false,
@@ -67,6 +96,18 @@ const ScanForm = ({ onStartScan, isLoading }) => {
       .then((data) => setCloudProviders(data))
       .catch((err) => console.log("Cloud providers check failed:", err));
   }, []);
+
+  // Toggle social provider selection
+  const toggleSocialProvider = (providerId) => {
+    setFormData((prev) => {
+      const providers = prev.social_providers || [];
+      if (providers.includes(providerId)) {
+        return { ...prev, social_providers: providers.filter(p => p !== providerId) };
+      } else {
+        return { ...prev, social_providers: [...providers, providerId] };
+      }
+    });
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -159,9 +200,9 @@ const ScanForm = ({ onStartScan, isLoading }) => {
   };
 
   const scanTypes = [
-    { id: "web", name: "Web Application", icon: "[WEB]", description: "OWASP Top 10 Testing" },
-    { id: "mobile", name: "Mobile App", icon: "[MOBILE]", description: "Android & iOS Security" },
-    { id: "cloud", name: "Cloud Infrastructure", icon: "", description: "AWS, Azure, GCP" },
+    { id: "web", name: "Web Application", icon: <Globe className="w-5 h-5" />, description: "OWASP Top 10 Testing" },
+    { id: "mobile", name: "Mobile App", icon: <Smartphone className="w-5 h-5" />, description: "Android & iOS Security" },
+    { id: "cloud", name: "Cloud Infrastructure", icon: <Cloud className="w-5 h-5" />, description: "AWS, Azure, GCP" },
   ];
 
   const awsRegions = [
@@ -191,7 +232,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Scan Type Selection */}
       <div className={cardClass}>
-        <h3 className={sectionTitle}>[TARGET] Select Scan Type</h3>
+        <h3 className={sectionTitle}><Target className="w-5 h-5 inline mr-2" />Select Scan Type</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {scanTypes.map((type) => (
             <div
@@ -223,7 +264,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
       {formData.scan_type === "web" && (
         <>
           <div className={cardClass}>
-            <h3 className={sectionTitle}>[WEB] Web Application Target</h3>
+            <h3 className={sectionTitle}><Globe className="w-5 h-5 inline mr-2" />Web Application Target</h3>
             <div className="space-y-4">
               <div>
                 <label className={labelClass}>Target Website URL *</label>
@@ -243,22 +284,48 @@ const ScanForm = ({ onStartScan, isLoading }) => {
             </div>
           </div>
 
+          {/* Authentication Method Selection */}
           <div className={cardClass}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className={sectionTitle}>[SECURE] Authentication</h3>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={authEnabled}
-                  onChange={(e) => setAuthEnabled(e.target.checked)}
-                />
-                <div className="w-11 h-6 bg-gray-600 peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
+            <h3 className={sectionTitle}><Lock className="w-5 h-5 inline mr-2" />Target App Authentication</h3>
+            <p className={isDarkMode ? "text-gray-400 text-sm mb-4" : "text-gray-600 text-sm mb-4"}>
+              How does the target application authenticate users?
+            </p>
+            
+            {/* Auth Method Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+              {AUTH_METHODS.map((method) => {
+                const IconComponent = method.icon;
+                return (
+                  <div
+                    key={method.id}
+                    className={`cursor-pointer p-3 rounded-lg border-2 transition-all duration-200 ${
+                      formData.auth_method === method.id
+                        ? isDarkMode
+                          ? "border-blue-500 bg-blue-500/10"
+                          : "border-blue-500 bg-blue-50"
+                        : isDarkMode
+                        ? "border-slate-700 hover:border-slate-600"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                    onClick={() => setFormData((prev) => ({ ...prev, auth_method: method.id }))}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <IconComponent className="w-4 h-4" />
+                      <span className={isDarkMode ? "text-white font-medium text-sm" : "text-gray-900 font-medium text-sm"}>
+                        {method.name}
+                      </span>
+                    </div>
+                    <p className={isDarkMode ? "text-gray-400 text-xs" : "text-gray-600 text-xs"}>
+                      {method.description}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
-            {authEnabled && (
-              <div className="space-y-4">
+            {/* Username/Password Fields */}
+            {formData.auth_method === "username_password" && (
+              <div className="space-y-4 p-4 rounded-lg bg-slate-900/20 border border-slate-700/30">
                 <div>
                   <label className={labelClass}>Login Page URL</label>
                   <input
@@ -350,10 +417,127 @@ const ScanForm = ({ onStartScan, isLoading }) => {
                 )}
               </div>
             )}
+
+            {/* Social Login Fields */}
+            {formData.auth_method === "social_login" && (
+              <div className="space-y-4 p-4 rounded-lg bg-slate-900/20 border border-slate-700/30">
+                <div>
+                  <label className={labelClass}>Login Page URL</label>
+                  <input
+                    type="text"
+                    name="login_url"
+                    value={formData.login_url}
+                    onChange={handleChange}
+                    placeholder="https://example.com/login"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Select Social Providers Available on Target</label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {SOCIAL_PROVIDERS.map((provider) => (
+                      <button
+                        key={provider.id}
+                        type="button"
+                        onClick={() => toggleSocialProvider(provider.id)}
+                        className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                          (formData.social_providers || []).includes(provider.id)
+                            ? "border-blue-500 bg-blue-500/20 text-blue-400"
+                            : isDarkMode
+                            ? "border-slate-600 text-gray-400 hover:border-slate-500"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        {provider.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={isDarkMode ? "text-gray-500 text-xs mt-2" : "text-gray-500 text-xs mt-2"}>
+                    During the scan, a browser window will open for you to log in manually
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Phone OTP Fields */}
+            {formData.auth_method === "phone_otp" && (
+              <div className="space-y-4 p-4 rounded-lg bg-slate-900/20 border border-slate-700/30">
+                <div>
+                  <label className={labelClass}>Login Page URL</label>
+                  <input
+                    type="text"
+                    name="login_url"
+                    value={formData.login_url}
+                    onChange={handleChange}
+                    placeholder="https://example.com/login"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phone_number"
+                    value={formData.phone_number}
+                    onChange={handleChange}
+                    placeholder="+1 555 123 4567"
+                    className={inputClass}
+                  />
+                  <p className={isDarkMode ? "text-gray-500 text-xs mt-1" : "text-gray-500 text-xs mt-1"}>
+                    OTP will be sent to this number. You'll enter it when prompted.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Session Fields */}
+            {formData.auth_method === "manual_session" && (
+              <div className="space-y-4 p-4 rounded-lg bg-slate-900/20 border border-slate-700/30">
+                <div className={isDarkMode ? "bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3" : "bg-yellow-50 border border-yellow-200 rounded-lg p-3"}>
+                  <p className={isDarkMode ? "text-yellow-300 text-sm" : "text-yellow-700 text-sm"}>
+                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                    Advanced: Provide session cookies or tokens from your browser's dev tools
+                  </p>
+                </div>
+                <div>
+                  <label className={labelClass}>Session Cookie</label>
+                  <input
+                    type="text"
+                    name="session_cookie"
+                    value={formData.session_cookie}
+                    onChange={handleChange}
+                    placeholder="session=abc123..."
+                    className={`${inputClass} font-mono text-sm`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Or Authorization Token</label>
+                  <input
+                    type="text"
+                    name="session_token"
+                    value={formData.session_token}
+                    onChange={handleChange}
+                    placeholder="Bearer eyJhbG..."
+                    className={`${inputClass} font-mono text-sm`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* No auth info message */}
+            {formData.auth_method === "none" && (
+              <div className={isDarkMode ? "bg-slate-800/50 rounded-lg p-4 border border-slate-700/50" : "bg-gray-50 rounded-lg p-4 border border-gray-200"}>
+                <p className={isDarkMode ? "text-gray-400 text-sm" : "text-gray-600 text-sm"}>
+                  <Unlock className="w-4 h-4 inline mr-2" />
+                  The scan will only test unauthenticated/public-facing pages. 
+                  Enable authentication to test logged-in features like user dashboards, profile pages, etc.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className={cardClass}>
-            <h3 className={sectionTitle}>[GEAR] Options</h3>
+            <h3 className={sectionTitle}><Settings className="w-5 h-5 inline mr-2" />Options</h3>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -374,7 +558,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
       {formData.scan_type === "mobile" && (
         <>
           <div className={cardClass}>
-            <h3 className={sectionTitle}>[MOBILE] Mobile Application Target</h3>
+            <h3 className={sectionTitle}><Smartphone className="w-5 h-5 inline mr-2" />Mobile Application Target</h3>
             
             <div className="mb-4">
               <label className={labelClass}>Upload Application File (APK/IPA) *</label>
@@ -402,7 +586,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
                 />
                 {selectedFile ? (
                   <div className="space-y-2">
-                    <span className="text-4xl">{selectedFile.name.endsWith(".apk") ? "[BOT]" : ""}</span>
+                    <span className="text-4xl">{selectedFile.name.endsWith(".apk") ? "🤖" : "🍎"}</span>
                     <p className={isDarkMode ? "text-white font-medium" : "text-gray-900 font-medium"}>
                       {selectedFile.name}
                     </p>
@@ -423,7 +607,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <span className="text-4xl">[SEND]</span>
+                    <span className="text-4xl"><Upload className="w-10 h-10 mx-auto text-gray-400" /></span>
                     <p className={isDarkMode ? "text-gray-300" : "text-gray-700"}>
                       Drag & drop your APK or IPA file here
                     </p>
@@ -431,7 +615,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
                   </div>
                 )}
               </div>
-              {fileError && <p className="text-red-400 text-sm mt-2">[X] {fileError}</p>}
+              {fileError && <p className="text-red-400 text-sm mt-2"><XCircle className="w-4 h-4 inline mr-1" />{fileError}</p>}
               <p className={isDarkMode ? "text-gray-500 text-sm mt-2" : "text-gray-500 text-sm mt-2"}>
                 Accepted formats: .apk (Android), .ipa (iOS) * Max size: 500MB
               </p>
@@ -439,7 +623,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
 
             <div className={`p-4 rounded-lg ${isDarkMode ? "bg-blue-900/20 border border-blue-700/30" : "bg-blue-50 border border-blue-200"}`}>
               <strong className={isDarkMode ? "text-blue-300" : "text-blue-700"}>
-                [LIST] OWASP Mobile Top 10 Coverage:
+                <List className="w-4 h-4 inline mr-1" /> OWASP Mobile Top 10 Coverage:
               </strong>
               <ul className={`mt-2 grid grid-cols-1 md:grid-cols-2 gap-1 text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
                 <li>M1: Improper Platform Usage</li>
@@ -460,7 +644,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
           {selectedFile && (
             <div className={cardClass}>
               <div className="flex justify-between items-center mb-4">
-                <h3 className={sectionTitle}>[SECURE] SSL Pinning Configuration</h3>
+                <h3 className={sectionTitle}><Lock className="w-5 h-5 inline mr-2" />SSL Pinning Configuration</h3>
                 <button
                   type="button"
                   className={isDarkMode ? "text-blue-400 hover:text-blue-300 text-sm" : "text-blue-600 hover:text-blue-500 text-sm"}
@@ -482,8 +666,8 @@ const ScanForm = ({ onStartScan, isLoading }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { value: "pinned", icon: "[LOCK]", title: "Yes, SSL Pinned", desc: "App rejects proxy certificates" },
-                  { value: "unpinned", icon: "[UNLOCK]", title: "No, Not Pinned", desc: "App accepts any valid cert" },
+                  { value: "pinned", icon: <Lock className="w-6 h-6" />, title: "Yes, SSL Pinned", desc: "App rejects proxy certificates" },
+                  { value: "unpinned", icon: <Unlock className="w-6 h-6" />, title: "No, Not Pinned", desc: "App accepts any valid cert" },
                   { value: "unknown", icon: "", title: "I Don't Know", desc: "Auto-detect during scan" },
                 ].map((option) => (
                   <div
@@ -548,7 +732,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
             <>
               <div className={cardClass}>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className={sectionTitle}>[KEY] App Authentication</h3>
+                  <h3 className={sectionTitle}><Key className="w-5 h-5 inline mr-2" />App Authentication</h3>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -564,10 +748,10 @@ const ScanForm = ({ onStartScan, isLoading }) => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {[
-                        { value: "email_password", icon: "[EMAIL]", label: "Email & Password" },
-                        { value: "phone_otp", icon: "[MOBILE]", label: "Phone + OTP" },
+                        { value: "email_password", icon: <Mail className="w-5 h-5" />, label: "Email & Password" },
+                        { value: "phone_otp", icon: <Smartphone className="w-5 h-5" />, label: "Phone + OTP" },
                         { value: "username_password", icon: "", label: "Username & Password" },
-                        { value: "social", icon: "[LINK]", label: "Social Login" },
+                        { value: "social", icon: <Link className="w-5 h-5" />, label: "Social Login" },
                       ].map((authType) => (
                         <div
                           key={authType.value}
@@ -637,7 +821,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
               </div>
 
               <div className={cardClass}>
-                <h3 className={sectionTitle}>[TOOL] Extraction & Analysis</h3>
+                <h3 className={sectionTitle}><Wrench className="w-5 h-5 inline mr-2" />Extraction & Analysis</h3>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
@@ -692,9 +876,9 @@ const ScanForm = ({ onStartScan, isLoading }) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { id: "aws", icon: "", name: "Amazon AWS" },
-                { id: "azure", icon: "[BLUE]", name: "Microsoft Azure" },
-                { id: "gcp", icon: "[RED]", name: "Google Cloud" },
-                { id: "all", icon: "[WEB]", name: "All Providers" },
+                { id: "azure", icon: "", name: "Microsoft Azure" },
+                { id: "gcp", icon: "", name: "Google Cloud" },
+                { id: "all", icon: <Globe className="w-5 h-5" />, name: "All Providers" },
               ].map((provider) => (
                 <div
                   key={provider.id}
@@ -757,7 +941,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
 
           {(formData.provider === "azure" || formData.provider === "all") && (
             <div className={cardClass}>
-              <h3 className={sectionTitle}>[BLUE] Azure Configuration</h3>
+              <h3 className={sectionTitle}><Cloud className="w-5 h-5 inline mr-2" />Azure Configuration</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Subscription ID *</label>
@@ -787,7 +971,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
 
           {(formData.provider === "gcp" || formData.provider === "all") && (
             <div className={cardClass}>
-              <h3 className={sectionTitle}>[RED] GCP Configuration</h3>
+              <h3 className={sectionTitle}><Cloud className="w-5 h-5 inline mr-2" />GCP Configuration</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Project ID *</label>
@@ -834,7 +1018,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
             </>
           ) : (
             <>
-              [LAUNCH] Start{" "}
+              <Rocket className="w-4 h-4 inline mr-1" /> Start{" "}
               {formData.scan_type === "web"
                 ? "Penetration Test"
                 : formData.scan_type === "mobile"
@@ -848,7 +1032,7 @@ const ScanForm = ({ onStartScan, isLoading }) => {
       {/* Disclaimer */}
       <div className={`p-4 rounded-lg ${isDarkMode ? "bg-yellow-900/20 border border-yellow-700/30" : "bg-yellow-50 border border-yellow-200"}`}>
         <p className={isDarkMode ? "text-yellow-300 text-sm" : "text-yellow-700 text-sm"}>
-          [!] <strong>Warning:</strong> Only scan systems you own or have explicit written permission to test.
+          <AlertTriangle className="w-4 h-4 inline mr-1" /> <strong>Warning:</strong> Only scan systems you own or have explicit written permission to test.
           Unauthorized access is illegal.
         </p>
       </div>

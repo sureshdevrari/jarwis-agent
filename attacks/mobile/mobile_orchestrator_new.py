@@ -674,7 +674,7 @@ class MobilePenTestOrchestrator:
     
     async def _run_api_attacks(self, authenticated: bool = False):
         """Run attacks on discovered API endpoints"""
-        from attacks.pre_login import PreLoginAttacks
+        from attacks.web.pre_login import PreLoginAttacks
         
         # Convert mobile endpoints to web-style endpoints for attack modules
         web_endpoints = [

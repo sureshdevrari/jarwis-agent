@@ -353,11 +353,12 @@ class PenTestRunner:
         ) as progress:
             task = progress.add_task("Jarwis discovering endpoints...", total=None)
             
-            # Crawl the target
+            # Crawl the target using BFS tree method
             discovered = await self.browser.crawl(
                 self.config['target']['url'],
-                max_depth=3,
-                scope=self.config['target']['scope']
+                max_depth=5,
+                scope=self.config['target']['scope'],
+                max_pages=200
             )
             
             self.context.endpoints = discovered['endpoints']
@@ -436,7 +437,7 @@ class PenTestRunner:
         console.print("[cyan][!]   Jarwis is executing security tests on unauthenticated surfaces...[/cyan]")
         console.print("[dim][OK]  JavaScript rendering enabled for modern web app testing[/dim]")
         
-        from attacks.pre_login import PreLoginAttacks
+        from attacks.web.pre_login import PreLoginAttacks
         from core.ai_verifier import AIVerifier
         
         # Pass browser controller for JavaScript rendering support
@@ -560,13 +561,15 @@ class PenTestRunner:
             return
             
         console.print("\n[bold yellow]Phase 4: Jarwis Authenticated Reconnaissance[/bold yellow]")
-        console.print("[cyan][OK]  Jarwis is discovering authenticated endpoints...[/cyan]")
+        console.print("[cyan][OK]  Jarwis is discovering authenticated endpoints using BFS tree crawl...[/cyan]")
         
+        # Re-crawl with authentication using BFS tree method
         discovered = await self.browser.crawl(
             self.config['target']['url'],
-            max_depth=3,
+            max_depth=5,
             scope=self.config['target']['scope'],
-            authenticated=True
+            authenticated=True,
+            max_pages=200
         )
         
         # Merge new endpoints
@@ -579,14 +582,56 @@ class PenTestRunner:
         console.print(f"[bold green][OK]  New authenticated endpoints: {len(discovered['endpoints'])}[/bold green]")
     
     async def phase_5_postlogin_scan(self):
-        """Phase 5: Run post-login attacks including IDOR, CSRF, privilege escalation"""
+        """Phase 5: Run ALL attacks (pre-login + post-login specific) with authentication
+        
+        This runs ALL 48+ pre-login scanners AGAIN with authenticated context,
+        plus post-login specific attacks (IDOR, CSRF, privilege escalation).
+        """
         if not self.context.authenticated:
             return
             
         console.print("\n[bold yellow]Phase 5: Jarwis Post-Login Security Scan[/bold yellow]")
         console.print("[cyan][!]   Jarwis is testing authenticated attack surfaces...[/cyan]")
+        console.print("[dim][!]   Running ALL scanners with authenticated session for complete coverage[/dim]")
         
-        from attacks.post_login import PostLoginAttacks
+        # ========== Run ALL pre-login scanners with auth context ==========
+        console.print("\n[cyan]Re-running all OWASP scanners with authentication...[/cyan]")
+        from attacks.web.pre_login import PreLoginAttacks
+        
+        # Pass authenticated cookies and headers to pre-login attacks
+        # This allows them to test authenticated-only pages
+        pre_login_attacker = PreLoginAttacks(
+            config=self.config['attacks'],
+            context=self.context,  # Context has auth cookies/headers
+            browser_controller=self.browser
+        )
+        
+        # Filter to only test authenticated endpoints (discovered in phase 4)
+        auth_endpoints = [ep for ep in self.context.endpoints if ep.get('requires_auth', False)]
+        if auth_endpoints:
+            console.print(f"[cyan][!]   Testing {len(auth_endpoints)} authenticated endpoints with all scanners...[/cyan]")
+            # Temporarily replace endpoints with auth-only ones for targeted testing
+            original_endpoints = self.context.endpoints
+            self.context.endpoints = auth_endpoints
+            
+            auth_findings = await pre_login_attacker.run_all()
+            
+            # Mark these findings as discovered in authenticated context
+            for finding in auth_findings:
+                if hasattr(finding, 'reasoning'):
+                    finding.reasoning = "[AUTHENTICATED] " + (finding.reasoning or "")
+                if hasattr(finding, 'description'):
+                    finding.description = "[Found in authenticated session] " + finding.description
+            
+            self.context.findings.extend(auth_findings)
+            console.print(f"[green][!]   Authenticated scanner findings: {len(auth_findings)}[/green]")
+            
+            # Restore all endpoints
+            self.context.endpoints = original_endpoints
+        
+        # ========== Run post-login specific attacks (IDOR, CSRF, PrivEsc) ==========
+        console.print("\n[cyan]Running post-login specific attacks (IDOR, CSRF, Privilege Escalation)...[/cyan]")
+        from attacks.web.post_login import PostLoginAttacks
         
         attacker = PostLoginAttacks(
             config=self.config['attacks'],
@@ -598,14 +643,15 @@ class PenTestRunner:
         findings = await attacker.run_all()
         self.context.findings.extend(findings)
         
-        console.print(f"[bold green][OK]  Jarwis post-login scan complete. Findings: {len(findings)}[/bold green]")
+        total_post_login = len(auth_findings) + len(findings) if auth_endpoints else len(findings)
+        console.print(f"[bold green][OK]  Jarwis post-login scan complete. Total Findings: {total_post_login}[/bold green]")
     
     async def phase_6_api_testing(self):
         """Phase 6: API-specific testing"""
         console.print("\n[bold yellow]Phase 6: Jarwis API Security Testing[/bold yellow]")
         console.print("[cyan][OK]  Jarwis is scanning API endpoints for vulnerabilities...[/cyan]")
         
-        from attacks.pre_login.api_scanner import APIScanner
+        from attacks.web.pre_login.api_scanner import APIScanner
         
         api_scanner = APIScanner(
             config=self.config['api'],
@@ -990,7 +1036,12 @@ class PenTestRunner:
             logger.error(f"Scan failed: {e}")
             raise
         finally:
-            await self.cleanup()
+            # Cleanup browser resources
+            try:
+                await self.cleanup()
+            except Exception as e:
+                # Ignore cleanup errors (especially greenlet errors on Windows)
+                logger.warning(f"Cleanup error (non-critical): {type(e).__name__}")
     
     def _finding_to_dict(self, finding) -> dict:
         """Convert a ScanResult to dict"""

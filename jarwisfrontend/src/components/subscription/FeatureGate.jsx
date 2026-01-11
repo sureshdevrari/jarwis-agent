@@ -1,6 +1,7 @@
 // src/components/subscription/FeatureGate.jsx
 // Component to gate features based on subscription plan
 import { useNavigate } from "react-router-dom";
+import { Lock } from "lucide-react";
 import { useSubscription } from "../../context/SubscriptionContext";
 
 // Feature Gate - wraps content that requires specific features
@@ -36,7 +37,7 @@ export const FeatureGate = ({
         ? "bg-gray-800/50 border border-gray-700" 
         : "bg-gray-50 border border-gray-200"
     }`}>
-      <div className="text-4xl mb-3">[LOCK]</div>
+      <div className="text-4xl mb-3"><Lock className="w-10 h-10 mx-auto text-gray-400" /></div>
       <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
         Feature Locked
       </h3>
@@ -86,7 +87,7 @@ export const UsageGate = ({
         ? "bg-gray-800/50 border border-gray-700" 
         : "bg-gray-50 border border-gray-200"
     }`}>
-      <div className="text-4xl mb-3">[!]</div>
+      <div className="text-4xl mb-3"><Lock className="w-10 h-10 mx-auto text-gray-400" /></div>
       <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
         Limit Reached
       </h3>
@@ -133,7 +134,7 @@ export const FeatureChip = ({ feature, label, icon, isDarkMode = true }) => {
         ? (isDarkMode ? "bg-green-500/10 text-green-400 border border-green-500/30" : "bg-green-50 text-green-700 border border-green-200")
         : (isDarkMode ? "bg-gray-700/50 text-gray-500 border border-gray-600" : "bg-gray-100 text-gray-400 border border-gray-200")
     }`}>
-      <span>{hasAccess ? icon : "[LOCK]"}</span>
+      <span>{hasAccess ? icon : <Lock className="w-4 h-4" />}</span>
       <span className="text-sm font-medium">{label}</span>
       {!hasAccess && <ProBadge />}
     </div>

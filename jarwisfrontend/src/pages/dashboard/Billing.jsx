@@ -1,6 +1,7 @@
 // src/pages/dashboard/Billing.jsx - Comprehensive Billing & Subscription Management
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { Sparkles, BarChart3, Search, Globe, Users, MessageSquare, History, FileText, RefreshCw, AlertCircle } from "lucide-react";
 import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -13,10 +14,12 @@ const Billing = () => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
   const { user, userDoc, token } = useAuth();
-  const { currentPlan, usage, getAllUsageStats, canPerformAction } = useSubscription();
+  const { currentPlan, usage, getAllUsageStats, canPerformAction, refreshSubscription, serverUsage } = useSubscription();
   
   const [billingData, setBillingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [savedCards, setSavedCards] = useState([]);
 
@@ -55,8 +58,12 @@ const Billing = () => {
         const cards = await cardsRes.json();
         setSavedCards(cards.cards || []);
       }
+      
+      // Clear any previous errors on success
+      setError(null);
     } catch (error) {
       console.error("Failed to fetch billing data:", error);
+      setError("Failed to load billing information. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -64,7 +71,11 @@ const Billing = () => {
 
   useEffect(() => {
     fetchBillingData();
-  }, [fetchBillingData]);
+    // Also refresh subscription context on page load to get latest usage
+    if (refreshSubscription) {
+      refreshSubscription();
+    }
+  }, [fetchBillingData, refreshSubscription]);
 
   // Calculate next billing date
   const getNextBillingDate = () => {
@@ -142,6 +153,28 @@ const Billing = () => {
   return (
     <MiftyJarwisLayout>
       <div className="p-6 space-y-6">
+        {/* Error Banner */}
+        {error && (
+          <div className={`rounded-xl border p-4 flex items-center gap-3 ${
+            isDarkMode 
+              ? "bg-red-900/20 border-red-700/50 text-red-400" 
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}>
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button 
+              onClick={fetchBillingData}
+              className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                isDarkMode 
+                  ? "bg-red-800/50 hover:bg-red-800 text-red-300" 
+                  : "bg-red-100 hover:bg-red-200 text-red-700"
+              }`}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Page Header */}
         <MiftyPageHeader
           title="Billing & Subscription"
@@ -210,7 +243,7 @@ const Billing = () => {
                   onClick={() => navigate("/pricing")}
                   className="px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/30 transition-all duration-300 hover:scale-105"
                 >
-                  [!] Upgrade Plan
+                  <Sparkles className="w-4 h-4 inline mr-1" /> Upgrade Plan
                 </button>
               ) : (
                 <>
@@ -233,16 +266,44 @@ const Billing = () => {
 
         {/* Usage Overview */}
         <div className={`rounded-2xl border p-6 ${cardBg}`}>
-          <h3 className={`text-lg font-bold ${textPrimary} mb-4 flex items-center gap-2`}>
-            <span>[CHART]</span> Current Usage
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
+              <BarChart3 className="w-5 h-5" /> Current Usage
+            </h3>
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  // Refresh subscription data from context (makes API call)
+                  if (refreshSubscription) {
+                    await refreshSubscription();
+                  }
+                  // Also refresh billing data
+                  await fetchBillingData();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                refreshing ? "opacity-50 cursor-not-allowed" : ""
+              } ${
+                isDarkMode 
+                  ? "bg-slate-700 hover:bg-slate-600 text-slate-300" 
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Scans This Month", used: usage?.scansThisMonth || 0, limit: currentPlan?.maxScansPerMonth || 3, icon: "[SEARCH]" },
-              { label: "Websites", used: usage?.websitesThisMonth || 0, limit: currentPlan?.maxWebsitesPerMonth || 1, icon: "[WEB]" },
-              { label: "Team Members", used: usage?.teamMembers || 1, limit: currentPlan?.maxTeamMembers || 1, icon: "" },
-              { label: "AI Questions Today", used: usage?.chatbotQuestionsToday || 0, limit: currentPlan?.maxChatbotQuestionsPerDay || 0, icon: "[BOT]" },
+              { label: "Scans This Month", used: usage?.scansThisMonth || 0, limit: currentPlan?.maxScansPerMonth || 3, icon: <Search className="w-5 h-5" /> },
+              { label: "Websites", used: usage?.websitesThisMonth || 0, limit: currentPlan?.maxWebsitesPerMonth || 1, icon: <Globe className="w-5 h-5" /> },
+              { label: "Team Members", used: usage?.teamMembers || 1, limit: currentPlan?.maxTeamMembers || 1, icon: <Users className="w-5 h-5" /> },
+              { label: "AI Questions Today", used: usage?.chatbotQuestionsToday || 0, limit: currentPlan?.maxChatbotQuestionsPerDay || 0, icon: <MessageSquare className="w-5 h-5" /> },
             ].map((item, i) => {
               const percentage = item.limit === 0 ? 0 : Math.min(100, (item.used / item.limit) * 100);
               const isUnlimited = item.limit === -1 || item.limit === Infinity;
@@ -333,7 +394,7 @@ const Billing = () => {
         <div className={`rounded-2xl border p-6 ${cardBg}`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-              <span>[LIST]</span> Billing History
+              <History className="w-5 h-5" /> Billing History
             </h3>
             {paymentHistory.length > 0 && (
               <button className={`text-sm font-medium ${isDarkMode ? "text-purple-400 hover:text-purple-300" : "text-purple-600 hover:text-purple-700"}`}>
@@ -384,7 +445,7 @@ const Billing = () => {
             </div>
           ) : (
             <div className={`text-center py-8 rounded-xl ${isDarkMode ? "bg-slate-700/30" : "bg-gray-50"}`}>
-              <span className="text-4xl mb-3 block">[LIST]</span>
+              <span className="text-4xl mb-3 block"><FileText className="w-10 h-10 mx-auto text-gray-400" /></span>
               <p className={textSecondary}>No billing history</p>
               <p className={`text-sm ${textMuted} mt-1`}>
                 {isPaid ? "Your first invoice will appear here after the billing cycle" : "Upgrade to a paid plan to see billing history"}

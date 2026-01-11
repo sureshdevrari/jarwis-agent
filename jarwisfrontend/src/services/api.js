@@ -4,7 +4,11 @@
 import axios from 'axios';
 
 // Base URL for the API
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// In development with proxy (package.json), use empty string for relative URLs
+// In production or if REACT_APP_API_URL is set, use absolute URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+
+console.log('[API] Base URL:', API_BASE_URL || '(using proxy/relative URLs)');
 
 // Token refresh interval (5 minutes in milliseconds) - shorter for better security
 const TOKEN_REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -14,12 +18,14 @@ const TOKEN_REFRESH_BUFFER = 1 * 60 * 1000; // Refresh 1 minute before expiry
 const SESSION_INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000; // 3 hours
 
 // Create axios instance with default config
+// Timeout increased to 60s for scan operations that may take longer
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 second timeout
+  timeout: 60000, // 60 second timeout (increased for scan operations)
+  withCredentials: true, // IMPORTANT: Send HttpOnly cookies with every request
 });
 
 // Token storage keys
@@ -92,6 +98,7 @@ export const isSessionInactive = () => {
 };
 
 // Auto refresh token if needed
+// Now uses HttpOnly cookies - browser sends them automatically
 let refreshPromise = null;
 export const autoRefreshToken = async () => {
   // Avoid multiple simultaneous refresh attempts
@@ -99,15 +106,16 @@ export const autoRefreshToken = async () => {
     return refreshPromise;
   }
   
+  // With HttpOnly cookies, refresh token is sent automatically by browser
+  // We also send localStorage version as fallback for backwards compatibility
   const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    throw new Error('No refresh token');
-  }
   
-  refreshPromise = axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-    refresh_token: refreshToken,
-  }).then(response => {
+  refreshPromise = axios.post(`${API_BASE_URL}/api/auth/refresh`, 
+    refreshToken ? { refresh_token: refreshToken } : {},
+    { withCredentials: true }  // Send HttpOnly cookies
+  ).then(response => {
     const { access_token, refresh_token: newRefreshToken, expires_in } = response.data;
+    // Still store in localStorage for backwards compatibility and session tracking
     setTokens(access_token, newRefreshToken, expires_in || 900);
     return response.data;
   }).finally(() => {
@@ -115,6 +123,23 @@ export const autoRefreshToken = async () => {
   });
   
   return refreshPromise;
+};
+
+// ============== CSRF Token Management ==============
+
+const CSRF_COOKIE_NAME = 'jarwis_csrf_token';
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+
+// Read CSRF token from cookie
+const getCSRFToken = () => {
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === CSRF_COOKIE_NAME) {
+      return value;
+    }
+  }
+  return null;
 };
 
 // ============== Request Interceptor ==============
@@ -130,6 +155,14 @@ const isAuthEndpoint = (url) => {
 // Add token to requests and check for proactive refresh
 api.interceptors.request.use(
   async (config) => {
+    // Add CSRF token for state-changing requests
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method?.toUpperCase())) {
+      const csrfToken = getCSRFToken();
+      if (csrfToken) {
+        config.headers[CSRF_HEADER_NAME] = csrfToken;
+      }
+    }
+    
     // Skip session checks for auth endpoints (login, register, etc.)
     if (isAuthEndpoint(config.url)) {
       return config;
@@ -235,8 +268,37 @@ export const authAPI = {
   },
 
   // Login with email and password
+  // Returns { two_factor_required: true, two_factor_token, two_factor_method } if 2FA is enabled
   login: async (email, password) => {
     const response = await api.post('/api/auth/login', { email, password });
+    
+    // Check if 2FA is required
+    if (response.data.two_factor_required) {
+      return {
+        two_factor_required: true,
+        two_factor_token: response.data.two_factor_token,
+        two_factor_method: response.data.two_factor_method || 'email',
+        message: response.data.message,
+      };
+    }
+    
+    const { access_token, refresh_token, user } = response.data;
+    
+    // Store tokens and user
+    setTokens(access_token, refresh_token);
+    setStoredUser(user);
+    
+    return response.data;
+  },
+
+  // Complete login with 2FA code
+  loginWith2FA: async (twoFactorToken, code, useBackupCode = false) => {
+    const response = await api.post('/api/auth/login/2fa', {
+      two_factor_token: twoFactorToken,
+      code: code,
+      use_backup_code: useBackupCode,
+    });
+    
     const { access_token, refresh_token, user } = response.data;
     
     // Store tokens and user
@@ -304,6 +366,24 @@ export const authAPI = {
     const { access_token, refresh_token: newRefreshToken } = response.data;
     setTokens(access_token, newRefreshToken);
     
+    return response.data;
+  },
+
+  // Get login history
+  getLoginHistory: async (limit = 10) => {
+    const response = await api.get(`/api/auth/login-history?limit=${limit}`);
+    return response.data;
+  },
+
+  // Get active sessions
+  getActiveSessions: async () => {
+    const response = await api.get('/api/auth/sessions');
+    return response.data;
+  },
+
+  // Revoke a specific session
+  revokeSession: async (sessionId) => {
+    const response = await api.delete(`/api/auth/sessions/${sessionId}`);
     return response.data;
   },
 };
@@ -401,16 +481,73 @@ export const adminAPI = {
 export const scanAPI = {
   // Start a new web scan
   startScan: async (data) => {
+    // Extract auth credentials
+    const loginUrl = data.auth?.login_url || data.login_url || '';
+    const username = data.auth?.username || data.username || '';
+    const password = data.auth?.password || data.password || '';
+    
+    // Determine auth_method based on provided credentials or explicit method
+    let authMethod = data.auth?.method || 'none';
+    if (authMethod === 'none') {
+      // Auto-detect from credentials
+      if (username && password) {
+        authMethod = 'username_password';
+      } else if (data.session_cookie || data.session_token) {
+        authMethod = 'manual_session';
+      } else if (data.social_providers?.length > 0) {
+        authMethod = 'social_login';
+      } else if (data.phone_number) {
+        authMethod = 'phone_otp';
+      }
+    }
+    
+    // Build 2FA config if provided
+    let twoFactorConfig = null;
+    if (data.two_factor?.enabled) {
+      twoFactorConfig = {
+        enabled: true,
+        type: data.two_factor.type || 'email',
+        email: data.two_factor.email || null,
+        phone: data.two_factor.phone || null,
+      };
+    }
+    
     // Transform frontend format to backend format
     const scanRequest = {
       target_url: data.target?.url || data.target_url || '',
       scan_type: 'web',
-      login_url: data.auth?.login_url || data.login_url || '',
-      username: data.auth?.username || data.username || '',
-      password: data.auth?.password || data.password || '',
+      scan_name: data.scan_name || null,
+      // Auth fields
+      auth_method: authMethod,
+      login_url: loginUrl,
+      username: username,
+      password: password,
+      // Phone OTP auth
+      phone_number: data.phone_number || null,
+      // Manual session auth
+      session_cookie: data.session_cookie || null,
+      session_token: data.session_token || null,
+      // Social login auth
+      social_providers: data.social_providers || null,
+      // 2FA config
+      two_factor: twoFactorConfig,
+      // Pass config with scan profile, rate limit, scope
+      config: {
+        scan_profile: data.scan_type || 'full',  // full, quick, api, authenticated
+        rate_limit: data.rate_limit || 10,
+        attacks: data.attacks || null,
+        scope: data.scope || null,
+      },
     };
-    const response = await api.post('/api/scans/', scanRequest);
-    return response.data;
+    console.log('scanAPI.startScan request:', scanRequest);
+    try {
+      const response = await api.post('/api/scans/', scanRequest);
+      console.log('scanAPI.startScan response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('scanAPI.startScan error:', error.response?.data || error.message);
+      throw error;
+    }
   },
 
   // Get scan status (combined status + logs for live updates)
@@ -419,7 +556,13 @@ export const scanAPI = {
     // Also fetch logs for live output
     try {
       const logsResponse = await api.get(`/api/scans/${scanId}/logs`);
-      return { ...response.data, logs: logsResponse.data?.logs || [] };
+      return { 
+        ...response.data, 
+        logs: logsResponse.data?.logs || [],
+        // Include manual auth waiting states from logs response
+        waiting_for_manual_auth: logsResponse.data?.waiting_for_manual_auth || false,
+        waiting_for_otp: logsResponse.data?.waiting_for_otp || false
+      };
     } catch {
       return response.data;
     }
@@ -428,6 +571,11 @@ export const scanAPI = {
   // Alias for backward compatibility
   getStatus: async (scanId) => {
     return scanAPI.getScanStatus(scanId);
+  },
+
+  // Alias for backward compatibility - startWebScan is alias to startScan
+  startWebScan: async (data) => {
+    return scanAPI.startScan(data);
   },
 
   // Get scan logs with optional since timestamp for incremental updates
@@ -456,12 +604,66 @@ export const scanAPI = {
     return response.data;
   },
 
-  // Stop a scan
-  stopScan: async (scanId) => {
-    const response = await api.post(`/api/scans/${scanId}/stop`);
+  // Get a single finding/vulnerability by ID
+  getVulnerability: async (vulnId) => {
+    const response = await api.get(`/api/scans/findings/${vulnId}`);
     return response.data;
   },
 
+  // Mark a finding as false positive (effectively changing its status)
+  updateVulnerabilityStatus: async (vulnId, status) => {
+    // Map status to is_false_positive boolean
+    const isFalsePositive = status === 'false_positive' || status === 'Resolved';
+    const response = await api.patch(`/api/scans/findings/${vulnId}/false-positive?is_false_positive=${isFalsePositive}`);
+    return response.data;
+  },
+
+  // Stop a scan
+  stopScan: async (scanId, confirmed = false) => {
+    const response = await api.post(`/api/scans/${scanId}/stop?confirmed=${confirmed}`);
+    return response.data;
+  },
+  // Resume a failed/stopped scan from checkpoint
+  resumeScan: async (scanId) => {
+    const response = await api.post(`/api/scans/${scanId}/resume`);
+    return response.data;
+  },
+
+  // Retry a failed scan (creates new scan with same config)
+  retryScan: async (scanId) => {
+    const response = await api.post(`/api/scans/${scanId}/retry`);
+    return response.data;
+  },
+
+  // Get detailed diagnostics for a failed scan
+  getScanDiagnostics: async (scanId) => {
+    const response = await api.get(`/api/scans/${scanId}/diagnostics`);
+    return response.data;
+  },
+
+  // Get recovery status for a scan (checkpoint info, circuit breakers)
+  getRecoveryStatus: async (scanId) => {
+    const response = await api.get(`/api/scans/${scanId}/recovery-status`);
+    return response.data;
+  },
+
+  // Run preflight validation before starting scan
+  runPreflight: async () => {
+    const response = await api.get('/api/scans/preflight');
+    return response.data;
+  },
+
+  // Get scanner health (circuit breaker states)
+  getScannerHealth: async () => {
+    const response = await api.get('/api/scans/scanners/health');
+    return response.data;
+  },
+
+  // Reset circuit breaker for a scanner
+  resetScannerCircuit: async (scannerName) => {
+    const response = await api.post(`/api/scans/scanners/${scannerName}/reset-circuit`);
+    return response.data;
+  },
   // List all scans with optional filters
   listScans: async (filters = {}) => {
     const params = new URLSearchParams();
@@ -485,8 +687,8 @@ export const scanAPI = {
     return response.data;
   },
 
-  // Get scan report URL
-  getReportUrl: (scanId) => `${API_BASE_URL}/api/scans/${scanId}/report`,
+  // Get scan report URL (uses /api/scan/ singular to match server routes)
+  getReportUrl: (scanId) => `${API_BASE_URL}/api/scan/${scanId}/report`,
 
   // Get scan report PDF URL
   getReportPdfUrl: (scanId) => `${API_BASE_URL}/api/scan/${scanId}/report/pdf`,
@@ -568,7 +770,8 @@ export const scanAPI = {
 
 export const mobileScanAPI = {
   // Start mobile scan with file upload
-  startScan: async (config, file) => {
+  // Note: Accepts (file, config) to match NewScan.jsx call pattern
+  startScan: async (file, config) => {
     const formData = new FormData();
     if (file) {
       formData.append('app_file', file);
@@ -601,14 +804,20 @@ export const mobileScanAPI = {
   },
 
   // Stop mobile scan
-  stopScan: async (scanId) => {
-    const response = await api.post(`/api/scan/mobile/${scanId}/stop`);
+  stopScan: async (scanId, confirmed = false) => {
+    const response = await api.post(`/api/scan/mobile/${scanId}/stop?confirmed=${confirmed}`);
     return response.data;
   },
 
   // List mobile scans
   listScans: async () => {
-    const response = await api.get('/api/scans/mobile');
+    const response = await api.get('/api/scan/mobile/');
+    return response.data;
+  },
+
+  // Get mobile scan findings
+  getScanFindings: async (scanId) => {
+    const response = await api.get(`/api/scan/mobile/${scanId}/findings`);
     return response.data;
   },
 };
@@ -617,8 +826,20 @@ export const mobileScanAPI = {
 
 export const cloudScanAPI = {
   // Start cloud scan
-  startScan: async (config) => {
-    const response = await api.post('/api/scan/cloud/start', config);
+  // Accepts either (provider, credentials) or a full config object
+  startScan: async (providerOrConfig, credentials = null) => {
+    let payload;
+    if (typeof providerOrConfig === 'object' && providerOrConfig !== null && !credentials) {
+      // Full config object passed
+      payload = providerOrConfig;
+    } else {
+      // Legacy: (provider, credentials) format
+      payload = {
+        provider: providerOrConfig,
+        credentials
+      };
+    }
+    const response = await api.post('/api/scan/cloud/start', payload);
     return response.data;
   },
 
@@ -628,15 +849,256 @@ export const cloudScanAPI = {
     return response.data;
   },
 
+  // Get cloud scan results/findings
+  getScanResults: async (scanId) => {
+    const response = await api.get(`/api/scan/cloud/${scanId}/logs`);
+    return response.data;
+  },
+
+  // Get cloud scan findings
+  getScanFindings: async (scanId) => {
+    const response = await api.get(`/api/scan/cloud/${scanId}/findings`);
+    return response.data;
+  },
+
+  // Get attack paths for a cloud scan
+  getAttackPaths: async (scanId) => {
+    const response = await api.get(`/api/scan/cloud/${scanId}/attack-paths`);
+    return response.data;
+  },
+
+  // Get compliance scores for a cloud scan
+  getComplianceScores: async (scanId) => {
+    const response = await api.get(`/api/scan/cloud/${scanId}/compliance`);
+    return response.data;
+  },
+
+  // Export cloud scan results
+  exportResults: async (scanId, format = 'json') => {
+    const response = await api.get(`/api/scan/cloud/${scanId}/export?format=${format}`, {
+      responseType: format === 'json' ? 'json' : 'blob'
+    });
+    return response.data;
+  },
+
+  // Validate cloud credentials before scan
+  validateCredentials: async (provider, credentials) => {
+    const response = await api.post('/api/scan/cloud/validate-credentials', credentials, {
+      params: { provider }
+    });
+    return response.data;
+  },
+
+  // Stop a running cloud scan
+  stopScan: async (scanId, confirmed = true) => {
+    const response = await api.post(`/api/scan/cloud/${scanId}/stop`, null, {
+      params: { confirmed }
+    });
+    return response.data;
+  },
+
   // List cloud scans
   listScans: async () => {
-    const response = await api.get('/api/scans/cloud');
+    const response = await api.get('/api/scan/cloud/');
     return response.data;
   },
 
   // Get available cloud providers
   getProviders: async () => {
     const response = await api.get('/api/scan/cloud/providers');
+    return response.data;
+  },
+
+  // Get scan logs (real-time)
+  getScanLogs: async (scanId, since = null) => {
+    const params = since ? `?since=${encodeURIComponent(since)}` : '';
+    const response = await api.get(`/api/scan/cloud/${scanId}/logs${params}`);
+    return response.data;
+  },
+
+  // Generate external ID for AWS cross-account role
+  generateExternalId: async () => {
+    const response = await api.post('/api/scan/cloud/generate-external-id');
+    return response.data;
+  },
+
+  // Get onboarding template for a cloud provider
+  getOnboardingTemplate: async (provider) => {
+    const response = await api.get(`/api/scan/cloud/onboarding-template/${provider}`);
+    return response.data;
+  },
+
+  // Get available services for a cloud provider
+  getServices: async (provider) => {
+    const response = await api.get(`/api/scan/cloud/services/${provider}`);
+    return response.data;
+  },
+};
+
+// ============== Network Scan API ==============
+
+export const networkScanAPI = {
+  // Start network scan
+  startScan: async (scanConfig) => {
+    const response = await api.post('/api/network/scan', scanConfig);
+    return response.data;
+  },
+
+  // Get network scan status
+  getScanStatus: async (scanId) => {
+    const response = await api.get(`/api/network/scan/${scanId}`);
+    return response.data;
+  },
+
+  // Get network scan findings
+  getScanFindings: async (scanId) => {
+    const response = await api.get(`/api/network/scan/${scanId}/findings`);
+    return response.data;
+  },
+
+  // Get network scan logs (real-time)
+  getScanLogs: async (scanId) => {
+    const response = await api.get(`/api/network/scan/${scanId}/logs`);
+    return response.data;
+  },
+
+  // Stop a running network scan
+  stopScan: async (scanId) => {
+    const response = await api.delete(`/api/network/scan/${scanId}`);
+    return response.data;
+  },
+
+  // List network scans
+  listScans: async () => {
+    const response = await api.get('/api/network/scans');
+    return response.data;
+  },
+
+  // Get network scan tools/capabilities
+  getTools: async () => {
+    const response = await api.get('/api/network/tools');
+    return response.data;
+  },
+
+  // Get network dashboard summary (aggregated stats)
+  getDashboardSummary: async () => {
+    const response = await api.get('/api/network/dashboard/summary');
+    return response.data;
+  },
+
+  // Export network scan results
+  exportResults: async (scanId, format = 'json') => {
+    const response = await api.get(`/api/network/scan/${scanId}/export?format=${format}`, {
+      responseType: format === 'json' ? 'json' : 'blob'
+    });
+    return response.data;
+  },
+
+  // ============== Agent Management ==============
+  
+  // Get list of registered agents
+  getAgents: async () => {
+    const response = await api.get('/api/network/agents');
+    return response.data;
+  },
+
+  // Register a new agent
+  registerAgent: async (agentData) => {
+    const response = await api.post('/api/network/agents', agentData);
+    return response.data;
+  },
+
+  // Delete an agent
+  deleteAgent: async (agentId) => {
+    const response = await api.delete(`/api/network/agents/${agentId}`);
+    return response.data;
+  },
+
+  // Get agent status
+  getAgentStatus: async (agentId) => {
+    const response = await api.get(`/api/network/agents/${agentId}/status`);
+    return response.data;
+  },
+
+  // Get agent deployment instructions
+  getAgentSetupInstructions: async () => {
+    const response = await api.get('/api/network/agents/setup-instructions');
+    return response.data;
+  },
+};
+
+// ============== SAST (Source Code Review) API ==============
+
+export const sastScanAPI = {
+  // Start a SAST scan
+  startScan: async (scanConfig) => {
+    const response = await api.post('/api/scan/sast/start', scanConfig);
+    return response.data;
+  },
+
+  // List SAST scans
+  listScans: async (limit = 10) => {
+    const response = await api.get(`/api/scan/sast?limit=${limit}`);
+    return response.data;
+  },
+
+  // Get SAST scan status
+  getScanStatus: async (scanId) => {
+    const response = await api.get(`/api/scan/sast/${scanId}/status`);
+    return response.data;
+  },
+
+  // Get SAST scan logs (for real-time updates)
+  getScanLogs: async (scanId, since = 0) => {
+    const response = await api.get(`/api/scan/sast/${scanId}/logs?since=${since}`);
+    return response.data;
+  },
+
+  // Stop a running SAST scan
+  stopScan: async (scanId) => {
+    const response = await api.post(`/api/scan/sast/${scanId}/stop`);
+    return response.data;
+  },
+
+  // ============== SCM Connection APIs ==============
+
+  // Connect to GitHub (get OAuth URL)
+  connectGitHub: async () => {
+    const response = await api.get('/api/scan/sast/github/connect');
+    return response.data;
+  },
+
+  // Connect to GitLab (get OAuth URL)
+  connectGitLab: async (baseUrl = null) => {
+    const params = baseUrl ? `?base_url=${encodeURIComponent(baseUrl)}` : '';
+    const response = await api.get(`/api/scan/sast/gitlab/connect${params}`);
+    return response.data;
+  },
+
+  // List all SCM connections
+  listConnections: async () => {
+    const response = await api.get('/api/scan/sast/connections');
+    return response.data;
+  },
+
+  // Disconnect an SCM provider
+  disconnectProvider: async (connectionId) => {
+    const response = await api.delete(`/api/scan/sast/connections/${connectionId}`);
+    return response.data;
+  },
+
+  // List repositories from a connected SCM
+  listRepositories: async (provider) => {
+    const response = await api.get(`/api/scan/sast/repositories?provider=${provider}`);
+    return response.data;
+  },
+
+  // Validate a personal access token
+  validateToken: async (provider, accessToken) => {
+    const response = await api.post('/api/scan/sast/validate-token', {
+      provider,
+      access_token: accessToken,
+    });
     return response.data;
   },
 };
@@ -686,6 +1148,22 @@ export const contactAPI = {
 // ============== Domain Verification API ==============
 
 export const domainVerificationAPI = {
+  // Check if user has any verified domains (for routing decisions)
+  hasVerifiedDomains: async () => {
+    try {
+      const response = await api.get('/api/domains/has-verified');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to check verified domains:', error);
+      return { 
+        has_domains: false, 
+        is_personal_email: true, 
+        can_scan: false,
+        error: error.message 
+      };
+    }
+  },
+
   // Get verification status for a domain
   getVerificationStatus: async (domain) => {
     try {
@@ -727,6 +1205,281 @@ export const domainVerificationAPI = {
     } catch {
       return { domains: [] };
     }
+  },
+
+  // Check if user is authorized to scan a target URL
+  checkAuthorization: async (targetUrl) => {
+    try {
+      const response = await api.get(`/api/domains/check-authorization?target_url=${encodeURIComponent(targetUrl)}`);
+      return response.data;
+    } catch (error) {
+      // Return unauthorized with helpful message
+      return {
+        authorized: false,
+        reason: 'error',
+        message: error.response?.data?.detail || 'Failed to check authorization'
+      };
+    }
+  },
+
+  // Remove a verified domain
+  removeVerifiedDomain: async (domain) => {
+    const response = await api.delete(`/api/domains/verified/${encodeURIComponent(domain)}`);
+    return response.data;
+  },
+};
+
+// ============== Dashboard API ==============
+
+export const dashboardAPI = {
+  // Get overall security score (0-100) with platform breakdown
+  getSecurityScore: async (days = 30) => {
+    const response = await api.get(`/api/dashboard/security-score?days=${days}`);
+    return response.data;
+  },
+
+  // Get risk heatmap matrix (Platform × Severity)
+  getRiskHeatmap: async (days = 30) => {
+    const response = await api.get(`/api/dashboard/risk-heatmap?days=${days}`);
+    return response.data;
+  },
+
+  // Get platform risk breakdown for horizontal bars
+  getPlatformBreakdown: async (days = 30) => {
+    const response = await api.get(`/api/dashboard/platform-breakdown?days=${days}`);
+    return response.data;
+  },
+
+  // Get aggregated scan statistics
+  getScanStats: async (days = 30) => {
+    const response = await api.get(`/api/dashboard/scan-stats?days=${days}`);
+    return response.data;
+  },
+
+  // Get complete dashboard overview (optimized single call)
+  getOverview: async (days = 30) => {
+    const response = await api.get(`/api/dashboard/overview?days=${days}`);
+    return response.data;
+  },
+};
+
+// ============== Scan Manual Auth API ==============
+// For handling social login (Google/Facebook/etc) and phone OTP targets
+
+export const scanAuthAPI = {
+  // Get manual auth status for a scan
+  getStatus: async (scanId) => {
+    const response = await api.get(`/api/scan-auth/${scanId}/status`);
+    return response.data;
+  },
+
+  // Confirm user has completed manual login
+  confirmLogin: async (scanId, options = {}) => {
+    const response = await api.post(`/api/scan-auth/${scanId}/confirm`, {
+      cookies: options.cookies || null,
+      token: options.token || null,
+    });
+    return response.data;
+  },
+
+  // Cancel manual auth (continue scan unauthenticated)
+  cancel: async (scanId) => {
+    const response = await api.post(`/api/scan-auth/${scanId}/cancel`);
+    return response.data;
+  },
+
+  // Provide session cookie/token directly
+  provideSession: async (scanId, sessionData) => {
+    const response = await api.post(`/api/scan-auth/${scanId}/session`, {
+      session_cookie: sessionData.cookie || null,
+      session_token: sessionData.token || null,
+      cookie_name: sessionData.cookieName || 'session',
+    });
+    return response.data;
+  },
+};
+
+// ============== Scan OTP API ==============
+// For handling target app 2FA/OTP during scanning
+
+export const scanOtpAPI = {
+  // Get OTP status for a scan
+  getStatus: async (scanId) => {
+    const response = await api.get(`/api/scan-otp/${scanId}/status`);
+    return response.data;
+  },
+
+  // Submit OTP code
+  submitOtp: async (scanId, otpCode) => {
+    const response = await api.post(`/api/scan-otp/${scanId}/submit`, {
+      otp: otpCode,
+    });
+    return response.data;
+  },
+
+  // Get 2FA configuration for a scan
+  get2faConfig: async (scanId) => {
+    const response = await api.get(`/api/scan-otp/${scanId}/2fa-config`);
+    return response.data;
+  },
+};
+
+// ============== Two-Factor Authentication API ==============
+// Uses backend 2FA system (not Firebase) for secure OTP via email/SMS
+
+export const twoFactorAPI = {
+  // Get user's current 2FA status
+  getStatus: async () => {
+    const response = await api.get('/api/2fa/status');
+    return response.data;
+  },
+
+  // Initiate 2FA setup (sends OTP to email or phone)
+  initiateSetup: async (channel, phoneNumber = null) => {
+    const payload = { channel };
+    if (channel === 'sms' && phoneNumber) {
+      payload.phone_number = phoneNumber;
+    }
+    const response = await api.post('/api/2fa/setup/initiate', payload);
+    return response.data;
+  },
+
+  // Verify OTP and complete 2FA setup
+  verifySetup: async (otp) => {
+    const response = await api.post('/api/2fa/setup/verify', { otp });
+    return response.data;
+  },
+
+  // Update phone number for SMS 2FA
+  updatePhone: async (phoneNumber) => {
+    const response = await api.post('/api/2fa/setup/phone', { phone_number: phoneNumber });
+    return response.data;
+  },
+
+  // Disable 2FA (requires password verification)
+  disable: async (password, otp = null) => {
+    const payload = { password };
+    if (otp) payload.otp = otp;
+    const response = await api.post('/api/2fa/disable', payload);
+    return response.data;
+  },
+
+  // Send OTP code for login verification (called during login flow)
+  sendCode: async (userId = null, channel = null) => {
+    const payload = {};
+    if (userId) payload.user_id = userId;
+    if (channel) payload.channel = channel;
+    const response = await api.post('/api/2fa/send-code', payload);
+    return response.data;
+  },
+
+  // Verify OTP during login
+  verify: async (otp, purpose = 'login_2fa') => {
+    const response = await api.post('/api/2fa/verify', { otp, purpose });
+    return response.data;
+  },
+
+  // Generate new backup codes (requires password confirmation for security)
+  generateBackupCodes: async (password = null) => {
+    const response = await api.post('/api/2fa/backup-codes/regenerate', { password });
+    return response.data;
+  },
+
+  // Verify backup code (for account recovery)
+  verifyBackupCode: async (code) => {
+    const response = await api.post('/api/2fa/backup-codes/verify', { code });
+    return response.data;
+  },
+};
+
+// ============== User Settings API ==============
+// Extended profile and preferences management
+
+export const userSettingsAPI = {
+  // Update extended profile (bio, job_title, social links)
+  updateProfile: async (profileData) => {
+    const response = await api.put('/api/users/me/profile', profileData);
+    return response.data;
+  },
+
+  // Upload profile avatar
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await api.post('/api/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // Update notification settings
+  updateNotifications: async (settings) => {
+    const response = await api.put('/api/users/me/notifications', settings);
+    return response.data;
+  },
+
+  // Update scan preferences
+  updatePreferences: async (preferences) => {
+    const response = await api.put('/api/users/me/preferences', preferences);
+    return response.data;
+  },
+
+  // Export all user data (GDPR compliance)
+  exportData: async () => {
+    const response = await api.get('/api/users/me/export', {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Delete account (requires password confirmation)
+  deleteAccount: async (password) => {
+    const response = await api.delete('/api/users/me', {
+      data: { password },
+    });
+    return response.data;
+  },
+
+  // Delete all scan data (soft delete)
+  deleteAllData: async (password) => {
+    const response = await api.delete('/api/users/me/data', {
+      data: { password },
+    });
+    return response.data;
+  },
+};
+
+// ============== Domain Verification API ==============
+
+export const domainAPI = {
+  // Generate verification code for a domain
+  generateVerificationCode: async (domain) => {
+    const response = await api.post('/api/domains/verify/generate', { domain });
+    return response.data;
+  },
+
+  // Verify domain ownership
+  verifyDomain: async (domain, method = 'txt') => {
+    const response = await api.post('/api/domains/verify', { domain, method });
+    return response.data;
+  },
+
+  // Check verification status
+  checkStatus: async (domain) => {
+    const response = await api.get(`/api/domains/verify/status?domain=${encodeURIComponent(domain)}`);
+    return response.data;
+  },
+
+  // List verified domains
+  listVerified: async () => {
+    const response = await api.get('/api/domains/verified');
+    return response.data;
+  },
+
+  // Remove verified domain
+  removeVerified: async (domain) => {
+    const response = await api.delete(`/api/domains/verified/${encodeURIComponent(domain)}`);
+    return response.data;
   },
 };
 

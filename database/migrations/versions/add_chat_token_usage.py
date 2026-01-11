@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_chat_token_usage'
-down_revision = None  # Update this based on your latest migration
+down_revision = '002_contact_submissions'  # Fixed: was None, now links to proper chain
 branch_labels = None
 depends_on = None
 

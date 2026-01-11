@@ -1,0 +1,202 @@
+name: Contract Validation & CI
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  validate-contracts:
+    runs-on: ubuntu-latest
+    name: Validate API Contracts
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Generate frontend contracts
+        run: |
+          python shared/generate_frontend_types.py
+      
+      - name: Check for uncommitted changes
+        run: |
+          git diff --exit-code jarwisfrontend/src/config/*.generated.js
+          if [ $? -ne 0 ]; then
+            echo "❌ ERROR: Generated contracts are out of sync!"
+            echo ""
+            echo "To fix this:"
+            echo "  1. Run: python shared/generate_frontend_types.py"
+            echo "  2. Commit the generated files"
+            echo ""
+            exit 1
+          fi
+          echo "✅ Contracts are in sync"
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Backend Tests
+    needs: validate-contracts
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: jarwis_test
+          POSTGRES_USER: jarwis
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+      
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://jarwis:test_password@localhost:5432/jarwis_test
+          JWT_SECRET: test_secret_key_for_ci
+          TESTING: "true"
+        run: |
+          python -m pytest tests/ -v --tb=short --cov=api --cov=core --cov=services
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    name: Frontend Build
+    needs: validate-contracts
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: jarwisfrontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: jarwisfrontend
+        run: npm ci
+      
+      - name: Build production bundle
+        working-directory: jarwisfrontend
+        run: npm run build
+        env:
+          CI: true
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: jarwisfrontend/build/
+          retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    needs: [backend-tests, frontend-build]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit
+      
+      - name: Check for vulnerable dependencies
+        run: |
+          pip install -r requirements.txt
+          safety check || echo "⚠️ Some vulnerabilities found - review required"
+      
+      - name: Run Bandit security linter
+        run: |
+          bandit -r api/ core/ services/ -ll || echo "⚠️ Security issues found - review required"
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    name: Deploy to Staging
+    needs: [backend-tests, frontend-build, security-scan]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: jarwisfrontend/build/
+      
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging..."
+          # Add your staging deployment commands here
+          # e.g., docker push, kubectl apply, etc.
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    needs: [backend-tests, frontend-build, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: jarwisfrontend/build/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker images
+        run: |
+          docker-compose build
+      
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production..."
+          # Add your production deployment commands here
+          # e.g., docker push to registry, update kubernetes, etc.

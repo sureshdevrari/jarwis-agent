@@ -18,6 +18,21 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Callable, Any
 
+from .base import CloudScanner
+from .schemas import (
+    CloudFinding,
+    CloudScanContext,
+    Provider,
+    ScannerMetadata,
+    Severity,
+)
+from .exceptions import (
+    APIThrottlingError,
+    ProviderAuthError,
+    RateLimitError,
+    ServicePermissionError,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,46 +75,179 @@ class AWSSecurityScanner:
         "4.2": "No security groups with 0.0.0.0/0 RDP",
     }
     
+    # Available services for scanning
+    AVAILABLE_SERVICES = {
+        's3': {'name': 'S3 Buckets', 'description': 'Encryption, public access, logging', 'global': True},
+        'iam': {'name': 'IAM', 'description': 'Users, roles, MFA, policies', 'global': True},
+        'ec2': {'name': 'EC2', 'description': 'Security groups, instances, metadata', 'global': False},
+        'rds': {'name': 'RDS', 'description': 'Database encryption, public access', 'global': False},
+        'lambda': {'name': 'Lambda', 'description': 'Runtimes, environment variables', 'global': False},
+        'cloudtrail': {'name': 'CloudTrail', 'description': 'Logging configuration', 'global': True},
+    }
+    
     def __init__(
         self,
         access_key: str = None,
         secret_key: str = None,
         session_token: str = None,
-        profile: str = None
+        profile: str = None,
+        # Enterprise cross-account role parameters
+        role_arn: str = None,
+        external_id: str = None,
     ):
         self.access_key = access_key
         self.secret_key = secret_key
         self.session_token = session_token
         self.profile = profile
+        # Cross-account role support
+        self.role_arn = role_arn
+        self.external_id = external_id
         self.session = None
         self.findings: List[AWSFinding] = []
         self._verbose_callback: Optional[Callable] = None
         self._boto3_available = False
+        self._auth_mode = None  # 'direct', 'assume_role', or 'profile'
         self._init_session()
     
     def _init_session(self):
-        """Initialize boto3 session"""
+        """Initialize boto3 session with support for cross-account role assumption"""
         try:
             import boto3
+            import os
             self._boto3_available = True
             
-            if self.access_key and self.secret_key:
+            # Priority 1: Cross-account role assumption (Enterprise mode)
+            if self.role_arn:
+                self._auth_mode = 'assume_role'
+                logger.info(f"Using cross-account role assumption: {self.role_arn}")
+                
+                # Get Jarwis's own credentials for assuming the role
+                # These come from environment variables or instance profile
+                jarwis_access_key = os.getenv('JARWIS_AWS_ACCESS_KEY')
+                jarwis_secret_key = os.getenv('JARWIS_AWS_SECRET_KEY')
+                
+                if jarwis_access_key and jarwis_secret_key:
+                    # Use Jarwis's credentials to assume customer role
+                    jarwis_session = boto3.Session(
+                        aws_access_key_id=jarwis_access_key,
+                        aws_secret_access_key=jarwis_secret_key
+                    )
+                else:
+                    # Use default credentials (instance profile, etc.)
+                    jarwis_session = boto3.Session()
+                
+                sts = jarwis_session.client('sts')
+                
+                # Build assume role parameters
+                assume_params = {
+                    'RoleArn': self.role_arn,
+                    'RoleSessionName': 'JarwisCloudSecurityScan',
+                    'DurationSeconds': 3600  # 1 hour
+                }
+                
+                # Add external ID if provided (prevents confused deputy attack)
+                if self.external_id:
+                    assume_params['ExternalId'] = self.external_id
+                
+                # Assume the customer's role
+                assumed = sts.assume_role(**assume_params)
+                
+                # Create session with temporary credentials
+                self.session = boto3.Session(
+                    aws_access_key_id=assumed['Credentials']['AccessKeyId'],
+                    aws_secret_access_key=assumed['Credentials']['SecretAccessKey'],
+                    aws_session_token=assumed['Credentials']['SessionToken']
+                )
+                logger.info("Successfully assumed cross-account role")
+                
+            # Priority 2: Direct credentials (legacy mode)
+            elif self.access_key and self.secret_key:
+                self._auth_mode = 'direct'
                 self.session = boto3.Session(
                     aws_access_key_id=self.access_key,
                     aws_secret_access_key=self.secret_key,
                     aws_session_token=self.session_token
                 )
-            elif self.profile:
-                self.session = boto3.Session(profile_name=self.profile)
-            else:
-                self.session = boto3.Session()
+                logger.info("Using direct AWS credentials")
                 
-            logger.info("AWS session initialized")
+            # Priority 3: AWS profile
+            elif self.profile:
+                self._auth_mode = 'profile'
+                self.session = boto3.Session(profile_name=self.profile)
+                logger.info(f"Using AWS profile: {self.profile}")
+                
+            # Priority 4: Default credentials chain
+            else:
+                self._auth_mode = 'default'
+                self.session = boto3.Session()
+                logger.info("Using default AWS credentials chain")
+                
+            logger.info(f"AWS session initialized (mode: {self._auth_mode})")
         except ImportError:
             logger.warning("boto3 not installed. AWS scanning unavailable.")
             self._boto3_available = False
         except Exception as e:
             logger.error(f"Failed to initialize AWS session: {e}")
+            raise
+    
+    @classmethod
+    def get_available_services(cls) -> Dict[str, Dict]:
+        """Return available services for UI service selection"""
+        return cls.AVAILABLE_SERVICES
+
+    async def discover_resources(self, region: str = "us-east-1") -> List[Dict[str, Any]]:
+        """Lightweight resource discovery to avoid phase-1 failures."""
+        resources: List[Dict[str, Any]] = []
+        if not self._boto3_available or not self.session:
+            return resources
+
+        try:
+            s3 = self.session.client("s3")
+
+            def _list_buckets():
+                return s3.list_buckets().get("Buckets", [])
+
+            buckets = await asyncio.to_thread(_list_buckets)
+            for bucket in buckets:
+                resources.append({
+                    "id": bucket.get("Name"),
+                    "name": bucket.get("Name"),
+                    "type": "s3_bucket",
+                    "arn": f"arn:aws:s3:::{bucket.get('Name')}",
+                    "tags": {},
+                    "metadata": {},
+                })
+        except Exception as e:
+            logger.error(f"AWS discovery (S3) failed: {e}")
+
+        try:
+            ec2 = self.session.client("ec2", region_name=region)
+
+            def _list_instances():
+                reservations = ec2.describe_instances().get("Reservations", [])
+                instances = []
+                for res in reservations:
+                    instances.extend(res.get("Instances", []))
+                return instances
+
+            instances = await asyncio.to_thread(_list_instances)
+            for inst in instances:
+                inst_id = inst.get("InstanceId")
+                resources.append({
+                    "id": inst_id,
+                    "name": inst_id,
+                    "type": "ec2_instance",
+                    "arn": f"arn:aws:ec2:{region}::instance/{inst_id}",
+                    "tags": {t.get("Key"): t.get("Value") for t in inst.get("Tags", [])} if inst.get("Tags") else {},
+                    "metadata": {
+                        "state": inst.get("State", {}).get("Name"),
+                        "type": inst.get("InstanceType"),
+                    },
+                })
+        except Exception as e:
+            logger.error(f"AWS discovery (EC2) failed: {e}")
+
+        return resources
     
     def set_verbose_callback(self, callback: Callable):
         """Set callback for verbose logging"""
@@ -630,6 +778,107 @@ class AWSSecurityScanner:
             logger.error(f"Error scanning Lambda in {region}: {e}")
         
         return resources
+
+
+class AWSScanner(CloudScanner):
+    """CloudScanner-based AWS scanner adapter using existing methods."""
+
+    metadata = ScannerMetadata(
+        name="aws_core",
+        provider=Provider.aws,
+        services=["iam", "s3", "ec2", "rds", "lambda", "cloudtrail"],
+        enabled_by_default=True,
+        description="Core AWS security checks (IAM, S3, EC2, RDS, Lambda, CloudTrail)",
+    )
+
+    def __init__(self, config: Dict[str, Any]) -> None:
+        super().__init__(config)
+        self._scanner = AWSSecurityScanner(
+            access_key=self.config.get("access_key"),
+            secret_key=self.config.get("secret_key"),
+            session_token=self.config.get("session_token"),
+            profile=self.config.get("profile"),
+        )
+
+    async def scan(self, context: CloudScanContext) -> List[CloudFinding]:
+        # Discover regions
+        try:
+            ec2 = self._scanner.session.client("ec2", region_name="us-east-1")
+            regions = [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
+        except Exception:
+            regions = ["us-east-1", "us-west-2", "eu-west-1"]
+
+        services = self.config.get(
+            "services", ["s3", "iam", "ec2", "rds", "lambda", "cloudtrail"]
+        )
+
+        # Global services
+        if "iam" in services:
+            await self._safe_call(self._scanner._scan_iam, service="iam")
+        if "s3" in services:
+            await self._safe_call(self._scanner._scan_s3, service="s3")
+        if "cloudtrail" in services:
+            await self._safe_call(self._scanner._scan_cloudtrail, service="cloudtrail")
+
+        # Regional services
+        for region in regions:
+            if "ec2" in services:
+                await self._safe_call(self._scanner._scan_ec2, region, service="ec2")
+            if "rds" in services:
+                await self._safe_call(self._scanner._scan_rds, region, service="rds")
+            if "lambda" in services:
+                await self._safe_call(self._scanner._scan_lambda, region, service="lambda")
+            await self._sleep_rate()
+
+        # Convert AWSFinding -> CloudFinding
+        cloud_findings: List[CloudFinding] = []
+        for f in self._scanner.findings:
+            sev = None
+            try:
+                sev = Severity(f.severity)
+            except Exception:
+                sev = Severity.info
+            cloud_findings.append(
+                CloudFinding(
+                    id=f.id,
+                    provider=Provider.aws,
+                    service=f.service,
+                    category=f.cis_benchmark or "general",
+                    severity=sev,
+                    title=f.title,
+                    description=f.description,
+                    resource_id=f.resource_id,
+                    region=f.region,
+                    evidence=json.dumps(f.evidence) if isinstance(f.evidence, dict) else str(f.evidence),
+                    remediation=f.recommendation,
+                    references=[],
+                    cwe=None,
+                    cve=[],
+                    compliance={"cis": f.cis_benchmark} if f.cis_benchmark else {},
+                    context={"resource_arn": getattr(f, "resource_arn", "")},
+                )
+            )
+
+        return cloud_findings
+
+    async def _safe_call(self, func, *args, service: str = "", **kwargs):
+        try:
+            return await self.run_limited(self.with_retry(func, *args, **kwargs))
+        except Exception as e:
+            mapped = self._map_error(e, service)
+            raise mapped from e
+
+    def _map_error(self, err: Exception, service: str):
+        msg = str(err)
+        if "Throttling" in msg or "Rate exceeded" in msg:
+            return APIThrottlingError(msg, provider="aws", service=service)
+        if "AccessDenied" in msg or "Unauthorized" in msg:
+            return ServicePermissionError(msg, provider="aws", service=service)
+        if "RequestLimitExceeded" in msg:
+            return RateLimitError(msg, provider="aws", service=service)
+        if "InvalidClientTokenId" in msg or "AuthFailure" in msg:
+            return ProviderAuthError(msg, provider="aws", service=service)
+        return err
     
     async def _scan_cloudtrail(self) -> int:
         """Scan CloudTrail configuration"""

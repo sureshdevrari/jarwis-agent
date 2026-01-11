@@ -250,9 +250,19 @@ class ScanCreate(BaseModel):
     """Create scan request"""
     target_url: str
     scan_type: str = Field(..., pattern="^(web|mobile|cloud|network)$")
+    scan_name: Optional[str] = None  # User-friendly name for the scan
+    # Authentication method for target app
+    auth_method: Optional[str] = "none"  # none, username_password, social_login, phone_otp, manual_session
     login_url: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    # For phone OTP auth
+    phone_number: Optional[str] = None
+    # For manual session (user-provided cookies/tokens)
+    session_cookie: Optional[str] = None
+    session_token: Optional[str] = None
+    # Social login providers enabled on target
+    social_providers: Optional[List[str]] = None  # ["google", "facebook", "linkedin", "apple"]
     config: Optional[dict] = None
     # Network-specific fields
     network_config: Optional[NetworkScanConfig] = None
@@ -266,6 +276,7 @@ class ScanResponse(BaseModel):
     scan_id: str
     target_url: str
     scan_type: str
+    scan_name: Optional[str] = None  # User-friendly scan name from config
     status: str
     progress: int
     phase: Optional[str] = None
@@ -276,6 +287,7 @@ class ScanResponse(BaseModel):
     low_count: int
     started_at: datetime
     completed_at: Optional[datetime] = None
+    can_resume: Optional[bool] = None  # Whether scan can be resumed from checkpoint
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -325,6 +337,7 @@ class MessageResponse(BaseModel):
     """Generic message response"""
     message: str
     success: bool = True
+    data: Optional[dict] = None  # Optional data payload for additional info
 
 
 class ErrorResponse(BaseModel):

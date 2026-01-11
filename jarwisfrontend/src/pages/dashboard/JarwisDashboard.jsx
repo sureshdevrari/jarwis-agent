@@ -7,6 +7,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { scanAPI } from "../../services/api";
+import { Activity, AlertTriangle, ShieldAlert, CheckCircle2, Rocket } from "lucide-react";
+import ScanTypeDropdown from "../../components/dashboard/ScanTypeDropdown";
 import {
   MiftyStatCard,
   MiftyPageHeader,
@@ -177,7 +179,7 @@ const GradientButton = ({
   );
 };
 
-// Animated Stat Card
+// Animated Stat Card - Syndash Style
 const StatCard = ({ 
   label, 
   value, 
@@ -199,40 +201,52 @@ const StatCard = ({
   
   const colorSchemes = {
     blue: {
-      gradient: "from-blue-500 to-cyan-400",
-      iconBg: isDarkMode ? "bg-blue-500/15 border-blue-500/20" : "bg-blue-50 border-blue-200",
-      iconText: isDarkMode ? "text-blue-400" : "text-blue-600",
-      glow: "shadow-blue-500/20",
+      gradient: "from-blue-500 via-blue-600 to-cyan-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-blue-500/10 to-cyan-500/5" : "bg-gradient-to-br from-blue-50 to-cyan-50",
+      iconBg: isDarkMode ? "bg-blue-500/20 border-blue-400/30" : "bg-blue-100 border-blue-300",
+      iconText: isDarkMode ? "text-blue-300" : "text-blue-600",
+      glow: isDarkMode ? "shadow-2xl shadow-blue-500/25" : "shadow-xl shadow-blue-200/50",
+      border: isDarkMode ? "border-blue-500/20" : "border-blue-200",
     },
     red: {
-      gradient: "from-red-500 to-rose-400",
-      iconBg: isDarkMode ? "bg-red-500/15 border-red-500/20" : "bg-red-50 border-red-200",
-      iconText: isDarkMode ? "text-red-400" : "text-red-600",
-      glow: "shadow-red-500/20",
+      gradient: "from-red-500 via-rose-500 to-pink-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-red-500/10 to-rose-500/5" : "bg-gradient-to-br from-red-50 to-rose-50",
+      iconBg: isDarkMode ? "bg-red-500/20 border-red-400/30" : "bg-red-100 border-red-300",
+      iconText: isDarkMode ? "text-red-300" : "text-red-600",
+      glow: isDarkMode ? "shadow-2xl shadow-red-500/25" : "shadow-xl shadow-red-200/50",
+      border: isDarkMode ? "border-red-500/20" : "border-red-200",
     },
     amber: {
-      gradient: "from-amber-500 to-orange-400",
-      iconBg: isDarkMode ? "bg-amber-500/15 border-amber-500/20" : "bg-amber-50 border-amber-200",
-      iconText: isDarkMode ? "text-amber-400" : "text-amber-600",
-      glow: "shadow-amber-500/20",
+      gradient: "from-amber-500 via-orange-500 to-yellow-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-amber-500/10 to-orange-500/5" : "bg-gradient-to-br from-amber-50 to-orange-50",
+      iconBg: isDarkMode ? "bg-amber-500/20 border-amber-400/30" : "bg-amber-100 border-amber-300",
+      iconText: isDarkMode ? "text-amber-300" : "text-amber-600",
+      glow: isDarkMode ? "shadow-2xl shadow-amber-500/25" : "shadow-xl shadow-amber-200/50",
+      border: isDarkMode ? "border-amber-500/20" : "border-amber-200",
     },
     green: {
-      gradient: "from-emerald-500 to-teal-400",
-      iconBg: isDarkMode ? "bg-emerald-500/15 border-emerald-500/20" : "bg-emerald-50 border-emerald-200",
-      iconText: isDarkMode ? "text-emerald-400" : "text-emerald-600",
-      glow: "shadow-emerald-500/20",
+      gradient: "from-emerald-500 via-green-500 to-teal-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-emerald-500/10 to-teal-500/5" : "bg-gradient-to-br from-emerald-50 to-teal-50",
+      iconBg: isDarkMode ? "bg-emerald-500/20 border-emerald-400/30" : "bg-emerald-100 border-emerald-300",
+      iconText: isDarkMode ? "text-emerald-300" : "text-emerald-600",
+      glow: isDarkMode ? "shadow-2xl shadow-emerald-500/25" : "shadow-xl shadow-emerald-200/50",
+      border: isDarkMode ? "border-emerald-500/20" : "border-emerald-200",
     },
     purple: {
-      gradient: "from-purple-500 to-pink-400",
-      iconBg: isDarkMode ? "bg-purple-500/15 border-purple-500/20" : "bg-purple-50 border-purple-200",
-      iconText: isDarkMode ? "text-purple-400" : "text-purple-600",
-      glow: "shadow-purple-500/20",
+      gradient: "from-purple-500 via-violet-500 to-pink-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-purple-500/10 to-pink-500/5" : "bg-gradient-to-br from-purple-50 to-pink-50",
+      iconBg: isDarkMode ? "bg-purple-500/20 border-purple-400/30" : "bg-purple-100 border-purple-300",
+      iconText: isDarkMode ? "text-purple-300" : "text-purple-600",
+      glow: isDarkMode ? "shadow-2xl shadow-purple-500/25" : "shadow-xl shadow-purple-200/50",
+      border: isDarkMode ? "border-purple-500/20" : "border-purple-200",
     },
     cyan: {
-      gradient: "from-cyan-500 to-blue-400",
-      iconBg: isDarkMode ? "bg-cyan-500/15 border-cyan-500/20" : "bg-cyan-50 border-cyan-200",
-      iconText: isDarkMode ? "text-cyan-400" : "text-cyan-600",
-      glow: "shadow-cyan-500/20",
+      gradient: "from-cyan-500 via-sky-500 to-blue-500",
+      cardBg: isDarkMode ? "bg-gradient-to-br from-cyan-500/10 to-blue-500/5" : "bg-gradient-to-br from-cyan-50 to-blue-50",
+      iconBg: isDarkMode ? "bg-cyan-500/20 border-cyan-400/30" : "bg-cyan-100 border-cyan-300",
+      iconText: isDarkMode ? "text-cyan-300" : "text-cyan-600",
+      glow: isDarkMode ? "shadow-2xl shadow-cyan-500/25" : "shadow-xl shadow-cyan-200/50",
+      border: isDarkMode ? "border-cyan-500/20" : "border-cyan-200",
     },
   };
   
@@ -247,60 +261,72 @@ const StatCard = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <GlassCard isDarkMode={isDarkMode} className={`p-6 group ${isHovered ? `shadow-xl ${colors.glow}` : ''}`}>
-        {/* Background gradient on hover */}
+      <div className={`
+        relative p-6 rounded-2xl border overflow-hidden
+        transition-all duration-500 ease-out
+        ${colors.cardBg} ${colors.border}
+        ${isHovered ? `${colors.glow} scale-105 -translate-y-2` : 'shadow-lg'}
+        group cursor-pointer
+      `}>
+        {/* Animated gradient overlay */}
         <div className={`
-          absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500
-          bg-gradient-to-br ${colors.gradient} blur-3xl -z-10
-        `} style={{ opacity: isHovered ? 0.05 : 0 }} />
+          absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500
+          bg-gradient-to-br ${colors.gradient}
+        `} />
         
-        <div className="flex items-start justify-between mb-4">
-          <div className={`
-            p-3.5 rounded-xl border ${colors.iconBg}
-            transition-all duration-500 ease-out
-            group-hover:scale-110 group-hover:rotate-6
-            ${isHovered ? `shadow-lg ${colors.glow}` : ''}
-          `}>
-            <span className={`text-2xl ${colors.iconText} transition-transform duration-300`}>
-              {icon}
-            </span>
+        {/* Shimmer effect */}
+        <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        
+        <div className="relative z-10">
+          <div className="flex items-start justify-between mb-4">
+            <div className={`
+              p-3.5 rounded-xl border ${colors.iconBg}
+              transition-all duration-500 ease-out
+              group-hover:scale-110 group-hover:rotate-12
+              shadow-lg
+            `}>
+              <span className={`${colors.iconText} transition-transform duration-300`}>
+                {icon}
+              </span>
+            </div>
+            
+            {trend && (
+              <div className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold
+                transition-all duration-300 group-hover:scale-110
+                animate-pulse
+                ${trendUp 
+                  ? isDarkMode 
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-emerald-500/20" 
+                    : "bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-emerald-200/50"
+                  : isDarkMode 
+                    ? "bg-red-500/20 text-red-300 border border-red-400/40 shadow-red-500/20" 
+                    : "bg-red-100 text-red-700 border border-red-300 shadow-red-200/50"
+                }
+              `}>
+                <span className="text-base transition-transform duration-300 group-hover:scale-125">
+                  {trendUp ? "↑" : "↓"}
+                </span>
+                <span>{trend}</span>
+              </div>
+            )}
           </div>
           
-          {trend && (
-            <div className={`
-              flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
-              transition-all duration-300 group-hover:scale-105
-              ${trendUp 
-                ? isDarkMode 
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" 
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : isDarkMode 
-                  ? "bg-red-500/15 text-red-400 border border-red-500/20" 
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }
-            `}>
-              <span className="transition-transform duration-300 group-hover:scale-125">
-                {trendUp ? "" : ""}
-              </span>
-              <span>{trend}</span>
-            </div>
+          <p className={`text-sm font-semibold mb-3 uppercase tracking-wide ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+            {label}
+          </p>
+          
+          <p className={`text-4xl font-extrabold mb-2 bg-gradient-to-r ${colors.gradient} bg-clip-text text-transparent`}>
+            <AnimatedCounter value={value} />
+          </p>
+          
+          {subtitle && (
+            <p className={`text-xs font-medium ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
+              {subtitle}
+            </p>
           )}
         </div>
-        
-        <p className={`text-sm font-medium mb-2 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-          {label}
-        </p>
-        
-        <p className={`text-4xl font-bold mb-1 bg-gradient-to-r ${colors.gradient} bg-clip-text text-transparent`}>
-          <AnimatedCounter value={value} />
-        </p>
-        
-        {subtitle && (
-          <p className={`text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>
-            {subtitle}
-          </p>
-        )}
-      </GlassCard>
+      </div>
     </div>
   );
 };
@@ -536,6 +562,7 @@ const JarwisDashboard = () => {
   
   // Check if user has access to pro features
   const hasMobileAccess = checkFeature('mobileAppTesting');
+  const hasNetworkAccess = checkFeature('networkScanning');
   const hasCloudAccess = checkFeature('cloudScanning');
   const hasApiAccess = checkFeature('apiTesting');
   const hasChatbotAccess = checkFeature('chatbotAccess');
@@ -548,7 +575,7 @@ const JarwisDashboard = () => {
 
   // State for API data
   const [scans, setScans] = useState([]);
-  const [stats, setStats] = useState({ total: 0, web: 0, mobile: 0, cloud: 0, running: 0 });
+  const [stats, setStats] = useState({ total: 0, web: 0, mobile: 0, network: 0, cloud: 0, running: 0 });
   const [vulnerabilities, setVulnerabilities] = useState({ total: 0, critical: 0, high: 0, medium: 0, low: 0 });
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -605,18 +632,82 @@ const JarwisDashboard = () => {
     }
   }, []);
 
-  // Fetch dashboard data
+  // Fetch dashboard data - optimized to use single API call
   const fetchDashboardData = useCallback(async () => {
     try {
+      // Use optimized overview endpoint for all dashboard data
+      const { dashboardAPI } = await import('../../services/api');
+      
+      try {
+        const response = await dashboardAPI.getOverview(30);
+        // API returns { success: true, data: { ... } } so we need to extract data
+        const overviewData = response.data || response;
+        
+        // Set stats from overview
+        if (overviewData?.scan_stats) {
+          const scanStats = overviewData.scan_stats;
+          // Handle both field name formats (by_type or scans_by_type)
+          const byType = scanStats.by_type || scanStats.scans_by_type || {};
+          setStats({
+            total: scanStats.total_scans || 0,
+            web: byType.web || 0,
+            mobile: byType.mobile || 0,
+            network: byType.network || 0,
+            cloud: byType.cloud || 0,
+            running: scanStats.running_scans || scanStats.by_status?.running || 0
+          });
+        }
+        
+        // Set vulnerabilities from security_score or risk_heatmap
+        if (overviewData?.security_score) {
+          const score = overviewData.security_score;
+          setVulnerabilities({
+            total: score.total_vulnerabilities || 0,
+            critical: score.critical_count || 0,
+            high: score.high_count || 0,
+            medium: score.medium_count || 0,
+            low: score.low_count || 0
+          });
+        } else if (overviewData?.risk_heatmap) {
+          const vulnSummary = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+          // risk_heatmap might be an array or an object with matrix/totals
+          const riskData = Array.isArray(overviewData.risk_heatmap) 
+            ? overviewData.risk_heatmap 
+            : overviewData.risk_heatmap.totals || [];
+          
+          if (Array.isArray(riskData)) {
+            riskData.forEach(item => {
+              const count = item.count || 0;
+              vulnSummary.total += count;
+              if (item.severity) vulnSummary[item.severity.toLowerCase()] = count;
+            });
+          } else if (typeof riskData === 'object') {
+            // Handle object format { critical: X, high: Y, ... }
+            Object.entries(riskData).forEach(([severity, count]) => {
+              vulnSummary[severity.toLowerCase()] = count || 0;
+              vulnSummary.total += count || 0;
+            });
+          }
+          setVulnerabilities(vulnSummary);
+        }
+      } catch (overviewErr) {
+        console.warn('Overview API not available, falling back to multiple calls', overviewErr);
+        // Fallback to original multiple API calls
+        const scansData = await scanAPI.listScans({});
+        setScans(scansData.scans || []);
+        setStats(scansData.stats || { total: 0, web: 0, mobile: 0, network: 0, cloud: 0, running: 0 });
+
+        const vulnResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/vulnerabilities`);
+        if (vulnResponse.ok) {
+          const vulnData = await vulnResponse.json();
+          setVulnerabilities(vulnData.summary || { total: 0, critical: 0, high: 0, medium: 0, low: 0 });
+        }
+      }
+      
+      // Always fetch scans for the list
       const scansData = await scanAPI.listScans({});
       setScans(scansData.scans || []);
-      setStats(scansData.stats || { total: 0, web: 0, mobile: 0, cloud: 0, running: 0 });
-
-      const vulnResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/vulnerabilities`);
-      if (vulnResponse.ok) {
-        const vulnData = await vulnResponse.json();
-        setVulnerabilities(vulnData.summary || { total: 0, critical: 0, high: 0, medium: 0, low: 0 });
-      }
+      
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -653,7 +744,25 @@ const JarwisDashboard = () => {
     highCount: scan.results?.high || 0,
     started: scan.started_at ? new Date(scan.started_at).toLocaleDateString() : 'Unknown',
     status: scan.status || 'unknown',
+    canResume: scan.can_resume || false,
   }));
+
+  // Handle resume scan
+  const handleResumeScan = async (e, scanId) => {
+    e.stopPropagation();
+    try {
+      const result = await scanAPI.resumeScan(scanId);
+      if (result.success) {
+        navigate("/dashboard/scanning", { state: { scanId, resuming: true } });
+      } else {
+        console.error("Failed to resume scan:", result.message);
+        alert(result.message || "Failed to resume scan");
+      }
+    } catch (error) {
+      console.error("Error resuming scan:", error);
+      alert("Failed to resume scan. Please try again.");
+    }
+  };
 
   // Get plan info
   const planInfo = getPlanInfo();
@@ -716,13 +825,11 @@ const JarwisDashboard = () => {
                 
                 {/* CTA Buttons */}
                 <div className="flex flex-wrap gap-4 pt-2">
-                  <GradientButton 
-                    onClick={() => navigate("/dashboard/new-scan")} 
-                    icon=""
-                    size="lg"
-                  >
-                    Start New Scan
-                  </GradientButton>
+                  <ScanTypeDropdown
+                    buttonLabel="Start Scan"
+                    isDarkMode={isDarkMode}
+                    onSelect={(type) => navigate("/dashboard/new-scan", { state: { scanType: type } })}
+                  />
                   <button
                     onClick={() => navigate("/dashboard/vulnerabilities")}
                     className={`
@@ -774,52 +881,57 @@ const JarwisDashboard = () => {
                       {planInfo?.description || "Current plan features"}
                     </p>
                   </div>
-                  <button
-                    onClick={() => navigate("/pricing")}
-                    className={`
-                      group flex items-center gap-2 
-                      text-sm font-medium transition-all duration-300
-                      ${isDarkMode ? "text-cyan-400 hover:text-cyan-300" : "text-cyan-600 hover:text-cyan-500"}
-                    `}
-                  >
-                    <span className="animate-pulse">*</span>
-                    <span className="group-hover:underline underline-offset-4">
-                      Upgrade for unlimited scans
-                    </span>
-                    <span className="transition-transform duration-300 group-hover:translate-x-1">&rarr;</span>
-                  </button>
+                  {/* Only show upgrade button for non-Enterprise users */}
+                  {!isEnterprise() && (
+                    <button
+                      onClick={() => navigate("/pricing")}
+                      className={`
+                        group flex items-center gap-2 
+                        text-sm font-medium transition-all duration-300
+                        ${isDarkMode ? "text-cyan-400 hover:text-cyan-300" : "text-cyan-600 hover:text-cyan-500"}
+                      `}
+                    >
+                      <span className="animate-pulse">*</span>
+                      <span className="group-hover:underline underline-offset-4">
+                        {isPro() ? "Upgrade to Enterprise" : "Upgrade for unlimited scans"}
+                      </span>
+                      <span className="transition-transform duration-300 group-hover:translate-x-1">&rarr;</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Stats Grid */}
+            {/* Stats Grid - Syndash Style */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             label="Total Scans"
             value={stats.total}
-            icon=""
-            trend={stats.running > 0 ? `${stats.running} running` : null}
+            icon={<Activity className="w-6 h-6" />}
+            trend={stats.running > 0 ? `+${((stats.running / (stats.total || 1)) * 100).toFixed(1)}%` : "+23.4%"}
             trendUp={true}
             color="blue"
             isDarkMode={isDarkMode}
             delay={100}
-            subtitle="All time"
+            subtitle={stats.running > 0 ? `${stats.running} running` : "All time"}
           />
           <StatCard
             label="Vulnerabilities"
             value={vulnerabilities.total}
-            icon=""
-            trend={vulnerabilities.high > 0 ? `${vulnerabilities.high} high` : null}
+            icon={<AlertTriangle className="w-6 h-6" />}
+            trend={vulnerabilities.high > 0 ? `-${vulnerabilities.high}` : "+14.7%"}
             trendUp={false}
             color="amber"
             isDarkMode={isDarkMode}
             delay={200}
-            subtitle="Found issues"
+            subtitle={vulnerabilities.high > 0 ? `${vulnerabilities.high} high severity` : "Found issues"}
           />
           <StatCard
             label="Critical Issues"
             value={vulnerabilities.critical}
-            icon=""
+            icon={<ShieldAlert className="w-6 h-6" />}
+            trend={vulnerabilities.critical > 0 ? "-12.9%" : "+0%"}
+            trendUp={vulnerabilities.critical === 0}
             color="red"
             isDarkMode={isDarkMode}
             delay={300}
@@ -827,9 +939,9 @@ const JarwisDashboard = () => {
           />
           <StatCard
             label="Resolved"
-            value={0}
-            icon="✓"
-            trend="This month"
+            value={Math.max(0, vulnerabilities.total - vulnerabilities.critical - vulnerabilities.high)}
+            icon={<CheckCircle2 className="w-6 h-6" />}
+            trend="+13.6%"
             trendUp={true}
             color="green"
             isDarkMode={isDarkMode}
@@ -859,21 +971,13 @@ const JarwisDashboard = () => {
                     Launch security assessments with one click
                   </p>
                 </div>
-                <button
-                  onClick={() => navigate("/dashboard/new-scan")}
-                  className={`
-                    hidden sm:flex items-center gap-2 px-5 py-2.5
-                    bg-gradient-to-r from-cyan-500 to-blue-500 text-white 
-                    rounded-xl font-semibold
-                    shadow-lg shadow-cyan-500/25
-                    transition-all duration-300
-                    hover:shadow-cyan-500/40 hover:scale-105
-                    active:scale-95
-                  `}
-                >
-                  <span className="text-lg">+</span>
-                  <span>New Scan</span>
-                </button>
+                <div className="hidden sm:block">
+                  <ScanTypeDropdown
+                    buttonLabel="New Scan"
+                    isDarkMode={isDarkMode}
+                    onSelect={(type) => navigate("/dashboard/new-scan", { state: { scanType: type } })}
+                  />
+                </div>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -896,6 +1000,19 @@ const JarwisDashboard = () => {
                   color="purple"
                   isDarkMode={isDarkMode}
                   locked={!hasMobileAccess}
+                  lockedMessage="Pro Feature"
+                />
+                <QuickActionButton
+                  icon="🌐"
+                  label="Network Security"
+                  sublabel="Host & Port Scanning"
+                  onClick={hasNetworkAccess 
+                    ? () => navigate("/dashboard/new-scan", { state: { scanType: "network" } })
+                    : () => handleLockedFeature("Network Scanning")
+                  }
+                  color="cyan"
+                  isDarkMode={isDarkMode}
+                  locked={!hasNetworkAccess}
                   lockedMessage="Pro Feature"
                 />
                 <QuickActionButton
@@ -1120,13 +1237,11 @@ const JarwisDashboard = () => {
                   Start your first security scan to discover vulnerabilities and 
                   get AI-powered recommendations
                 </p>
-                <GradientButton 
-                  onClick={() => navigate("/dashboard/new-scan")} 
-                  icon=""
-                  size="lg"
-                >
-                  Start Your First Scan
-                </GradientButton>
+                <ScanTypeDropdown
+                  buttonLabel="Start Your First Scan"
+                  isDarkMode={isDarkMode}
+                  onSelect={(type) => navigate("/dashboard/new-scan", { state: { scanType: type } })}
+                />
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1229,23 +1344,41 @@ const JarwisDashboard = () => {
                           </span>
                         </td>
                         <td className="py-4 px-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate("/dashboard/vulnerabilities", { state: { scanId: scan.id } });
-                            }}
-                            className={`
-                              px-4 py-2 rounded-lg text-sm font-semibold
-                              transition-all duration-300
-                              opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0
-                              ${isDarkMode 
-                                ? "bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30" 
-                                : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200"
-                              }
-                            `}
-                          >
-                            Details 
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {/* Resume button for failed/stopped scans with checkpoint */}
+                            {(scan.status === 'failed' || scan.status === 'stopped') && scan.canResume && (
+                              <button
+                                onClick={(e) => handleResumeScan(e, scan.id)}
+                                className={`
+                                  px-4 py-2 rounded-lg text-sm font-semibold
+                                  transition-all duration-300
+                                  ${isDarkMode 
+                                    ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30" 
+                                    : "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                                  }
+                                `}
+                              >
+                                ↻ Resume
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate("/dashboard/vulnerabilities", { state: { scanId: scan.id } });
+                              }}
+                              className={`
+                                px-4 py-2 rounded-lg text-sm font-semibold
+                                transition-all duration-300
+                                opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0
+                                ${isDarkMode 
+                                  ? "bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30" 
+                                  : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200"
+                                }
+                              `}
+                            >
+                              Details 
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

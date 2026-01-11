@@ -3,6 +3,14 @@
 # ============================================================
 
 # ------------------------------------------------------------
+# Large Files (GitHub limit: 100MB)
+# ------------------------------------------------------------
+jarwis_ai/training/data/learned/learner_state.pkl
+jarwis_ai/training/data/crawl_cache/Metamath_Proof_Explorer.json
+*.pkl
+jarwis_ai/training/data/crawl_cache/*.json
+
+# ------------------------------------------------------------
 # Dependencies (reinstallable - NOT backed up)
 # ------------------------------------------------------------
 .venv/
@@ -37,8 +45,9 @@ wheels/
 .env.*.local
 *.pem
 *.key
-key.txt
-secrets/
+config/secrets/
+config/secrets/*
+!config/secrets/.gitkeep
 
 # ------------------------------------------------------------
 # IDE & Editor
@@ -84,10 +93,6 @@ coverage.xml
 *.tmp
 *.temp
 *.bak
-reports/*.html
-reports/*.pdf
-reports/*.json
-!reports/.gitkeep
 
 # ------------------------------------------------------------
 # Playwright
@@ -96,16 +101,56 @@ playwright-report/
 test-results/
 
 # ------------------------------------------------------------
-# Database
+# Database (both old and new locations)
 # ------------------------------------------------------------
 *.db
 *.sqlite3
+jarwis.db
+data/jarwis.db
 
 # ------------------------------------------------------------
-# Keep these folders but ignore contents
+# Data folder - generated content (keep structure, ignore files)
 # ------------------------------------------------------------
+data/logs/*
+!data/logs/.gitkeep
+data/reports/*
+!data/reports/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/temp/*
+!data/temp/.gitkeep
+
+# Legacy paths (before reorganization)
 uploads/*
 !uploads/.gitkeep
+reports/*
+!reports/.gitkeep
+logs/
+temp/
+
+# ------------------------------------------------------------
+# Deprecated/Demo Folders (prevent re-creation)
+# ------------------------------------------------------------
+frontend/
+jarwisfrontend-theme-demo/
+backup/
+mockups/
+sample report/
+report1/
+gridphoto/
+screenshotdemo/
+learnattacks/
+network security/
+otp_logic/
+mobsec/
+
+# Old root-level locations (now moved)
+architecture_flow/
+developer_input/
+frontend-design/
+reminders/
+Ai Logo/
+Ai_training/
 
 # ------------------------------------------------------------
 # FILES TO KEEP (backed up)

@@ -6,8 +6,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
+import { featureFlags } from "../../config/features";
 import ScrollToTop from "../ScrollToTop";
 import SettingsPanel from "../settings/SettingsPanel";
+import DashboardShell from "../dashboardTheme/DashboardShell";
 
 // Professional Dashboard Icons
 const DashboardIcons = {
@@ -180,9 +182,11 @@ const MiftyJarwisLayout = ({ children }) => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [usageExpanded, setUsageExpanded] = useState(false);
   const userDropdownRef = useRef(null);
+  const isNewDashboard = featureFlags.useNewDashboard;
 
   // Handle opening settings from route state
   useEffect(() => {
+    if (isNewDashboard) return;
     if (location.state?.openSettings) {
       setSettingsOpen(true);
       if (location.state?.settingsTab) {
@@ -190,17 +194,19 @@ const MiftyJarwisLayout = ({ children }) => {
       }
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, navigate, location.pathname]);
+  }, [isNewDashboard, location.state, navigate, location.pathname]);
 
   // Redirect admins
   useEffect(() => {
+    if (isNewDashboard) return;
     if (userDoc.role === "admin" || userDoc.role === "super_admin") {
       navigate("/admin");
     }
-  }, [userDoc.role, navigate]);
+  }, [isNewDashboard, userDoc.role, navigate]);
 
   // Close dropdown on outside click
   useEffect(() => {
+    if (isNewDashboard) return;
     const handleClickOutside = (event) => {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setUserDropdownOpen(false);
@@ -208,7 +214,7 @@ const MiftyJarwisLayout = ({ children }) => {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isNewDashboard]);
 
   const handleLogout = async () => {
     try {
@@ -225,6 +231,10 @@ const MiftyJarwisLayout = ({ children }) => {
       console.log("Searching for:", searchQuery);
     }
   };
+
+  if (isNewDashboard) {
+    return <DashboardShell>{children}</DashboardShell>;
+  }
 
   const navigationItems = [
     { href: "/dashboard", icon: DashboardIcons.dashboard, label: "Dashboard" },

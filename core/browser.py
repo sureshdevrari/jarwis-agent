@@ -9,12 +9,17 @@ import asyncio
 import logging
 import re
 import json
+import sys
 from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+
+# Fix for Windows asyncio subprocess (Playwright compatibility)
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +40,29 @@ class Endpoint:
 class BrowserController:
     """Controls headless browser for crawling and authentication"""
     
-    def __init__(self, proxy_host: str = "127.0.0.1", proxy_port: int = 8080, use_mitm: bool = False, headless: bool = False):
+    def __init__(
+        self,
+        proxy_host: str = "",  # Empty by default - no proxy
+        proxy_port: int = 0,   # 0 by default - no proxy
+        use_mitm: bool = False,
+        headless: bool = False,
+        force_async_windows: bool = None,  # Auto-detect based on Python version
+    ):
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.use_mitm = use_mitm  # Whether to use MITM proxy for HTTPS interception
+        
+        # Python 3.14+ on Windows has broken async subprocess support
+        # Auto-detect and use sync mode when needed
+        if force_async_windows is None:
+            if sys.platform == 'win32' and sys.version_info >= (3, 14):
+                # Python 3.14+ on Windows: use sync mode due to asyncio subprocess bug
+                force_async_windows = False
+                logger.info("Python 3.14+ detected on Windows - using sync Playwright mode")
+            else:
+                force_async_windows = True
+        
+        self.force_async_windows = force_async_windows  # Avoid sync Playwright greenlet issues on Windows
         self.playwright = None
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
@@ -48,12 +72,190 @@ class BrowserController:
         self._captured_traffic: List[Dict] = []  # Store all request/response headers
         self.headless = headless  # Now configurable - True for headless, False to see browser
         self._mitm_proxy = None  # MITM proxy instance
+        self._is_windows = sys.platform == 'win32'  # Track Windows mode for sync/async handling
+        self._executor = None  # Thread pool executor for Windows sync operations
         
         # 2FA handling for target websites
         self._scan_id: Optional[str] = None  # Current scan ID for OTP handling
         self._2fa_config: Optional[Dict] = None  # 2FA configuration
         self._ai_watcher = None  # AI request watcher for analyzing traffic
         self._ai_findings: List[Dict] = []  # Findings from AI traffic analysis
+    
+    async def _run_sync(self, func, *args, **kwargs):
+        """Run a sync function in the executor (for Windows Playwright sync API)"""
+        if self._is_windows and self._executor:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                self._executor, 
+                lambda: func(*args, **kwargs)
+            )
+        else:
+            # For async Playwright, just await the coroutine
+            result = func(*args, **kwargs)
+            if asyncio.iscoroutine(result):
+                return await result
+            return result
+    
+    # ========== Page operation wrappers for Windows compatibility ==========
+    async def _page_goto(self, url: str, **kwargs):
+        """Navigate page to URL - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.goto, url, **kwargs)
+        return await self.page.goto(url, **kwargs)
+
+    # ===== Public convenience APIs used by WebScanRunner =====
+    async def goto(self, url: str, **kwargs):
+        """Navigate to a URL (wrapper around Playwright goto)."""
+        return await self._page_goto(url, **kwargs)
+
+    async def current_url(self) -> str:
+        """Return the current page URL."""
+        if self._is_windows:
+            return await self._run_sync(lambda: self.page.url)
+        return self.page.url
+
+    async def fill_form(self, field_map: Dict[str, str]):
+        """Fill multiple fields given a selector->value map."""
+        for selector, value in field_map.items():
+            try:
+                await self._page_fill(selector, value)
+            except Exception as e:
+                logger.debug(f"Fill failed for {selector}: {e}")
+
+    async def click(self, selector: str):
+        """Click an element by selector."""
+        return await self._page_click(selector)
+
+    async def discover_links(self, base_url: str, max_depth: int = 3, max_urls: int = 50):
+        """Run a crawl and return discovered URLs."""
+        result = await self.crawl(start_url=base_url, max_depth=max_depth, max_pages=max_urls)
+        return result.get('urls_visited', [])
+
+    async def find_forms(self):
+        """Extract forms on the current page."""
+        return await self._extract_forms()
+
+    async def close(self):
+        """Gracefully close browser resources."""
+        try:
+            if self.context:
+                await self.context.close()
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+        finally:
+            self.context = None
+            self.browser = None
+            self.playwright = None
+    
+    async def _page_title(self):
+        """Get page title - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.title)
+        return await self.page.title()
+    
+    async def _page_evaluate(self, expression):
+        """Evaluate JavaScript on page - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.evaluate, expression)
+        return await self.page.evaluate(expression)
+    
+    async def _page_query_selector(self, selector: str):
+        """Query for a single element - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.query_selector, selector)
+        return await self.page.query_selector(selector)
+    
+    async def _page_query_selector_all(self, selector: str):
+        """Query for all matching elements - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.query_selector_all, selector)
+        return await self.page.query_selector_all(selector)
+    
+    async def _element_click(self, element):
+        """Click an element - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.click)
+        return await element.click()
+    
+    async def _element_is_visible(self, element):
+        """Check if element is visible - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.is_visible)
+        return await element.is_visible()
+    
+    async def _element_inner_text(self, element):
+        """Get element's inner text - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.inner_text)
+        return await element.inner_text()
+    
+    async def _element_fill(self, element, value: str):
+        """Fill an input element - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.fill, value)
+        return await element.fill(value)
+    
+    async def _element_press(self, element, key: str):
+        """Press a key on element - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.press, key)
+        return await element.press(key)
+    
+    async def _element_get_attribute(self, element, name: str):
+        """Get attribute from element - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.get_attribute, name)
+        return await element.get_attribute(name)
+    
+    async def _element_text_content(self, element):
+        """Get element's text content - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(element.text_content)
+        return await element.text_content()
+    
+    async def _page_fill(self, selector: str, value: str):
+        """Fill input by selector - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.fill, selector, value)
+        return await self.page.fill(selector, value)
+    
+    async def _page_click(self, selector: str):
+        """Click element by selector - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.click, selector)
+        return await self.page.click(selector)
+    
+    async def _page_press(self, selector: str, key: str):
+        """Press key on element by selector - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.press, selector, key)
+        return await self.page.press(selector, key)
+    
+    async def _page_wait_for_selector(self, selector: str, **kwargs):
+        """Wait for selector - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.wait_for_selector, selector, **kwargs)
+        return await self.page.wait_for_selector(selector, **kwargs)
+    
+    async def _page_wait_for_load_state(self, state: str = 'load', **kwargs):
+        """Wait for page load state - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.wait_for_load_state, state, **kwargs)
+        return await self.page.wait_for_load_state(state, **kwargs)
+    
+    async def _page_content(self):
+        """Get page HTML content - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.content)
+        return await self.page.content()
+    
+    async def _keyboard_press(self, key: str):
+        """Press keyboard key - works on both Windows and non-Windows"""
+        if self._is_windows:
+            return await self._run_sync(self.page.keyboard.press, key)
+        return await self.page.keyboard.press(key)
         
     async def start(self, enable_mitm_https: bool = False):
         """Start the browser instance
@@ -61,6 +263,63 @@ class BrowserController:
         Args:
             enable_mitm_https: If True, start MITM proxy for full HTTPS interception
         """
+        # Windows: default to async Playwright to avoid greenlet/thread issues. Use sync mode only if explicitly requested.
+        if sys.platform == 'win32' and not self.force_async_windows:
+            import concurrent.futures
+            from playwright.sync_api import sync_playwright
+            
+            def start_playwright_sync():
+                """Start Playwright in sync mode (Windows workaround)"""
+                pw = sync_playwright().start()
+                browser = pw.chromium.launch(
+                    headless=self.headless,
+                    slow_mo=300,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--no-sandbox'
+                    ]
+                )
+                context = browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    ignore_https_errors=True
+                )
+                # Create page for Windows
+                page = context.new_page()
+                return pw, browser, context, page
+            
+            # Run sync Playwright in thread pool - store executor to keep it alive
+            loop = asyncio.get_event_loop()
+            self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            self.playwright, self.browser, self.context, self.page = await loop.run_in_executor(
+                self._executor, start_playwright_sync
+            )
+            
+            # Set up request/response interception for Windows (sync wrapper)
+            def setup_interception_sync():
+                # Capture responses for traffic log
+                def on_response(response):
+                    try:
+                        self._captured_traffic.append({
+                            'type': 'response',
+                            'url': response.url,
+                            'method': response.request.method,
+                            'status': response.status,
+                            'headers': dict(response.headers),
+                            'request_headers': dict(response.request.headers)
+                        })
+                    except Exception as e:
+                        logger.debug(f"Error capturing response: {e}")
+                
+                self.page.on('response', on_response)
+            
+            await loop.run_in_executor(self._executor, setup_interception_sync)
+            logger.info("Browser started successfully (Windows sync mode)")
+            return
+        
+        # Original async implementation for non-Windows
         self.playwright = await async_playwright().start()
         
         # Start MITM proxy if requested
@@ -233,24 +492,43 @@ class BrowserController:
     async def crawl(
         self, 
         start_url: str, 
-        max_depth: int = 3,
+        max_depth: int = 5,
         scope: Optional[Dict] = None,
-        authenticated: bool = False
+        authenticated: bool = False,
+        max_pages: int = 200
     ) -> Dict:
-        """Crawl the target website and discover endpoints"""
+        """
+        Crawl the target website using BFS tree traversal to discover all endpoints.
+        
+        Uses breadth-first search to ensure we reach all pages at each depth level
+        before going deeper. Excludes duplicate URLs and out-of-scope links.
+        
+        Args:
+            start_url: Starting URL to crawl
+            max_depth: Maximum depth to crawl (default 5 for comprehensive coverage)
+            scope: Optional scope restrictions
+            authenticated: Whether this is an authenticated crawl
+            max_pages: Maximum number of pages to visit (default 200)
+        """
         self._discovered_urls = set()
         self._endpoints = []
+        self._pending_urls: List[tuple] = []  # (url, depth) tuples for BFS
+        
+        logger.info(f"Starting comprehensive BFS crawl of: {start_url}")
+        logger.info(f"Settings: max_depth={max_depth}, max_pages={max_pages}")
         
         # Initial page load with popup handling
-        logger.info(f"Starting crawl of: {start_url}")
         try:
-            await self.page.goto(start_url, wait_until='domcontentloaded', timeout=30000)
+            # Use sync wrapper for Windows
+            if self._is_windows:
+                await self._run_sync(self.page.goto, start_url, wait_until='domcontentloaded', timeout=30000)
+            else:
+                await self.page.goto(start_url, wait_until='domcontentloaded', timeout=30000)
             
             # Handle popups on initial page load (critical for e-commerce sites)
             logger.info("Checking for initial popups/modals...")
-            for attempt in range(3):  # Try up to 3 times
+            for attempt in range(3):
                 await self._handle_popups_and_modals()
-                # Check if popups are still blocking
                 overlay = await self._find_blocking_overlay()
                 if not overlay:
                     break
@@ -260,11 +538,25 @@ class BrowserController:
         except Exception as e:
             logger.warning(f"Initial page load error: {e}")
         
-        await self._crawl_recursive(start_url, 0, max_depth, scope)
+        # Use BFS (Breadth-First Search) for comprehensive tree crawling
+        await self._crawl_bfs(start_url, max_depth, scope, max_pages)
         
-        # Process and deduplicate endpoints
+        # Deduplicate endpoints by URL+method
+        seen_endpoints = set()
+        unique_endpoints = []
+        for ep in self._endpoints:
+            key = f"{ep.get('url', '')}|{ep.get('method', 'GET')}"
+            if key not in seen_endpoints:
+                seen_endpoints.add(key)
+                unique_endpoints.append(ep)
+        
+        self._endpoints = unique_endpoints
+        
+        # Categorize endpoints
         upload_endpoints = [ep for ep in self._endpoints if ep.get('has_upload')]
-        api_endpoints = [ep for ep in self._endpoints if ep['type'] == 'api']
+        api_endpoints = [ep for ep in self._endpoints if ep.get('type') == 'api']
+        
+        logger.info(f"Crawl complete: {len(self._discovered_urls)} pages visited, {len(self._endpoints)} endpoints found")
         
         return {
             'endpoints': self._endpoints,
@@ -273,6 +565,245 @@ class BrowserController:
             'urls_visited': list(self._discovered_urls)
         }
     
+    async def _crawl_bfs(
+        self, 
+        start_url: str,
+        max_depth: int,
+        scope: Optional[Dict],
+        max_pages: int
+    ):
+        """
+        Breadth-First Search crawling - visits all pages at each depth level
+        before going deeper. This ensures comprehensive endpoint discovery.
+        """
+        from collections import deque
+        
+        # Queue holds (url, depth) tuples
+        queue = deque([(start_url, 0)])
+        
+        while queue and len(self._discovered_urls) < max_pages:
+            url, depth = queue.popleft()
+            
+            # Skip if already visited or too deep
+            if url in self._discovered_urls:
+                continue
+            if depth > max_depth:
+                continue
+            
+            # Normalize URL to avoid duplicates
+            normalized_url = self._normalize_url(url)
+            if normalized_url in self._discovered_urls:
+                continue
+                
+            # Check scope
+            if scope and not self._is_in_scope(url, scope):
+                continue
+            
+            # Mark as visited
+            self._discovered_urls.add(normalized_url)
+            
+            try:
+                # Visit the page - use sync wrapper for Windows
+                if self._is_windows:
+                    response = await self._run_sync(self.page.goto, url, wait_until='domcontentloaded', timeout=15000)
+                else:
+                    response = await self.page.goto(url, wait_until='domcontentloaded', timeout=15000)
+                    
+                if not response:
+                    continue
+                
+                # Log progress every 10 pages
+                if len(self._discovered_urls) % 10 == 0:
+                    logger.info(f"Crawled {len(self._discovered_urls)} pages, queue size: {len(queue)}, depth: {depth}")
+                
+                # Brief wait for dynamic content
+                await asyncio.sleep(0.3)
+                
+                # Handle popups
+                await self._handle_popups_and_modals()
+                
+                # Extract ALL link types from page
+                links = await self._extract_all_links()
+                
+                # Extract forms as endpoints
+                forms = await self._extract_forms()
+                for form in forms:
+                    self._endpoints.append(form)
+                
+                # Extract API endpoints from scripts
+                api_urls = await self._extract_api_endpoints()
+                for api_url in api_urls:
+                    if api_url not in [ep.get('url') for ep in self._endpoints]:
+                        self._endpoints.append({
+                            'url': api_url,
+                            'method': 'GET',
+                            'type': 'api',
+                            'params': {},
+                            'has_upload': False
+                        })
+                
+                # Add discovered links to queue for BFS traversal
+                for link in links:
+                    if self._is_same_domain(start_url, link):
+                        normalized_link = self._normalize_url(link)
+                        if normalized_link not in self._discovered_urls:
+                            queue.append((link, depth + 1))
+                    
+            except Exception as e:
+                logger.debug(f"Error crawling {url}: {e}")
+    
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL to avoid visiting duplicates with different fragments/params"""
+        parsed = urlparse(url)
+        # Remove fragment and normalize
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        # Remove trailing slash for consistency
+        if normalized.endswith('/') and len(normalized) > len(f"{parsed.scheme}://{parsed.netloc}/"):
+            normalized = normalized[:-1]
+        return normalized.lower()
+    
+    async def _extract_all_links(self) -> List[str]:
+        """Extract ALL types of links from the page - comprehensive discovery"""
+        js_code = '''() => {
+            const links = new Set();
+            
+            // Standard anchor links
+            document.querySelectorAll('a[href]').forEach(a => {
+                if (a.href && !a.href.startsWith('javascript:') && !a.href.startsWith('mailto:') && !a.href.startsWith('tel:')) {
+                    links.add(a.href);
+                }
+            });
+            
+            // Links in onclick handlers
+            document.querySelectorAll('[onclick]').forEach(el => {
+                const onclick = el.getAttribute('onclick') || '';
+                const matches = onclick.match(/(?:location\\.href|window\\.open|navigate)\\s*[=\\(]\\s*['"]([^'"]+)['"]/gi);
+                if (matches) {
+                    matches.forEach(match => {
+                        const urlMatch = match.match(/['"]([^'"]+)['"]/);
+                        if (urlMatch) {
+                            try {
+                                const url = new URL(urlMatch[1], window.location.href);
+                                links.add(url.href);
+                            } catch(e) {}
+                        }
+                    });
+                }
+            });
+            
+            // Links in data attributes
+            document.querySelectorAll('[data-href], [data-url], [data-link], [data-target]').forEach(el => {
+                ['data-href', 'data-url', 'data-link', 'data-target'].forEach(attr => {
+                    const val = el.getAttribute(attr);
+                    if (val && val.startsWith('/')) {
+                        try {
+                            const url = new URL(val, window.location.href);
+                            links.add(url.href);
+                        } catch(e) {}
+                    } else if (val && val.startsWith('http')) {
+                        links.add(val);
+                    }
+                });
+            });
+            
+            // Form actions
+            document.querySelectorAll('form[action]').forEach(form => {
+                try {
+                    const url = new URL(form.action, window.location.href);
+                    links.add(url.href);
+                } catch(e) {}
+            });
+            
+            // Iframe sources
+            document.querySelectorAll('iframe[src]').forEach(iframe => {
+                if (iframe.src && !iframe.src.startsWith('about:')) {
+                    links.add(iframe.src);
+                }
+            });
+            
+            // Script src (for discovering API patterns)
+            document.querySelectorAll('script[src]').forEach(script => {
+                if (script.src) {
+                    links.add(script.src);
+                }
+            });
+            
+            // Meta refresh URLs
+            document.querySelectorAll('meta[http-equiv="refresh"]').forEach(meta => {
+                const content = meta.getAttribute('content') || '';
+                const urlMatch = content.match(/url=(.+)/i);
+                if (urlMatch) {
+                    try {
+                        const url = new URL(urlMatch[1].trim(), window.location.href);
+                        links.add(url.href);
+                    } catch(e) {}
+                }
+            });
+            
+            // Area map links
+            document.querySelectorAll('area[href]').forEach(area => {
+                links.add(area.href);
+            });
+            
+            // Base tag consideration
+            document.querySelectorAll('link[href]').forEach(link => {
+                const rel = link.getAttribute('rel') || '';
+                if (rel.includes('canonical') || rel.includes('alternate')) {
+                    try {
+                        const url = new URL(link.href, window.location.href);
+                        links.add(url.href);
+                    } catch(e) {}
+                }
+            });
+            
+            return Array.from(links);
+        }'''
+        
+        if self._is_windows:
+            return await self._run_sync(self.page.evaluate, js_code)
+        else:
+            return await self.page.evaluate(js_code)
+    
+    async def _extract_api_endpoints(self) -> List[str]:
+        """Extract API endpoints from inline scripts and fetch patterns"""
+        js_code = '''() => {
+            const apiUrls = new Set();
+            const apiPatterns = [
+                /fetch\\s*\\(\\s*['"`]([^'"`]+)['"`]/g,
+                /axios\\.[a-z]+\\s*\\(\\s*['"`]([^'"`]+)['"`]/g,
+                /\\$\\.(ajax|get|post)\\s*\\(\\s*['"`]([^'"`]+)['"`]/g,
+                /XMLHttpRequest.*open\\s*\\(\\s*['"`]\\w+['"`]\\s*,\\s*['"`]([^'"`]+)['"`]/g,
+                /['"`](\\/api\\/[^'"`\\s]+)['"`]/g,
+                /['"`](\\/rest\\/[^'"`\\s]+)['"`]/g,
+                /['"`](\\/graphql[^'"`\\s]*)['"`]/g,
+                /['"`](\\/v[0-9]+\\/[^'"`\\s]+)['"`]/g,
+            ];
+            
+            // Check all script contents
+            document.querySelectorAll('script').forEach(script => {
+                const content = script.textContent || '';
+                apiPatterns.forEach(pattern => {
+                    let match;
+                    while ((match = pattern.exec(content)) !== null) {
+                        const url = match[1] || match[2];
+                        if (url && (url.startsWith('/') || url.startsWith('http'))) {
+                            try {
+                                const fullUrl = new URL(url, window.location.href);
+                                apiUrls.add(fullUrl.href);
+                            } catch(e) {}
+                        }
+                    }
+                });
+            });
+            
+            return Array.from(apiUrls);
+        }'''
+        
+        if self._is_windows:
+            return await self._run_sync(self.page.evaluate, js_code)
+        else:
+            return await self.page.evaluate(js_code)
+
     async def _crawl_recursive(
         self, 
         url: str, 
@@ -280,7 +811,7 @@ class BrowserController:
         max_depth: int,
         scope: Optional[Dict]
     ):
-        """Recursively crawl pages"""
+        """Recursively crawl pages (legacy method - now uses BFS instead)"""
         if depth > max_depth or url in self._discovered_urls:
             return
         
@@ -290,7 +821,11 @@ class BrowserController:
         self._discovered_urls.add(url)
         
         try:
-            response = await self.page.goto(url, wait_until='domcontentloaded', timeout=15000)
+            # Navigate to URL
+            if self._is_windows:
+                response = await self._run_sync(self.page.goto, url, wait_until='domcontentloaded', timeout=15000)
+            else:
+                response = await self.page.goto(url, wait_until='domcontentloaded', timeout=15000)
             if not response:
                 return
             
@@ -307,13 +842,17 @@ class BrowserController:
                 await asyncio.sleep(0.5)
             
             # Extract all links
-            links = await self.page.evaluate('''() => {
+            js_code = '''() => {
                 const links = [];
                 document.querySelectorAll('a[href]').forEach(a => {
                     links.push(a.href);
                 });
                 return links;
-            }''')
+            }'''
+            if self._is_windows:
+                links = await self._run_sync(self.page.evaluate, js_code)
+            else:
+                links = await self.page.evaluate(js_code)
             
             # Extract forms
             forms = await self._extract_forms()
@@ -339,7 +878,7 @@ class BrowserController:
     
     async def _extract_forms(self) -> List[Dict]:
         """Extract form endpoints from current page"""
-        return await self.page.evaluate('''() => {
+        js_code = '''() => {
             const forms = [];
             document.querySelectorAll('form').forEach(form => {
                 const formData = {
@@ -363,7 +902,12 @@ class BrowserController:
                 forms.push(formData);
             });
             return forms;
-        }''')
+        }'''
+        
+        if self._is_windows:
+            return await self._run_sync(self.page.evaluate, js_code)
+        else:
+            return await self.page.evaluate(js_code)
     
     def _is_in_scope(self, url: str, scope: Dict) -> bool:
         """Check if URL is within defined scope"""
@@ -417,12 +961,17 @@ class BrowserController:
         This is crucial for e-commerce sites that require location selection.
         Strategy: First try to INTERACT with popups (select something), then try to CLOSE them.
         """
+        # On Windows, skip popup handling for now due to threading issues
+        if self._is_windows:
+            logger.debug("Popup handling skipped on Windows (sync API threading)")
+            return
+            
         try:
             # Brief wait for popups to appear
             await asyncio.sleep(0.5)
             
             # Log current page state for debugging
-            page_title = await self.page.title()
+            page_title = await self._page_title()
             logger.info(f"Handling popups on page: {page_title}")
             
             # 1. Handle cookie consent banners first
@@ -544,6 +1093,10 @@ class BrowserController:
     
     async def _find_blocking_overlay(self):
         """Check if there's a blocking modal/popup overlay"""
+        # On Windows, skip overlay detection due to threading issues
+        if self._is_windows:
+            return None
+            
         overlay_selectors = [
             '[class*="modal" i][class*="open" i]',
             '[class*="modal" i][class*="show" i]',
@@ -946,7 +1499,7 @@ class BrowserController:
 
     async def _auto_detect_login_form(self) -> Dict:
         """Auto-detect login form fields by inspecting the page source"""
-        detected = await self.page.evaluate('''() => {
+        js_code = '''() => {
             const result = {
                 username_field: null,
                 password_field: null,
@@ -1087,12 +1640,22 @@ class BrowserController:
             }
             
             return result;
-        }''')
+        }'''
+        
+        if self._is_windows:
+            detected = await self._run_sync(self.page.evaluate, js_code)
+        else:
+            detected = await self.page.evaluate(js_code)
         
         return detected
     
     async def _close_popups(self):
         """Close common popups, modals, cookie banners, and welcome dialogs"""
+        # On Windows, skip popup handling due to threading issues with complex element queries
+        if self._is_windows:
+            logger.debug("Popup closing skipped on Windows (sync API)")
+            return
+            
         popup_selectors = [
             # Juice Shop specific
             'button[aria-label="Close Welcome Banner"]',
@@ -1203,8 +1766,8 @@ class BrowserController:
         
         for selector in otp_indicators:
             try:
-                element = await self.page.query_selector(selector)
-                if element and await element.is_visible():
+                element = await self._page_query_selector(selector)
+                if element and await self._element_is_visible(element):
                     logger.info(f"2FA page detected via: {selector}")
                     return True
             except:
@@ -1212,7 +1775,7 @@ class BrowserController:
         
         # Also check page content for 2FA keywords
         try:
-            page_content = await self.page.content()
+            page_content = await self._page_content()
             content_lower = page_content.lower()
             keywords = [
                 'verification code',
@@ -1260,8 +1823,8 @@ class BrowserController:
         
         for selector in otp_input_selectors:
             try:
-                element = await self.page.query_selector(selector)
-                if element and await element.is_visible():
+                element = await self._page_query_selector(selector)
+                if element and await self._element_is_visible(element):
                     return selector
             except:
                 continue
@@ -1285,11 +1848,14 @@ class BrowserController:
         
         logger.info("2FA page detected, waiting for user to provide OTP...")
         
-        # Import the OTP handling functions
+        # Import the OTP handling functions from services layer (not routes!)
         try:
-            from api.routes.scan_otp import wait_for_otp, set_otp_error, clear_scan_otp_state
+            from services.otp_service import (
+                wait_for_otp, set_otp_error, clear_scan_otp_state,
+                set_scan_waiting_for_otp, reset_otp_for_retry
+            )
         except ImportError:
-            logger.error("Could not import OTP handling module")
+            logger.error("Could not import OTP service module")
             return False
         
         if not self._scan_id:
@@ -1300,14 +1866,15 @@ class BrowserController:
         otp_type = self._2fa_config.get('type', 'email')
         contact = self._2fa_config.get('email') or self._2fa_config.get('phone') or ''
         
+        # Set scan as waiting for OTP
+        set_scan_waiting_for_otp(self._scan_id, otp_type, contact, timeout_seconds=300)
+        
         # Wait for user to submit OTP (this blocks until OTP is provided or timeout)
         max_attempts = 3
         for attempt in range(max_attempts):
             otp = await wait_for_otp(
                 scan_id=self._scan_id,
-                otp_type=otp_type,
-                contact=contact,
-                timeout_seconds=300,  # 5 minutes
+                timeout=300,  # 5 minutes
                 poll_interval=2.0
             )
             
@@ -1326,7 +1893,7 @@ class BrowserController:
             
             # Enter the OTP
             try:
-                await self.page.fill(otp_selector, otp)
+                await self._page_fill(otp_selector, otp)
                 await asyncio.sleep(0.5)
                 
                 # Submit the OTP form
@@ -1344,9 +1911,9 @@ class BrowserController:
                 
                 for submit_sel in submit_selectors:
                     try:
-                        btn = await self.page.query_selector(submit_sel)
-                        if btn and await btn.is_visible():
-                            await btn.click()
+                        btn = await self._page_query_selector(submit_sel)
+                        if btn and await self._element_is_visible(btn):
+                            await self._element_click(btn)
                             submit_clicked = True
                             logger.info(f"Clicked OTP submit button: {submit_sel}")
                             break
@@ -1355,12 +1922,12 @@ class BrowserController:
                 
                 if not submit_clicked:
                     # Try pressing Enter
-                    await self.page.press(otp_selector, 'Enter')
+                    await self._page_press(otp_selector, 'Enter')
                     logger.info("Submitted OTP via Enter key")
                 
                 # Wait for navigation
                 try:
-                    await self.page.wait_for_load_state('networkidle', timeout=10000)
+                    await self._page_wait_for_load_state('networkidle', timeout=10000)
                 except:
                     pass
                 await asyncio.sleep(2)
@@ -1380,9 +1947,9 @@ class BrowserController:
                 has_error = False
                 for err_sel in error_selectors:
                     try:
-                        err_el = await self.page.query_selector(err_sel)
-                        if err_el and await err_el.is_visible():
-                            error_text = await err_el.text_content()
+                        err_el = await self._page_query_selector(err_sel)
+                        if err_el and await self._element_is_visible(err_el):
+                            error_text = await self._element_text_content(err_el)
                             if error_text and ('invalid' in error_text.lower() or 
                                              'incorrect' in error_text.lower() or
                                              'expired' in error_text.lower() or
@@ -1397,8 +1964,7 @@ class BrowserController:
                 if still_on_2fa or has_error:
                     if attempt < max_attempts - 1:
                         logger.info("OTP verification failed, waiting for new code...")
-                        # Reset for retry - don't call reset_otp_for_retry, just continue
-                        from api.routes.scan_otp import reset_otp_for_retry
+                        # Reset for retry - already imported at top of function
                         reset_otp_for_retry(self._scan_id)
                         continue
                     else:
@@ -1424,8 +1990,8 @@ class BrowserController:
                 ]
                 for indicator in logout_indicators:
                     try:
-                        el = await self.page.query_selector(indicator)
-                        if el and await el.is_visible():
+                        el = await self._page_query_selector(indicator)
+                        if el and await self._element_is_visible(el):
                             logger.info("2FA authentication successful (logout button found)!")
                             clear_scan_otp_state(self._scan_id)
                             return True
@@ -1456,7 +2022,11 @@ class BrowserController:
     ) -> bool:
         """Perform authentication with smart form detection"""
         try:
-            await self.page.goto(login_url, wait_until='networkidle', timeout=30000)
+            # Navigate to login page
+            if self._is_windows:
+                await self._run_sync(self.page.goto, login_url, wait_until='networkidle', timeout=30000)
+            else:
+                await self.page.goto(login_url, wait_until='networkidle', timeout=30000)
             
             # Wait for page to fully load
             await asyncio.sleep(1)
@@ -1482,15 +2052,23 @@ class BrowserController:
             
             # Wait for elements to be available
             try:
-                await self.page.wait_for_selector(username_selector, timeout=5000)
-                await self.page.wait_for_selector(password_selector, timeout=5000)
+                if self._is_windows:
+                    await self._run_sync(self.page.wait_for_selector, username_selector, timeout=5000)
+                    await self._run_sync(self.page.wait_for_selector, password_selector, timeout=5000)
+                else:
+                    await self.page.wait_for_selector(username_selector, timeout=5000)
+                    await self.page.wait_for_selector(password_selector, timeout=5000)
             except Exception as e:
                 logger.error(f"Form fields not found after detection: {e}")
                 return False
 
             # Fill credentials
-            await self.page.fill(username_selector, credentials['username'])
-            await self.page.fill(password_selector, credentials['password'])
+            if self._is_windows:
+                await self._run_sync(self.page.fill, username_selector, credentials['username'])
+                await self._run_sync(self.page.fill, password_selector, credentials['password'])
+            else:
+                await self.page.fill(username_selector, credentials['username'])
+                await self.page.fill(password_selector, credentials['password'])
             
             logger.info(f"Filled credentials for user: {credentials['username']}")
 
@@ -1500,7 +2078,10 @@ class BrowserController:
             # Method 1: Click submit button if found
             if submit_selector:
                 try:
-                    await self.page.click(submit_selector)
+                    if self._is_windows:
+                        await self._run_sync(self.page.click, submit_selector)
+                    else:
+                        await self.page.click(submit_selector)
                     submitted = True
                     logger.info("Submitted form via button click")
                 except Exception as e:
@@ -1509,7 +2090,10 @@ class BrowserController:
             # Method 2: Press Enter on password field
             if not submitted:
                 try:
-                    await self.page.press(password_selector, 'Enter')
+                    if self._is_windows:
+                        await self._run_sync(self.page.press, password_selector, 'Enter')
+                    else:
+                        await self.page.press(password_selector, 'Enter')
                     submitted = True
                     logger.info("Submitted form via Enter key")
                 except Exception as e:
@@ -1518,10 +2102,14 @@ class BrowserController:
             # Method 3: Submit the form directly
             if not submitted:
                 try:
-                    await self.page.evaluate('''() => {
+                    js_code = '''() => {
                         const form = document.querySelector('form');
                         if (form) form.submit();
-                    }''')
+                    }'''
+                    if self._is_windows:
+                        await self._run_sync(self.page.evaluate, js_code)
+                    else:
+                        await self.page.evaluate(js_code)
                     submitted = True
                     logger.info("Submitted form via JavaScript")
                 except Exception as e:
@@ -1530,7 +2118,10 @@ class BrowserController:
 
             # Wait for navigation with timeout
             try:
-                await self.page.wait_for_load_state('networkidle', timeout=15000)
+                if self._is_windows:
+                    await self._run_sync(self.page.wait_for_load_state, 'networkidle', timeout=15000)
+                else:
+                    await self.page.wait_for_load_state('networkidle', timeout=15000)
             except Exception as e:
                 logger.debug(f"Networkidle timeout, continuing: {e}")
             await asyncio.sleep(2)  # Extra wait for redirects and SPA navigation
@@ -1582,8 +2173,8 @@ class BrowserController:
             
             for indicator in logged_in_indicators:
                 try:
-                    element = await self.page.query_selector(indicator)
-                    if element and await element.is_visible():
+                    element = await self._page_query_selector(indicator)
+                    if element and await self._element_is_visible(element):
                         success = True
                         logger.info(f"Login confirmed via indicator: {indicator}")
                         break
@@ -1609,7 +2200,7 @@ class BrowserController:
                 else:
                     # Treat as CSS selector
                     try:
-                        element = await self.page.query_selector(success_indicator)
+                        element = await self._page_query_selector(success_indicator)
                         success = element is not None
                         logger.info(f"Selector-based check: '{success_indicator}' found = {success}")
                     except Exception as e:
@@ -1619,8 +2210,8 @@ class BrowserController:
             if not success:
                 login_form_visible = False
                 try:
-                    login_form = await self.page.query_selector('input[type="password"]:visible')
-                    login_form_visible = login_form is not None and await login_form.is_visible()
+                    login_form = await self._page_query_selector('input[type="password"]:visible')
+                    login_form_visible = login_form is not None and await self._element_is_visible(login_form)
                 except:
                     pass
                 
@@ -1640,7 +2231,7 @@ class BrowserController:
                 if signup_success:
                     logger.info("Signup successful! Retrying login...")
                     # Navigate back to login page and retry
-                    await self.page.goto(login_url, wait_until='networkidle', timeout=30000)
+                    await self._page_goto(login_url, wait_until='networkidle', timeout=30000)
                     await asyncio.sleep(1)
                     
                     # Close popups again on login page
@@ -1653,17 +2244,17 @@ class BrowserController:
                     password_selector = detected.get('password_field') or selectors.get('password_field')
                     submit_selector = detected.get('submit_button') or selectors.get('submit_button')
                     
-                    await self.page.wait_for_selector(username_selector, timeout=5000)
-                    await self.page.fill(username_selector, credentials['username'])
-                    await self.page.fill(password_selector, credentials['password'])
+                    await self._page_wait_for_selector(username_selector, timeout=5000)
+                    await self._page_fill(username_selector, credentials['username'])
+                    await self._page_fill(password_selector, credentials['password'])
                     
                     if submit_selector:
-                        await self.page.click(submit_selector)
+                        await self._page_click(submit_selector)
                     else:
-                        await self.page.press(password_selector, 'Enter')
+                        await self._page_press(password_selector, 'Enter')
                     
                     try:
-                        await self.page.wait_for_load_state('networkidle', timeout=15000)
+                        await self._page_wait_for_load_state('networkidle', timeout=15000)
                     except:
                         pass
                     await asyncio.sleep(1)
@@ -1674,7 +2265,7 @@ class BrowserController:
                         success = success_indicator in current_url
                     else:
                         try:
-                            success = await self.page.query_selector(success_indicator) is not None
+                            success = await self._page_query_selector(success_indicator) is not None
                         except:
                             success = False
                     
@@ -1711,9 +2302,9 @@ class BrowserController:
             signup_clicked = False
             for selector in signup_link_selectors:
                 try:
-                    element = await self.page.query_selector(selector)
+                    element = await self._page_query_selector(selector)
                     if element:
-                        await element.click()
+                        await self._element_click(element)
                         signup_clicked = True
                         logger.info(f"Clicked signup link: {selector}")
                         break
@@ -1726,7 +2317,7 @@ class BrowserController:
             
             # Wait for signup page to load
             try:
-                await self.page.wait_for_load_state('networkidle', timeout=10000)
+                await self._page_wait_for_load_state('networkidle', timeout=10000)
             except:
                 pass
             await asyncio.sleep(1)
@@ -1736,7 +2327,7 @@ class BrowserController:
             await asyncio.sleep(0.5)
             
             # Detect registration form fields
-            reg_fields = await self.page.evaluate('''() => {
+            reg_fields = await self._page_evaluate('''() => {
                 const result = {
                     email_field: null,
                     password_field: null,
@@ -1827,56 +2418,56 @@ class BrowserController:
             
             # Fill registration form
             if reg_fields.get('email_field'):
-                await self.page.fill(reg_fields['email_field'], credentials['username'])
+                await self._page_fill(reg_fields['email_field'], credentials['username'])
                 logger.info(f"Filled email: {credentials['username']}")
             
             if reg_fields.get('password_field'):
-                await self.page.fill(reg_fields['password_field'], credentials['password'])
+                await self._page_fill(reg_fields['password_field'], credentials['password'])
                 logger.info("Filled password")
             
             if reg_fields.get('confirm_password_field'):
-                await self.page.fill(reg_fields['confirm_password_field'], credentials['password'])
+                await self._page_fill(reg_fields['confirm_password_field'], credentials['password'])
                 logger.info("Filled confirm password")
             
             # Handle security question (Juice Shop specific)
             if reg_fields.get('security_question'):
                 try:
                     # Click to open dropdown
-                    await self.page.click(reg_fields['security_question'])
+                    await self._page_click(reg_fields['security_question'])
                     await asyncio.sleep(0.5)
                     # Select first option
-                    option = await self.page.query_selector('mat-option, option, [role="option"]')
+                    option = await self._page_query_selector('mat-option, option, [role="option"]')
                     if option:
-                        await option.click()
+                        await self._element_click(option)
                         logger.info("Selected security question")
                         await asyncio.sleep(0.3)
                 except Exception as e:
                     logger.debug(f"Security question selection failed: {e}")
             
             if reg_fields.get('security_answer'):
-                await self.page.fill(reg_fields['security_answer'], 'test123')
+                await self._page_fill(reg_fields['security_answer'], 'test123')
                 logger.info("Filled security answer")
             
             # Submit registration
             if reg_fields.get('submit_button'):
                 try:
-                    await self.page.click(reg_fields['submit_button'])
+                    await self._page_click(reg_fields['submit_button'])
                     logger.info("Clicked register button")
                 except Exception as e:
                     logger.debug(f"Register button click failed: {e}")
                     # Try pressing Enter
-                    await self.page.keyboard.press('Enter')
+                    await self._keyboard_press('Enter')
             
             # Wait for registration to complete
             try:
-                await self.page.wait_for_load_state('networkidle', timeout=10000)
+                await self._page_wait_for_load_state('networkidle', timeout=10000)
             except:
                 pass
             await asyncio.sleep(2)
             
             # Check if registration was successful (look for success message or redirect)
             current_url = self.page.url
-            page_content = await self.page.content()
+            page_content = await self._page_content()
             
             success_indicators = [
                 'Registration completed successfully',
@@ -1912,6 +2503,43 @@ class BrowserController:
         cookies = await self.context.cookies()
         return {c['name']: c['value'] for c in cookies}
     
+    async def add_cookie(self, cookie: Dict):
+        """
+        Add a cookie to the browser context.
+        
+        Args:
+            cookie: Dict with keys 'name', 'value', 'domain', optionally 'path', 'secure', etc.
+        """
+        try:
+            # Ensure required fields
+            if 'name' not in cookie or 'value' not in cookie:
+                logger.error("Cookie must have 'name' and 'value'")
+                return
+            
+            # Build cookie dict with defaults
+            cookie_data = {
+                'name': cookie['name'],
+                'value': cookie['value'],
+                'domain': cookie.get('domain', ''),
+                'path': cookie.get('path', '/'),
+            }
+            
+            # Add optional fields if present
+            if cookie.get('secure'):
+                cookie_data['secure'] = cookie['secure']
+            if cookie.get('httpOnly'):
+                cookie_data['httpOnly'] = cookie['httpOnly']
+            if cookie.get('sameSite'):
+                cookie_data['sameSite'] = cookie['sameSite']
+            if cookie.get('expires'):
+                cookie_data['expires'] = cookie['expires']
+            
+            await self.context.add_cookies([cookie_data])
+            logger.debug(f"Added cookie: {cookie['name']}")
+            
+        except Exception as e:
+            logger.error(f"Failed to add cookie: {e}")
+    
     async def get_auth_headers(self) -> Dict:
         """Get authentication headers (Bearer token, etc.)"""
         # This could be extended to extract tokens from localStorage, headers, etc.
@@ -1942,17 +2570,29 @@ class BrowserController:
     
     async def stop(self):
         """Stop the browser and MITM proxy"""
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
+        # Windows: Skip cleanup to avoid greenlet threading issues
+        # Browser process will be cleaned up by OS
+        if sys.platform == 'win32' and hasattr(self, '_executor'):
+            if hasattr(self, '_executor'):
+                self._executor.shutdown(wait=False)
+            logger.info("Browser stopped (Windows - process cleanup skipped)")
+            return
         
-        # Stop MITM proxy if it was running
-        if self._mitm_proxy:
-            await self._mitm_proxy.stop()
-            self._mitm_proxy = None
-        
-        logger.info("Browser stopped")
+        try:
+            # Original async implementation for non-Windows
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+            
+            # Stop MITM proxy if it was running
+            if self._mitm_proxy:
+                await self._mitm_proxy.stop()
+                self._mitm_proxy = None
+            
+            logger.info("Browser stopped")
+        except Exception as e:
+            logger.warning(f"Browser stop error (non-critical): {type(e).__name__}")
     
     def is_mitm_enabled(self) -> bool:
         """Check if MITM proxy is active"""
@@ -2276,3 +2916,242 @@ class BrowserController:
         except Exception as e:
             logger.error(f"Error getting page state: {e}")
             return {}
+    
+    # ===== VISIBLE ATTACK METHODS FOR DEBUGGING =====
+    # These methods type payloads into input fields visibly for debugging
+    
+    async def visible_attack_xss(self, url: str, selector: str, payload: str, submit: bool = True) -> Dict:
+        """
+        Perform a VISIBLE XSS attack by typing payload into an input field.
+        Useful for debugging and demonstrating attacks.
+        
+        Args:
+            url: Target page URL
+            selector: CSS selector for input field (e.g., '#search', '[name="q"]')
+            payload: XSS payload to inject
+            submit: Whether to submit the form after typing
+            
+        Returns:
+            Dict with attack results and evidence
+        """
+        logger.info(f"[VISIBLE] XSS Attack on {selector} with payload: {payload[:50]}...")
+        
+        result = {
+            'type': 'xss',
+            'selector': selector,
+            'payload': payload,
+            'vulnerable': False,
+            'evidence': '',
+            'alerts': []
+        }
+        
+        try:
+            # Navigate to the page
+            await self.page.goto(url, wait_until='networkidle', timeout=30000)
+            await asyncio.sleep(1)
+            
+            # Set up alert detection
+            alerts = []
+            async def handle_dialog(dialog):
+                alerts.append({
+                    'type': dialog.type,
+                    'message': dialog.message
+                })
+                logger.info(f"[VISIBLE] ⚠ ALERT TRIGGERED: {dialog.message}")
+                await dialog.dismiss()
+            
+            self.page.on('dialog', handle_dialog)
+            
+            # Find the input field
+            input_element = await self.page.wait_for_selector(selector, timeout=5000)
+            
+            if not input_element:
+                logger.warning(f"[VISIBLE] Input field not found: {selector}")
+                result['error'] = f"Input field not found: {selector}"
+                return result
+            
+            # Clear existing content
+            await input_element.click()
+            await self.page.keyboard.press('Control+A')
+            await asyncio.sleep(0.2)
+            
+            # Type the payload CHARACTER BY CHARACTER (visible)
+            logger.info(f"[VISIBLE] Typing payload into {selector}...")
+            await input_element.type(payload, delay=50)  # 50ms delay between chars
+            await asyncio.sleep(0.5)
+            
+            # Highlight the input (visual feedback)
+            await self.page.evaluate(f'''(selector) => {{
+                const el = document.querySelector(selector);
+                if (el) {{
+                    el.style.border = '3px solid red';
+                    el.style.backgroundColor = '#ffcccc';
+                }}
+            }}''', selector)
+            await asyncio.sleep(0.5)
+            
+            # Submit if requested
+            if submit:
+                logger.info(f"[VISIBLE] Submitting form...")
+                await self.page.keyboard.press('Enter')
+                await asyncio.sleep(2)  # Wait for response
+            
+            # Check results
+            result['alerts'] = alerts
+            
+            if alerts:
+                result['vulnerable'] = True
+                result['evidence'] = f"XSS executed! Alerts: {alerts}"
+                logger.info(f"[VISIBLE] ✓ VULNERABLE! XSS payload executed.")
+            else:
+                # Check if payload is in page
+                html = await self.page.content()
+                if payload in html:
+                    result['vulnerable'] = True
+                    result['evidence'] = "Payload reflected in page without encoding"
+                    logger.info(f"[VISIBLE] ✓ Payload reflected in page")
+                else:
+                    logger.info(f"[VISIBLE] ✗ Payload not reflected or encoded")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[VISIBLE] XSS attack error: {e}")
+            result['error'] = str(e)
+            return result
+        finally:
+            self.page.remove_listener('dialog', handle_dialog)
+    
+    async def visible_attack_sqli(self, url: str, selector: str, payload: str, submit: bool = True) -> Dict:
+        """
+        Perform a VISIBLE SQL Injection attack by typing payload into an input field.
+        
+        Args:
+            url: Target page URL
+            selector: CSS selector for input field
+            payload: SQLi payload to inject
+            submit: Whether to submit the form after typing
+            
+        Returns:
+            Dict with attack results and evidence
+        """
+        import re
+        
+        logger.info(f"[VISIBLE] SQLi Attack on {selector} with payload: {payload}")
+        
+        sql_error_patterns = [
+            (r'SQL syntax', 'MySQL'),
+            (r'mysql_', 'MySQL PHP'),
+            (r'PostgreSQL.*ERROR', 'PostgreSQL'),
+            (r'ORA-\d{5}', 'Oracle'),
+            (r'SQLITE_ERROR', 'SQLite'),
+            (r'Unclosed quotation mark', 'MSSQL'),
+            (r'syntax error', 'Generic SQL'),
+        ]
+        
+        result = {
+            'type': 'sqli',
+            'selector': selector,
+            'payload': payload,
+            'vulnerable': False,
+            'evidence': '',
+            'db_type': None
+        }
+        
+        try:
+            # Navigate to the page
+            await self.page.goto(url, wait_until='networkidle', timeout=30000)
+            await asyncio.sleep(1)
+            
+            # Find the input field
+            input_element = await self.page.wait_for_selector(selector, timeout=5000)
+            
+            if not input_element:
+                result['error'] = f"Input field not found: {selector}"
+                return result
+            
+            # Clear and type payload
+            await input_element.click()
+            await self.page.keyboard.press('Control+A')
+            await asyncio.sleep(0.2)
+            
+            logger.info(f"[VISIBLE] Typing SQLi payload into {selector}...")
+            await input_element.type(payload, delay=30)
+            await asyncio.sleep(0.3)
+            
+            # Visual feedback
+            await self.page.evaluate(f'''(selector) => {{
+                const el = document.querySelector(selector);
+                if (el) {{
+                    el.style.border = '3px solid orange';
+                    el.style.backgroundColor = '#fff3cd';
+                }}
+            }}''', selector)
+            await asyncio.sleep(0.3)
+            
+            if submit:
+                logger.info(f"[VISIBLE] Submitting form...")
+                await self.page.keyboard.press('Enter')
+                await asyncio.sleep(2)
+            
+            # Check for SQL errors
+            html = await self.page.content()
+            
+            for pattern, db_type in sql_error_patterns:
+                if re.search(pattern, html, re.IGNORECASE):
+                    result['vulnerable'] = True
+                    result['db_type'] = db_type
+                    result['evidence'] = f"SQL error detected: {db_type}"
+                    logger.info(f"[VISIBLE] ✓ VULNERABLE! SQL error ({db_type}) detected.")
+                    break
+            
+            if not result['vulnerable']:
+                logger.info(f"[VISIBLE] ✗ No SQL error detected")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[VISIBLE] SQLi attack error: {e}")
+            result['error'] = str(e)
+            return result
+    
+    async def visible_attack_batch(self, url: str, selector: str, payloads: List[Dict], delay_between: float = 1.0) -> List[Dict]:
+        """
+        Run a batch of visible attacks with different payloads.
+        
+        Args:
+            url: Target page URL
+            selector: CSS selector for input field
+            payloads: List of {'type': 'xss'|'sqli', 'payload': '...'}
+            delay_between: Delay in seconds between attacks
+            
+        Returns:
+            List of attack results
+        """
+        results = []
+        
+        logger.info(f"[VISIBLE] Starting batch attack with {len(payloads)} payloads on {selector}")
+        
+        for i, p in enumerate(payloads):
+            attack_type = p.get('type', 'xss')
+            payload = p.get('payload', '')
+            
+            logger.info(f"[VISIBLE] Attack {i+1}/{len(payloads)}: {attack_type} - {payload[:40]}...")
+            
+            if attack_type == 'xss':
+                result = await self.visible_attack_xss(url, selector, payload)
+            elif attack_type == 'sqli':
+                result = await self.visible_attack_sqli(url, selector, payload)
+            else:
+                result = await self.visible_attack_xss(url, selector, payload)
+            
+            results.append(result)
+            
+            if delay_between > 0:
+                await asyncio.sleep(delay_between)
+        
+        # Summary
+        vulns = [r for r in results if r.get('vulnerable')]
+        logger.info(f"[VISIBLE] Batch complete: {len(vulns)}/{len(results)} vulnerable")
+        
+        return results

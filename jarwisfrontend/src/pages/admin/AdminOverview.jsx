@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { Clock, Unlock, AlertTriangle, AlertCircle, CheckCircle, BarChart3, List, Users, Bug } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import MiftyAdminLayout from "../../components/layout/MiftyAdminLayout";
 import { useUserManagement } from "../../context/UserManagementContext";
@@ -82,19 +83,19 @@ const AdminOverview = () => {
     {
       label: "Pending Requests",
       value: pendingRequests,
-      icon: "[WAIT]",
+      icon: <Clock className="w-5 h-5" />,
       badge: { type: "warn", text: "Review" },
     },
     {
       label: "Open Vulnerabilities",
       value: vulnerabilities,
-      icon: "[UNLOCK]",
+      icon: <Unlock className="w-5 h-5" />,
       badge: null,
     },
     {
       label: "Critical Issues",
       value: criticalIssues,
-      icon: "[ALERT]",
+      icon: <AlertTriangle className="w-5 h-5" />,
       badge: { type: "danger", text: "Urgent" },
     },
   ];
@@ -122,7 +123,7 @@ const AdminOverview = () => {
           {kpiData.map((kpi, index) => (
             <MiftyStatCard
               key={index}
-              icon={kpi.icon || "[CHART]"}
+              icon={kpi.icon || <BarChart3 className="w-5 h-5" />}
               label={kpi.label}
               value={kpi.value}
               trend={kpi.badge ? kpi.badge.text : null}
@@ -137,7 +138,7 @@ const AdminOverview = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recent Activity */}
           <MiftyCard className="mifty-animate-slide-up" style={{ animationDelay: '400ms' }}>
-            <MiftySectionTitle title="Recent Activity" icon="[LIST]" />
+            <MiftySectionTitle title="Recent Activity" icon={<List className="w-5 h-5" />} />
             <div className="overflow-x-auto mt-4">
               <MiftyDataTable
                 columns={['Time', 'Event', 'Actor', 'Target']}
@@ -148,38 +149,38 @@ const AdminOverview = () => {
                   Target: activity.target,
                 }))}
                 emptyMessage="No recent activity yet"
-                emptyIcon="[LIST]"
+                emptyIcon={<List className="w-5 h-5" />}
               />
             </div>
           </MiftyCard>
 
           {/* Quick Actions */}
           <MiftyCard className="mifty-animate-slide-up" style={{ animationDelay: '500ms' }}>
-            <MiftySectionTitle title="Quick Actions" icon="[!]" />
+            <MiftySectionTitle title="Quick Actions" icon={<AlertCircle className="w-5 h-5" />} />
             <div className="grid grid-cols-1 gap-4 mt-4">
               <MiftyQuickAction
-                icon="[OK]"
+                icon={<CheckCircle className="w-5 h-5" />}
                 title="Review Access Requests"
                 description={`${pendingRequests} pending requests`}
                 onClick={() => navigate("/admin/requests")}
                 color="cyan"
               />
               <MiftyQuickAction
-                icon=""
+                icon={<Users className="w-5 h-5" />}
                 title="Manage Users"
                 description={`${totalUsers} total users`}
                 onClick={() => navigate("/admin/users")}
                 color="purple"
               />
               <MiftyQuickAction
-                icon=""
+                icon={<Bug className="w-5 h-5" />}
                 title="Push Vulnerability"
                 description="Add new vulnerability"
                 onClick={() => navigate("/admin/push-vulnerability")}
                 color="rose"
               />
               <MiftyQuickAction
-                icon="[CHART]"
+                icon={<BarChart3 className="w-5 h-5" />}
                 title="View Analytics"
                 description="Platform insights"
                 onClick={() => navigate("/admin/analytics")}

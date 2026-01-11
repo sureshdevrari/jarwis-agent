@@ -347,9 +347,17 @@ async def check_brute_force(
 async def record_login_result(
     ip_address: str, 
     email: str, 
-    success: bool
+    success: bool,
+    reason: str = None
 ) -> None:
-    """Record a login attempt result"""
+    """Record a login attempt result
+    
+    Args:
+        ip_address: The client IP address
+        email: The email/username attempted
+        success: Whether login succeeded
+        reason: Optional reason for failure (e.g., '2fa_pending', 'invalid_2fa')
+    """
     await security_store.record_login_attempt(ip_address, email, success)
 
 

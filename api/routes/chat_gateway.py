@@ -38,10 +38,10 @@ router = APIRouter(prefix="/api/v2/chat", tags=["Chat Gateway"])
 
 # Token limits per subscription plan (tokens per month)
 TOKEN_LIMITS = {
-    "free": 0,
-    "individual": 0,
-    "professional": 500000,     # 500K tokens/month (Suru 1.1 model)
-    "enterprise": 5000000,      # 5M tokens/month (10x professional, Savi 3.1 Thinking)
+    "free": 0,              # No chatbot access
+    "individual": 0,        # No chatbot access (web-only plan)
+    "professional": 500000, # 500K tokens/month (Suru 1.1 model)
+    "enterprise": 5000000,  # 5M tokens/month (Savi 3.1 Thinking)
 }
 
 # Estimated tokens per request (for pre-check)
@@ -270,18 +270,26 @@ def check_chatbot_access(user: User) -> tuple[bool, str]:
     """
     Check if user has chatbot access based on their subscription.
     Returns (has_access, message)
+    
+    Access is controlled by the has_chatbot_access flag which is set 
+    by apply_plan_features() when a user's plan is assigned or changed.
+    
+    Current plan matrix:
+    - Free: No chatbot access
+    - Individual: Has chatbot access (with token limits)
+    - Professional: Has chatbot access (with token limits)
+    - Enterprise: Has chatbot access (higher token limits)
     """
     plan = user.plan.lower() if user.plan else "free"
     
-    # Check explicit chatbot access flag
+    # Check explicit chatbot access flag (set by plan features)
     if not user.has_chatbot_access:
-        return False, "Chatbot access requires a Professional or Enterprise subscription."
+        if plan == "free":
+            return False, "Upgrade to Individual or higher to access Jarwis AI chatbot."
+        else:
+            return False, "Chatbot access is not enabled for your account. Please contact support."
     
-    # Check plan-based access
-    if plan in ["free", "individual"]:
-        return False, "Upgrade to Professional or Enterprise to access Jarwis AI chatbot."
-    
-    # Check subscription validity
+    # Check subscription validity (for paid plans with expiry)
     if user.subscription_end and user.subscription_end < datetime.utcnow():
         return False, "Your subscription has expired. Please renew to access the chatbot."
     

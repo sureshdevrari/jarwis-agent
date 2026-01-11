@@ -8,7 +8,9 @@ import {
   StatsSection,
   CTASection,
   TrustedBy,
-  FooterNew
+  FooterNew,
+  UseCasesSlider,
+  PrivacyClaim
 } from "../components/landing";
 
 const HomeNew = () => {
@@ -19,6 +21,9 @@ const HomeNew = () => {
 
       {/* Trusted By / Integrations Marquee */}
       <TrustedBy />
+
+      {/* Use Cases - Web, Mobile, Network, Cloud, AI */}
+      <UseCasesSlider />
 
       {/* How It Works - Workflow Steps */}
       <WorkflowSteps />
@@ -31,6 +36,9 @@ const HomeNew = () => {
 
       {/* Final CTA */}
       <CTASection />
+
+      {/* Privacy Claim */}
+      <PrivacyClaim />
 
       {/* Footer */}
       <FooterNew />

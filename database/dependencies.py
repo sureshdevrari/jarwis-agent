@@ -1,6 +1,7 @@
 """
 FastAPI Dependencies for Authentication
 Includes subscription validation and refresh token enforcement.
+Now supports HttpOnly cookie-based authentication for XSS protection.
 """
 
 from datetime import datetime
@@ -22,10 +23,36 @@ from database.auth import (
 )
 from database.subscription import get_plan_config, has_feature
 from database.models import RefreshToken
+from database.cookie_auth import get_token_from_cookie, ACCESS_TOKEN_COOKIE
 
 
-# OAuth2 scheme for JWT tokens
+# OAuth2 scheme for JWT tokens (also reads from cookie now)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
+
+def get_token_from_request(request: Request, header_token: Optional[str] = None) -> Optional[str]:
+    """
+    Get JWT token from request, checking both:
+    1. HttpOnly cookie (preferred, more secure)
+    2. Authorization header (fallback for API clients)
+    
+    Args:
+        request: FastAPI request object
+        header_token: Token from Authorization header
+        
+    Returns:
+        JWT token string or None
+    """
+    # Priority 1: HttpOnly cookie (XSS-safe)
+    cookie_token = get_token_from_cookie(request, "access")
+    if cookie_token:
+        return cookie_token
+    
+    # Priority 2: Authorization header (for API clients, mobile apps, etc.)
+    if header_token:
+        return header_token
+    
+    return None
 
 # API Key header
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -69,13 +96,19 @@ def validate_token_freshness(payload: dict) -> bool:
 
 
 async def get_current_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     api_key: Optional[str] = Depends(api_key_header),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
-    Get current authenticated user from JWT token or API key.
+    Get current authenticated user from JWT token (cookie or header) or API key.
     Raises HTTPException if not authenticated.
+    
+    Token Priority:
+    1. HttpOnly cookie (most secure, XSS-protected)
+    2. Authorization header (for API clients/mobile)
+    3. API Key header (for programmatic access)
     
     SECURITY: Also validates that user has an active session (non-revoked refresh token).
     This prevents attackers from using captured JWT tokens after session logout.
@@ -99,11 +132,14 @@ async def get_current_user(
             _, user = result
             return user
     
+    # Get JWT token from cookie (preferred) or header (fallback)
+    actual_token = get_token_from_request(request, token)
+    
     # Try JWT token - REQUIRED for dashboard access
-    if not token:
+    if not actual_token:
         raise credentials_exception
     
-    payload = decode_token(token)
+    payload = decode_token(actual_token)
     if payload is None:
         raise credentials_exception
     
@@ -139,6 +175,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     api_key: Optional[str] = Depends(api_key_header),
     db: AsyncSession = Depends(get_db)
@@ -148,7 +185,7 @@ async def get_current_user_optional(
     Does not raise exception for unauthenticated requests.
     """
     try:
-        return await get_current_user(token, api_key, db)
+        return await get_current_user(request, token, api_key, db)
     except HTTPException:
         return None
 

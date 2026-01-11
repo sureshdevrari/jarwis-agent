@@ -1,0 +1,259 @@
+{
+  "timestamp": "2026-01-09T16:16:11.030459",
+  "moves": [
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_all_apis.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_all_apis.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_all_scan_types.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_all_scan_types.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_all_scans_integration.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_all_scans_integration.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_api.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_api.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_api_full.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_api_full.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_attack_demo.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_attack_demo.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_auth_attacks.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_auth_attacks.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_cloud_e2e.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_cloud_e2e.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_cloud_integration.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_cloud_integration.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_crawl_only.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_crawl_only.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_dashboard_api.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_dashboard_api.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_e2e_scan.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_e2e_scan.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_https_scan.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_https_scan.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_input_attacks.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_input_attacks.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_login_api.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_login_api.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_network_api.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_network_api.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_password.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_password.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_resilience.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_resilience.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_runner.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_runner.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_scan.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_scan.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_simple_scan.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_simple_scan.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_startup_debug.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_startup_debug.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\test_web_scan_complete.py",
+      "dst": "D:\\jarwis-ai-pentest\\test_web_scan_complete.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\tests\\temp_scan_test.py",
+      "dst": "D:\\jarwis-ai-pentest\\temp_scan_test.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\audit_dashboard.py",
+      "dst": "D:\\jarwis-ai-pentest\\audit_dashboard.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\check_latest_scans.py",
+      "dst": "D:\\jarwis-ai-pentest\\check_latest_scans.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\check_logs.py",
+      "dst": "D:\\jarwis-ai-pentest\\check_logs.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\check_scans.py",
+      "dst": "D:\\jarwis-ai-pentest\\check_scans.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\check_user2_issue.py",
+      "dst": "D:\\jarwis-ai-pentest\\check_user2_issue.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\check_user2_scans.py",
+      "dst": "D:\\jarwis-ai-pentest\\check_user2_scans.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\clean_jsx_ascii.py",
+      "dst": "D:\\jarwis-ai-pentest\\clean_jsx_ascii.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\create_users.py",
+      "dst": "D:\\jarwis-ai-pentest\\create_users.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\deploy_gateway.py",
+      "dst": "D:\\jarwis-ai-pentest\\deploy_gateway.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\diagnose_login.py",
+      "dst": "D:\\jarwis-ai-pentest\\diagnose_login.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\fix_jsx_patterns.py",
+      "dst": "D:\\jarwis-ai-pentest\\fix_jsx_patterns.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\generate_cloud_scanners.py",
+      "dst": "D:\\jarwis-ai-pentest\\generate_cloud_scanners.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\list_users.py",
+      "dst": "D:\\jarwis-ai-pentest\\list_users.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\migrate_network_scanning.py",
+      "dst": "D:\\jarwis-ai-pentest\\migrate_network_scanning.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\migrate_scan_diagnostics.py",
+      "dst": "D:\\jarwis-ai-pentest\\migrate_scan_diagnostics.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\requiredtools.py",
+      "dst": "D:\\jarwis-ai-pentest\\requiredtools.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\set_password.py",
+      "dst": "D:\\jarwis-ai-pentest\\set_password.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\setup_emulator.py",
+      "dst": "D:\\jarwis-ai-pentest\\setup_emulator.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\update_all_users.py",
+      "dst": "D:\\jarwis-ai-pentest\\update_all_users.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\upgrade_user.py",
+      "dst": "D:\\jarwis-ai-pentest\\upgrade_user.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\validate_network_architecture.py",
+      "dst": "D:\\jarwis-ai-pentest\\validate_network_architecture.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\validate_restructure.py",
+      "dst": "D:\\jarwis-ai-pentest\\validate_restructure.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\NETWORK_SCANNING_QUICKSTART.py",
+      "dst": "D:\\jarwis-ai-pentest\\NETWORK_SCANNING_QUICKSTART.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\run_mobile_scan.py",
+      "dst": "D:\\jarwis-ai-pentest\\run_mobile_scan.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\scripts\\jarwis_agent.py",
+      "dst": "D:\\jarwis-ai-pentest\\jarwis_agent.py"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\CLOUD_VISUAL_SUMMARY.txt",
+      "dst": "D:\\jarwis-ai-pentest\\CLOUD_VISUAL_SUMMARY.txt"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\DASHBOARD_QUICK_START.md",
+      "dst": "D:\\jarwis-ai-pentest\\DASHBOARD_QUICK_START.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\ENTERPRISE_DASHBOARD_IMPLEMENTATION.md",
+      "dst": "D:\\jarwis-ai-pentest\\ENTERPRISE_DASHBOARD_IMPLEMENTATION.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\NETWORK_SCANNING_COMPLETED.md",
+      "dst": "D:\\jarwis-ai-pentest\\NETWORK_SCANNING_COMPLETED.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\NETWORK_SCANNING_REFACTOR.md",
+      "dst": "D:\\jarwis-ai-pentest\\NETWORK_SCANNING_REFACTOR.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\NETWORK_SCANNING_SUMMARY.md",
+      "dst": "D:\\jarwis-ai-pentest\\NETWORK_SCANNING_SUMMARY.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\docs\\SYSTEM_REQUIREMENTS.md",
+      "dst": "D:\\jarwis-ai-pentest\\SYSTEM_REQUIREMENTS.md"
+    },
+    {
+      "src": "D:\\jarwis-ai-pentest\\logs\\server.log",
+      "dst": "D:\\jarwis-ai-pentest\\server.log"
+    }
+  ],
+  "deletes": [
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_error2.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_error2.log"
+    },
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_final_output.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_final_output.log"
+    },
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_full_output.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_full_output.log"
+    },
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_output.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_output.log"
+    },
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_output2.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_output2.log"
+    },
+    {
+      "file": "D:\\jarwis-ai-pentest\\test_report_output.log",
+      "backup": "D:\\jarwis-ai-pentest\\logs\\.deleted_test_report_output.log"
+    }
+  ]
+}

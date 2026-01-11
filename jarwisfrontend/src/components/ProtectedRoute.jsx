@@ -97,3 +97,4 @@ export const DashboardRoute = ({ children }) => {
 };
 
 export default ProtectedRoute;
+

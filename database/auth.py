@@ -56,10 +56,24 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # ============== Token Functions ==============
 
-def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token"""
+def create_access_token(
+    user_id: str, 
+    expires_delta: Optional[timedelta] = None,
+    expires_minutes: Optional[int] = None,
+    additional_claims: Optional[dict] = None
+) -> str:
+    """Create a JWT access token
+    
+    Args:
+        user_id: The user ID to encode in the token
+        expires_delta: Optional timedelta for expiration (takes precedence)
+        expires_minutes: Optional minutes until expiration (if expires_delta not set)
+        additional_claims: Optional dict of additional claims to include in token
+    """
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
+    elif expires_minutes:
+        expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
     else:
         expire = datetime.utcnow() + timedelta(minutes=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
@@ -69,6 +83,10 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
         "type": "access",
         "iat": datetime.utcnow()
     }
+    
+    # Add any additional claims
+    if additional_claims:
+        payload.update(additional_claims)
     
     return jwt.encode(payload, auth_settings.SECRET_KEY, algorithm=auth_settings.ALGORITHM)
 

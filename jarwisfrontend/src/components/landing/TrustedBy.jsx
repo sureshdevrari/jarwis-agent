@@ -5,22 +5,22 @@ import { motion } from "framer-motion";
 
 // Placeholder logos - replace with actual partner/technology logos
 const logos = [
-  { name: "AWS", icon: "" },
-  { name: "Azure", icon: "[!]" },
-  { name: "GCP", icon: "" },
+  { name: "AWS", icon: "☁️" },
+  { name: "Azure", icon: "☁️" },
+  { name: "GCP", icon: "☁️" },
   { name: "Kubernetes", icon: "⎈" },
-  { name: "Docker", icon: "" },
-  { name: "GitHub", icon: "" },
-  { name: "GitLab", icon: "" },
-  { name: "Jenkins", icon: "[TOOL]" },
-  { name: "Terraform", icon: "" },
-  { name: "Ansible", icon: "[RED]" },
+  { name: "Docker", icon: "🐳" },
+  { name: "GitHub", icon: "🐙" },
+  { name: "GitLab", icon: "🦊" },
+  { name: "Jenkins", icon: "🔧" },
+  { name: "Terraform", icon: "🏗️" },
+  { name: "Ansible", icon: "🤖" },
 ];
 
 const LogoItem = ({ name, icon }) => (
-  <div className="flex items-center gap-3 px-6 py-3 mx-4 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] transition-colors">
-    <span className="text-2xl">{icon}</span>
-    <span className="text-sm font-medium text-gray-400 whitespace-nowrap">{name}</span>
+  <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-3 mx-2 sm:mx-4 rounded-lg sm:rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] transition-colors">
+    <span className="text-xl sm:text-2xl">{icon}</span>
+    <span className="text-xs sm:text-sm font-medium text-gray-400 whitespace-nowrap">{name}</span>
   </div>
 );
 
@@ -41,8 +41,8 @@ const TrustedBy = () => {
       {/* Marquee container */}
       <div className="relative overflow-hidden">
         {/* Fade edges */}
-        <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-gray-950 to-transparent z-10 pointer-events-none" />
-        <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-gray-950 to-transparent z-10 pointer-events-none" />
+        <div className="absolute left-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-r from-gray-950 to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-l from-gray-950 to-transparent z-10 pointer-events-none" />
 
         {/* Scrolling track */}
         <motion.div

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-01-08T01:35:44.604205",
+  "environment": "development",
+  "git_commit": "84085a55e95d41a8de32e5fb9e17b4eed4a3f10f",
+  "python_version": "3.14.2",
+  "errors": [],
+  "warnings": [
+    "Database dialect: sqlite",
+    "Dependency issues: google-cloud-storage 3.7.0 has requirement google-api-core<3.0.0,>=2.27.0, but you have google-api-core 2.25.2.\n"
+  ]
+}

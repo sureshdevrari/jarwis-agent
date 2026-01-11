@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    print("\n👋 Shutting down Jarwis API Server...")
+    print("\n[SHUTDOWN] Shutting down Jarwis API Server...")
     try:
         await close_db()
         print("[OK] Database connections closed")

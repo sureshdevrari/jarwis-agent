@@ -1,11 +1,12 @@
 """
 Domain Verification Routes - TXT Record Verification for Credential-based Scans
 Protects against unauthorized testing by requiring domain ownership proof
+
+Uses database-backed DomainVerificationService for persistence.
 """
 
 import secrets
 import hashlib
-import dns.resolver
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,12 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.connection import get_db
 from database.dependencies import get_current_user
 from database.models import User
+from services.domain_verification_service import DomainVerificationService
 
 router = APIRouter(prefix="/api/domains", tags=["domains"])
-
-# In-memory store for verification codes (in production, use database)
-verification_codes = {}
-verified_domains = {}
 
 
 class DomainVerificationRequest(BaseModel):
@@ -62,170 +60,163 @@ def generate_verification_code(domain: str, user_id: int) -> str:
     return f"jarwis-verify-{code_hash}"
 
 
+@router.get("/has-verified")
+async def has_verified_domains(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Check if user has any verified domains or a corporate email.
+    Used to determine if personal email users can access the dashboard.
+    
+    Returns:
+        - has_domains: True if user has at least one verified domain
+        - is_personal_email: True if user has a personal email provider
+        - can_scan: True if user can start scans (has verified domain OR corporate email)
+    """
+    from shared.constants import is_personal_email as check_personal
+    
+    service = DomainVerificationService(db)
+    
+    user_has_personal_email = check_personal(current_user.email)
+    has_verified = await service.has_any_verified_domain(current_user.id)
+    
+    # Corporate email users can always scan their own domain
+    # Personal email users need at least one verified domain
+    can_scan = not user_has_personal_email or has_verified
+    
+    return {
+        "has_domains": has_verified,
+        "is_personal_email": user_has_personal_email,
+        "can_scan": can_scan,
+        "user_email": current_user.email,
+        "user_email_domain": current_user.email.split('@')[1] if '@' in current_user.email else None
+    }
+
+
 @router.get("/verify/status", response_model=DomainStatusResponse)
 async def get_verification_status(
     domain: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get verification status for a domain"""
-    normalized = normalize_domain(domain)
-    user_key = f"{current_user.id}:{normalized}"
+    """Get verification status for a domain (database-backed)"""
+    service = DomainVerificationService(db)
+    normalized = service.normalize_domain(domain)
     
-    if user_key in verified_domains:
-        info = verified_domains[user_key]
+    # First check if user has corporate email authorization
+    is_authorized, reason = await service.is_authorized_to_scan(
+        current_user.id, 
+        current_user.email, 
+        domain
+    )
+    
+    if is_authorized and reason in ("corporate_email_match", "corporate_subdomain_match"):
         return DomainStatusResponse(
             domain=normalized,
             verified=True,
-            verified_at=info.get("verified_at")
+            verified_at=None  # Auto-verified via email
         )
     
-    # Check if there's a pending verification code
-    if user_key in verification_codes:
-        code_info = verification_codes[user_key]
-        return DomainStatusResponse(
-            domain=normalized,
-            verified=False,
-            verification_code=code_info.get("code")
-        )
+    # Get verification status from database
+    status = await service.get_verification_status(current_user.id, domain)
     
     return DomainStatusResponse(
         domain=normalized,
-        verified=False
+        verified=status.get("verified", False),
+        verification_code=status.get("verification_code"),
+        verified_at=status.get("verified_at")
     )
 
 
 @router.post("/verify/generate")
 async def generate_verification_code_endpoint(
     request: DomainGenerateRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Generate a verification code for a domain"""
-    normalized = normalize_domain(request.domain)
-    user_key = f"{current_user.id}:{normalized}"
+    """Generate a verification code for a domain (database-backed)"""
+    service = DomainVerificationService(db)
     
-    # Check if already verified
-    if user_key in verified_domains:
+    # Check if user has corporate email authorization (no need to verify)
+    is_authorized, reason = await service.is_authorized_to_scan(
+        current_user.id, 
+        current_user.email, 
+        request.domain
+    )
+    
+    if is_authorized and reason in ("corporate_email_match", "corporate_subdomain_match"):
         return {
-            "domain": normalized,
+            "domain": service.normalize_domain(request.domain),
             "already_verified": True,
-            "verified_at": verified_domains[user_key].get("verified_at")
+            "message": f"Your email domain ({current_user.email.split('@')[1]}) matches the target domain. No DNS verification needed."
         }
     
-    # Generate new code
-    code = generate_verification_code(normalized, current_user.id)
+    # Generate verification code using database-backed service
+    result = await service.create_verification(current_user.id, request.domain)
     
-    verification_codes[user_key] = {
-        "code": code,
-        "domain": normalized,
-        "user_id": current_user.id,
-        "created_at": datetime.utcnow().isoformat(),
-        "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat()
-    }
+    if result.get("verified"):
+        return {
+            "domain": result["domain"],
+            "already_verified": True,
+            "verified_at": result.get("verified_at")
+        }
     
     return {
-        "domain": normalized,
-        "verification_code": code,
-        "txt_record_host": "_jarwis-verification",
-        "txt_record_value": code,
+        "domain": result["domain"],
+        "verification_code": result["verification_code"],
+        "txt_record_host": "_jarwis-verify",
+        "txt_record_value": result["verification_code"],
         "instructions": {
-            "step1": f"Add a TXT record to your DNS for {normalized}",
-            "step2": f"Host: _jarwis-verification.{normalized}",
-            "step3": f"Value: {code}",
+            "step1": f"Add a TXT record to your DNS for {result['domain']}",
+            "step2": f"Host: _jarwis-verify.{result['domain']}",
+            "step3": f"Value: {result['verification_code']}",
             "step4": "Wait for DNS propagation (can take up to 10 minutes)",
             "step5": "Return here and click 'Verify' to confirm"
         },
-        "expires_in": "24 hours"
+        "expires_in": f"{result.get('expires_in_hours', 24)} hours"
     }
 
 
 @router.post("/verify/check-txt", response_model=VerificationCheckResponse)
 async def check_txt_record(
     request: DomainGenerateRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Check if the TXT record is properly set up"""
-    normalized = normalize_domain(request.domain)
-    user_key = f"{current_user.id}:{normalized}"
+    """Check if the TXT record is properly set up (database-backed)"""
+    service = DomainVerificationService(db)
+    normalized = service.normalize_domain(request.domain)
     
-    # Get the expected verification code
-    if user_key not in verification_codes:
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error="No verification code found. Please generate one first."
-        )
+    # Use the database-backed service for TXT verification
+    is_verified, error_message = await service.verify_txt_record(
+        current_user.id, 
+        request.domain
+    )
     
-    expected_code = verification_codes[user_key]["code"]
-    
-    try:
-        # Query DNS for TXT records
-        txt_host = f"_jarwis-verification.{normalized}"
-        answers = dns.resolver.resolve(txt_host, 'TXT')
-        
-        for rdata in answers:
-            txt_value = str(rdata).strip('"')
-            if txt_value == expected_code:
-                # Mark as verified
-                verified_domains[user_key] = {
-                    "domain": normalized,
-                    "user_id": current_user.id,
-                    "verified_at": datetime.utcnow().isoformat(),
-                    "method": "txt"
-                }
-                
-                # Clean up verification code
-                del verification_codes[user_key]
-                
-                return VerificationCheckResponse(
-                    domain=normalized,
-                    verified=True
-                )
-        
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error=f"TXT record found but value doesn't match. Expected: {expected_code}"
-        )
-        
-    except dns.resolver.NXDOMAIN:
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error=f"TXT record not found at _jarwis-verification.{normalized}. Please add the DNS record."
-        )
-    except dns.resolver.NoAnswer:
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error="No TXT records found. Please add the DNS record and wait for propagation."
-        )
-    except dns.resolver.Timeout:
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error="DNS query timed out. Please try again in a few minutes."
-        )
-    except Exception as e:
-        return VerificationCheckResponse(
-            domain=normalized,
-            verified=False,
-            error=f"DNS lookup failed: {str(e)}"
-        )
+    return VerificationCheckResponse(
+        domain=normalized,
+        verified=is_verified,
+        error=error_message
+    )
 
 
 @router.post("/verify")
 async def verify_domain(
     request: DomainVerificationRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Verify domain ownership using specified method"""
-    normalized = normalize_domain(request.domain)
+    """Verify domain ownership using specified method (database-backed)"""
+    service = DomainVerificationService(db)
+    normalized = service.normalize_domain(request.domain)
     
     if request.method == "txt":
         # Use the check-txt endpoint logic
         result = await check_txt_record(
             DomainGenerateRequest(domain=normalized),
-            current_user
+            current_user,
+            db
         )
         return result
     else:
@@ -237,43 +228,96 @@ async def verify_domain(
 
 @router.get("/verified")
 async def list_verified_domains(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """List all verified domains for the current user"""
-    user_domains = []
+    """List all verified domains for the current user (database-backed)"""
+    service = DomainVerificationService(db)
     
-    for key, info in verified_domains.items():
-        if key.startswith(f"{current_user.id}:"):
-            user_domains.append({
-                "domain": info["domain"],
-                "verified_at": info["verified_at"],
-                "method": info.get("method", "txt")
+    # Get verified domains from database
+    domains = await service.list_verified_domains(current_user.id)
+    
+    # Also include corporate email domain as "auto-verified"
+    email_domain = service.extract_email_domain(current_user.email)
+    if email_domain:
+        # Check if email domain is already in list
+        email_domain_exists = any(d["domain"] == email_domain for d in domains)
+        if not email_domain_exists:
+            domains.insert(0, {
+                "domain": email_domain,
+                "verified_at": None,
+                "method": "corporate_email",
+                "auto_verified": True
             })
     
     return {
-        "domains": user_domains,
-        "count": len(user_domains)
+        "domains": domains,
+        "count": len(domains)
     }
 
 
 @router.delete("/verified/{domain}")
 async def remove_verified_domain(
     domain: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Remove a verified domain (requires re-verification for future scans)"""
-    normalized = normalize_domain(domain)
-    user_key = f"{current_user.id}:{normalized}"
+    service = DomainVerificationService(db)
+    normalized = service.normalize_domain(domain)
     
-    if user_key not in verified_domains:
+    # Don't allow removing corporate email domain
+    email_domain = service.extract_email_domain(current_user.email)
+    if email_domain and normalized == email_domain:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove your corporate email domain. This is automatically verified."
+        )
+    
+    success = await service.revoke_verification(current_user.id, domain)
+    
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Domain {domain} is not verified"
         )
     
-    del verified_domains[user_key]
-    
     return {
         "success": True,
         "message": f"Domain {normalized} has been removed from verified domains"
     }
+
+
+# Additional endpoint for scan authorization check
+@router.get("/check-authorization")
+async def check_scan_authorization(
+    target_url: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Check if user is authorized to scan a target URL.
+    Returns authorization status and reason.
+    """
+    service = DomainVerificationService(db)
+    
+    is_authorized, reason = await service.is_authorized_to_scan(
+        current_user.id,
+        current_user.email,
+        target_url
+    )
+    
+    normalized = service.normalize_domain(target_url)
+    
+    response = {
+        "target": normalized,
+        "authorized": is_authorized,
+        "reason": reason,
+        "user_email": current_user.email
+    }
+    
+    if not is_authorized:
+        response["verification_url"] = f"/dashboard/verify-domain?domain={normalized}"
+        response["message"] = f"Please verify ownership of {normalized} before scanning with credentials."
+    
+    return response

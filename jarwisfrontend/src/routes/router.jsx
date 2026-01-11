@@ -33,11 +33,22 @@ import PaymentSuccess from "../pages/PaymentSuccess";
 import ProtectedRoute from "../components/ProtectedRoute";
 import AdminRoute from "../routes/AdminRoute";
 import UserDashboardRoute from "../routes/UserDashboardRoute";
+import ScanPageRoute from "../routes/ScanPageRoute";  // Domain verification check for scans
 import ScrollToTop from "../components/ScrollToTop";
 
 // Jarwis Dashboard Components
 import JarwisDashboard from "../pages/dashboard/JarwisDashboard";
+import JarwisDashboardNew from "../pages/dashboard/JarwisDashboardNew";  // Enterprise unified dashboard
+import SyndashDashboard from "../pages/dashboard/SyndashDashboard";  // Syndash theme dashboard
+import DashboardShell from "../components/dashboardTheme/DashboardShell";
+import { featureFlags } from "../config/features";
 import NewScan from "../pages/dashboard/NewScan";
+import ScanTypeSelector from "../pages/dashboard/ScanTypeSelector";
+import WebScanPage from "../pages/dashboard/WebScanPage";
+import MobileScanPage from "../pages/dashboard/MobileScanPage";
+import NetworkScanPage from "../pages/dashboard/NetworkScanPage";
+import CloudScanPage from "../pages/dashboard/CloudScanPage";
+import SastScanPage from "../pages/dashboard/SastScanPage";
 import VerifyDomain from "../pages/dashboard/VerifyDomain";
 import Scanning from "../pages/dashboard/Scanning";
 import Vulnerabilities from "../pages/dashboard/Vulnerabilities";
@@ -46,6 +57,9 @@ import JarwisChatbot from "../pages/dashboard/JarwisChatbot";
 import ScanHistory from "../pages/dashboard/ScanHistory";
 import Billing from "../pages/dashboard/Billing";
 import Reports from "../pages/dashboard/Reports";
+import Settings from "../pages/dashboard/Settings";
+import CloudDashboard from "../pages/dashboard/CloudDashboard";
+import CloudScanStart from "../pages/cloud/CloudScanStart";
 
 // Admin Pages
 import AdminOverview from "../pages/admin/AdminOverview";
@@ -188,14 +202,12 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Authentication Status Routes (protected but accessible to specific states)
+  // Authentication Status Routes
+  // pending-approval is public when coming from OAuth redirect (has email param)
+  // but also works for authenticated pending users
   {
     path: "/pending-approval",
-    element: (
-      <ProtectedRoute>
-        <PendingApproval />
-      </ProtectedRoute>
-    ),
+    element: <PendingApproval />,
   },
   {
     path: "/access-denied",
@@ -211,16 +223,72 @@ const router = createBrowserRouter([
     path: "/dashboard",
     element: (
       <UserDashboardRoute>
-        <JarwisDashboard />
+        {featureFlags.useNewDashboard ? (
+          <DashboardShell>
+            <SyndashDashboard />
+          </DashboardShell>
+        ) : (
+          <JarwisDashboardNew />
+        )}
       </UserDashboardRoute>
     ),
   },
   {
-    path: "/dashboard/new-scan",
+    path: "/dashboard-legacy",
     element: (
       <UserDashboardRoute>
-        <NewScan />
+        <JarwisDashboard />
       </UserDashboardRoute>
+    ),
+  },
+  // Legacy route - redirects to scan type selector (with domain check)
+  {
+    path: "/dashboard/new-scan",
+    element: (
+      <ScanPageRoute>
+        <ScanTypeSelector />
+      </ScanPageRoute>
+    ),
+  },
+  // Dedicated scan type routes (with domain check for personal email users)
+  {
+    path: "/dashboard/scan/web",
+    element: (
+      <ScanPageRoute>
+        <WebScanPage />
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scan/mobile",
+    element: (
+      <ScanPageRoute>
+        <MobileScanPage />
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scan/network",
+    element: (
+      <ScanPageRoute>
+        <NetworkScanPage />
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scan/cloud",
+    element: (
+      <ScanPageRoute>
+        <CloudScanPage />
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scan/sast",
+    element: (
+      <ScanPageRoute>
+        <SastScanPage />
+      </ScanPageRoute>
     ),
   },
   {
@@ -234,9 +302,17 @@ const router = createBrowserRouter([
   {
     path: "/dashboard/scanning",
     element: (
-      <UserDashboardRoute>
+      <ScanPageRoute>
         <Scanning />
-      </UserDashboardRoute>
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scanning/:scanId",
+    element: (
+      <ScanPageRoute>
+        <Scanning />
+      </ScanPageRoute>
     ),
   },
   {
@@ -292,6 +368,30 @@ const router = createBrowserRouter([
     element: (
       <UserDashboardRoute>
         <Reports />
+      </UserDashboardRoute>
+    ),
+  },
+  {
+    path: "/dashboard/settings",
+    element: (
+      <UserDashboardRoute>
+        <Settings />
+      </UserDashboardRoute>
+    ),
+  },
+  {
+    path: "/dashboard/cloud/:scanId",
+    element: (
+      <UserDashboardRoute>
+        <CloudDashboard />
+      </UserDashboardRoute>
+    ),
+  },
+  {
+    path: "/dashboard/cloud-scan",
+    element: (
+      <UserDashboardRoute>
+        <CloudScanStart />
       </UserDashboardRoute>
     ),
   },

@@ -30,11 +30,25 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-// Check if Firebase is properly configured
+// Check if Firebase is properly configured (not just placeholder/dummy values)
+const isDummyValue = (val) => {
+  if (!val) return true;
+  const lowerVal = val.toLowerCase();
+  return lowerVal.includes('dummy') || 
+         lowerVal.includes('placeholder') || 
+         lowerVal.includes('your_') ||
+         lowerVal.includes('xxx') ||
+         lowerVal === 'undefined' ||
+         lowerVal.startsWith('your-');
+};
+
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && 
   firebaseConfig.authDomain && 
-  firebaseConfig.projectId
+  firebaseConfig.projectId &&
+  !isDummyValue(firebaseConfig.apiKey) &&
+  !isDummyValue(firebaseConfig.authDomain) &&
+  !isDummyValue(firebaseConfig.projectId)
 );
 
 // Initialize Firebase only if configured

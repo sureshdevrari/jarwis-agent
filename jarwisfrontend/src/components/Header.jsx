@@ -13,7 +13,14 @@ const Header = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
     const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
 
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
@@ -44,6 +51,8 @@ const Header = () => {
 
     let increment = 0;
 
+    let animationId;
+
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
 
@@ -66,7 +75,7 @@ const Header = () => {
       });
 
       increment += 0.02;
-      requestAnimationFrame(animate);
+      animationId = requestAnimationFrame(animate);
     };
 
     animate();
@@ -77,7 +86,12 @@ const Header = () => {
     };
     window.addEventListener("resize", resize);
 
-    return () => window.removeEventListener("resize", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
   }, []);
 
   // auth

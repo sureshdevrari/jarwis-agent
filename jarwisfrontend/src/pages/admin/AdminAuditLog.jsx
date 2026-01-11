@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Search, List, Table } from "lucide-react";
 import MiftyAdminLayout from "../../components/layout/MiftyAdminLayout";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -27,7 +28,7 @@ const AdminAuditLog = () => {
     switch (action) {
       case "Scan Completed":
       case "Scan Started":
-        return "[SEARCH]";
+        return <Search className="w-4 h-4" />;
       case "User Approved":
       case "User Rejected":
         return "";
@@ -36,7 +37,7 @@ const AdminAuditLog = () => {
       case "Backup Completed":
         return "";
       default:
-        return "[LIST]";
+        return <List className="w-4 h-4" />;
     }
   };
 
@@ -207,7 +208,7 @@ const AdminAuditLog = () => {
                 onClick={() => setViewMode("table")}
                 className={contentThemes.viewToggleButton(viewMode === "table")}
               >
-                [CHART] Table
+                <Table className="w-4 h-4 inline mr-1" /> Table
               </button>
               <button
                 onClick={() => setViewMode("cards")}

@@ -1,8 +1,10 @@
-// src/pages/dashboard/VerifyDomain.jsx - With Theme Support
-import { useState } from "react";
+// src/pages/dashboard/VerifyDomain.jsx - With Real API Integration
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { CheckCircle, Copy, AlertCircle, Loader2 } from "lucide-react";
 import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
 import { useTheme } from "../../context/ThemeContext";
+import { domainAPI } from "../../services/api";
 
 const VerifyDomain = () => {
   const navigate = useNavigate();
@@ -13,28 +15,58 @@ const VerifyDomain = () => {
     dns: false,
     html: false,
     checking: false,
+    error: null,
   });
 
   // Get scan config from previous page if available
   const scanConfig = location.state?.scanConfig;
   const targetDomain = scanConfig?.domain || "yourdomain.com";
 
-  // Generate verification codes (in real app, these would come from backend)
-  const verificationCode = "7b1f-ACME-9x2";
-  const htmlVerificationCode = "9x2-ACME";
+  // Verification codes from API
+  const [verificationCode, setVerificationCode] = useState("");
+  const [htmlVerificationCode, setHtmlVerificationCode] = useState("");
+  const [loadingCodes, setLoadingCodes] = useState(true);
+
+  // Fetch verification codes from backend on mount
+  useEffect(() => {
+    const fetchVerificationCodes = async () => {
+      if (targetDomain === "yourdomain.com") {
+        setLoadingCodes(false);
+        return;
+      }
+      
+      try {
+        setLoadingCodes(true);
+        const response = await domainAPI.generateVerificationCode(targetDomain);
+        setVerificationCode(response.txt_value || "jarwis-verify-xxxx");
+        setHtmlVerificationCode(response.html_file || "jarwis-verify.html");
+      } catch (error) {
+        console.error("Failed to generate verification code:", error);
+        // Fallback to generated codes
+        setVerificationCode(`jarwis-verify-${targetDomain.replace(/\./g, '-')}`);
+        setHtmlVerificationCode("jarwis-verify.html");
+      } finally {
+        setLoadingCodes(false);
+      }
+    };
+    
+    fetchVerificationCodes();
+  }, [targetDomain]);
 
   const checkVerification = async (method) => {
-    setVerificationStatus((prev) => ({ ...prev, checking: true }));
+    setVerificationStatus((prev) => ({ ...prev, checking: true, error: null }));
 
-    // Simulate verification check
-    setTimeout(() => {
-      // In a real app, you'd make an API call here
-      const isVerified = Math.random() > 0.5; // Random for demo
+    try {
+      // Call real API to verify domain
+      const response = await domainAPI.verifyDomain(targetDomain, method);
+      
+      const isVerified = response.verified === true;
 
       setVerificationStatus((prev) => ({
         ...prev,
         [method]: isVerified,
         checking: false,
+        error: isVerified ? null : (response.error || "Verification record not found. Please check your DNS settings."),
       }));
 
       if (isVerified) {
@@ -45,7 +77,14 @@ const VerifyDomain = () => {
           });
         }, 1500);
       }
-    }, 2000);
+    } catch (error) {
+      console.error("Verification failed:", error);
+      setVerificationStatus((prev) => ({
+        ...prev,
+        checking: false,
+        error: error.response?.data?.detail || error.message || "Verification failed. Please try again.",
+      }));
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -147,7 +186,7 @@ const VerifyDomain = () => {
                     : "ml-2 bg-transparent border-none text-blue-600 cursor-pointer hover:text-blue-500 transition-colors"
                 }
               >
-                [LIST]
+                <Copy className="w-4 h-4" />
               </button>
             </div>
             <div
@@ -179,7 +218,7 @@ const VerifyDomain = () => {
                     : "ml-2 bg-transparent border-none text-blue-600 cursor-pointer hover:text-blue-500 transition-colors"
                 }
               >
-                [LIST]
+                <Copy className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -202,22 +241,37 @@ const VerifyDomain = () => {
                   : "bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-md mb-4"
               }
             >
-              [OK] DNS Verification Successful!
+              <CheckCircle className="w-5 h-5 inline mr-1" /> DNS Verification Successful!
             </div>
           ) : (
-            <button
-              className={
-                isDarkMode
-                  ? "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors"
-                  : "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors shadow-sm"
-              }
-              onClick={() => checkVerification("dns")}
-              disabled={verificationStatus.checking}
-            >
-              {verificationStatus.checking
-                ? " Checking..."
-                : "Check DNS Verification"}
-            </button>
+            <>
+              {verificationStatus.error && (
+                <div
+                  className={
+                    isDarkMode
+                      ? "bg-red-900/30 border border-red-700 text-red-400 px-4 py-2 rounded-md mb-4 flex items-center gap-2"
+                      : "bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md mb-4 flex items-center gap-2"
+                  }
+                >
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <span>{verificationStatus.error}</span>
+                </div>
+              )}
+              <button
+                className={
+                  isDarkMode
+                    ? "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2"
+                    : "bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md transition-colors shadow-sm flex items-center gap-2"
+                }
+                onClick={() => checkVerification("dns")}
+                disabled={verificationStatus.checking}
+              >
+                {verificationStatus.checking && <Loader2 className="w-4 h-4 animate-spin" />}
+                {verificationStatus.checking
+                  ? "Checking..."
+                  : "Check DNS Verification"}
+              </button>
+            </>
           )}
         </div>
 
@@ -276,7 +330,7 @@ const VerifyDomain = () => {
                     : "ml-2 bg-transparent border-none text-blue-600 cursor-pointer hover:text-blue-500 transition-colors flex-shrink-0"
                 }
               >
-                [LIST]
+                <Copy className="w-4 h-4" />
               </button>
             </div>
             <div
@@ -312,7 +366,7 @@ const VerifyDomain = () => {
                     : "ml-2 bg-transparent border-none text-blue-600 cursor-pointer hover:text-blue-500 transition-colors flex-shrink-0"
                 }
               >
-                [LIST]
+                <Copy className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -344,7 +398,7 @@ const VerifyDomain = () => {
                   : "bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-md mb-4"
               }
             >
-              [OK] HTML Verification Successful!
+              <CheckCircle className="w-5 h-5 inline mr-1" /> HTML Verification Successful!
             </div>
           ) : (
             <button
