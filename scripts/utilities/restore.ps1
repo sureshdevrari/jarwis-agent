@@ -151,15 +151,6 @@ if (-not $SkipNode) {
 # ============================================================
 Write-Host "`n[5/6] Checking optional tools..." -ForegroundColor Yellow
 
-# Ollama (for local LLM)
-$ollama = Get-Command ollama -ErrorAction SilentlyContinue
-if ($ollama) {
-    Write-Host "  ✓ Ollama installed" -ForegroundColor Green
-} else {
-    Write-Host "  ○ Ollama not installed (optional - for local AI)" -ForegroundColor Gray
-    Write-Host "    Download from: https://ollama.com" -ForegroundColor Gray
-}
-
 # Android SDK (for mobile security)
 $adb = Get-Command adb -ErrorAction SilentlyContinue
 if ($adb) {

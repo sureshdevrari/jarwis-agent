@@ -76,7 +76,6 @@ Jarwis is an automated penetration testing tool that leverages AI to perform com
 - [OWASP ZAP](https://www.zaproxy.org/) - Web security scanner
 - [sqlmap](https://sqlmap.org/) - SQL injection testing
 - [Nuclei](https://github.com/projectdiscovery/nuclei) - Vulnerability scanner
-- [Ollama](https://ollama.ai/) - Local LLM for AI planning
 
 ---
 
@@ -116,17 +115,12 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### Step 5: (Optional) Install Ollama for AI Features
+### Step 5: Set Up Gemini API Key
 
 ```bash
-# Linux
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# macOS
-brew install ollama
-
-# Then pull a model
-ollama pull llama3.1
+# Get your API key from https://aistudio.google.com/apikey
+# Add to your .env file:
+echo "GEMINI_API_KEY=your-api-key-here" >> .env
 ```
 
 ### Step 6: (Optional) Install Security Tools
@@ -216,7 +210,7 @@ auth:
 
 # AI Configuration
 ai:
-  provider: "gemini"  # gemini, openai, anthropic, ollama
+  provider: "gemini"
   model: "gemini-2.5-flash"
   # api_key: "your-api-key"  # Or set GEMINI_API_KEY env var
 
@@ -343,12 +337,11 @@ Jarwis uses LLM (Large Language Model) for:
 2. **Finding Analysis**: Severity confirmation and false positive reduction
 3. **Attack Chain Detection**: Correlating findings for complex attacks
 
-### Supported Providers
+### Supported Provider
 
 | Provider | Model | Notes |
-|----------|-------|-------|
-| Ollama | llama3.1, codellama | Local, free, private |
-| OpenAI | gpt-4, gpt-3.5-turbo | Cloud, requires API key |
+|----------|----------|-------|
+| Gemini | gemini-2.5-flash | Cloud, free tier available |
 
 ---
 
