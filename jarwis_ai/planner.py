@@ -144,15 +144,17 @@ If no valuable tests remain, respond with:
 
     def __init__(
         self,
-        provider: str = "gemini",
-        model: str = "gemini-1.5-flash",
+        provider: str = None,
+        model: str = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None
     ):
-        self.provider = provider.lower()
-        self.model = model
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url
+        # Use centralized AI config for defaults
+        central_config = get_ai_config()
+        self.provider = (provider or central_config.provider).lower()
+        self.model = model or central_config.model
+        self.api_key = api_key or central_config.api_key
+        self.base_url = base_url or central_config.base_url
         self._client = None
         self._init_client()
     

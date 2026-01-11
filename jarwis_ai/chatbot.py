@@ -19,6 +19,7 @@ import time
 from typing import Dict, List, Optional, Generator
 from dataclasses import dataclass, field
 from datetime import datetime
+from shared.ai_config import get_ai_config
 
 # Gemini API
 try:
@@ -184,11 +185,13 @@ Remember: You are Jarwis AGI in Savi 3.1 Thinking mode. Provide comprehensive se
     def __init__(self, config: dict):
         self.config = config
         self.ai_config = config.get('ai', {})
-        self.provider = self.ai_config.get('provider', 'gemini')
-        self.model = self.ai_config.get('model', 'gemini-2.5-flash')  # Suru 1.1 (default)
-        self.model_thinking = self.ai_config.get('model_thinking', 'gemini-2.5-pro')  # Savi 3.1 Thinking
-        self.base_url = self.ai_config.get('base_url', 'http://localhost:11434')
-        self.api_key = self.ai_config.get('api_key', os.environ.get('GEMINI_API_KEY', ''))
+        # Use centralized AI config for defaults
+        central_config = get_ai_config()
+        self.provider = self.ai_config.get('provider', central_config.provider)
+        self.model = self.ai_config.get('model', central_config.model)  # Suru 1.1 (default)
+        self.model_thinking = self.ai_config.get('model_thinking', central_config.model_thinking)  # Savi 3.1 Thinking
+        self.base_url = self.ai_config.get('base_url', central_config.base_url or '')
+        self.api_key = self.ai_config.get('api_key', central_config.api_key)
         self._client = None
         self._gemini_model = None
         self._gemini_model_thinking = None  # For Savi 3.1 Thinking mode

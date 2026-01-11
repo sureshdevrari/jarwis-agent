@@ -13,6 +13,9 @@ import os
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
+# Import centralized AI config
+from shared.ai_config import get_ai_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,15 +147,17 @@ If no valuable tests remain, respond with:
 
     def __init__(
         self,
-        provider: str = "gemini",
-        model: str = "gemini-1.5-flash",
+        provider: str = None,
+        model: str = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None
     ):
-        self.provider = provider.lower()
-        self.model = model
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url
+        # Use centralized AI config as defaults
+        ai_config = get_ai_config()
+        self.provider = (provider or ai_config.provider).lower()
+        self.model = model or ai_config.model
+        self.api_key = api_key or ai_config.api_key
+        self.base_url = base_url or ai_config.base_url
         self._client = None
         self._init_client()
     

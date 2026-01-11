@@ -171,10 +171,13 @@ class PostLoginAttacks:
         """Initialize AI planner for form data generation"""
         try:
             from core.ai_planner import AIPlanner
+            from shared.ai_config import get_ai_config
+            # Use centralized AI config
+            central_config = get_ai_config()
             self.ai_planner = AIPlanner(
-                provider="ollama",
-                model="llama3:latest",
-                base_url="http://localhost:11434"
+                provider=central_config.provider,
+                model=central_config.model,
+                base_url=central_config.base_url
             )
         except Exception as e:
             logger.warning(f"AI planner not available for form generation: {e}")

@@ -9,6 +9,7 @@ import logging
 import re
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
+from shared.ai_config import get_ai_config
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +114,11 @@ Respond in JSON format ONLY:
     def __init__(self, config: dict):
         self.config = config
         self.ai_config = config.get('ai', {})
-        self.provider = self.ai_config.get('provider', 'gemini')
-        self.model = self.ai_config.get('model', 'gemini-1.5-flash')
-        self.base_url = self.ai_config.get('base_url', '')
+        # Use centralized AI config for defaults
+        central_config = get_ai_config()
+        self.provider = self.ai_config.get('provider', central_config.provider)
+        self.model = self.ai_config.get('model', central_config.model)
+        self.base_url = self.ai_config.get('base_url', central_config.base_url or '')
         self._client = None
         self._available = False
         self._init_client()
