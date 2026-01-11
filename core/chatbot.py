@@ -8,7 +8,7 @@ Supports:
 - Scan findings context
 - Server logs analysis
 - User authentication isolation (future)
-- Gemini/Ollama/OpenAI backends
+- Gemini/OpenAI backends
 """
 
 import json

@@ -1,6 +1,6 @@
 """
 JARWIS AGI PEN TEST - AI-Powered Vulnerability Verifier
-Uses Ollama to verify and analyze detected vulnerabilities
+Uses AI to verify and analyze detected vulnerabilities
 Reduces false positives through intelligent contextual analysis
 """
 
@@ -113,9 +113,9 @@ Respond in JSON format ONLY:
     def __init__(self, config: dict):
         self.config = config
         self.ai_config = config.get('ai', {})
-        self.provider = self.ai_config.get('provider', 'ollama')
-        self.model = self.ai_config.get('model', 'llama3.1')
-        self.base_url = self.ai_config.get('base_url', 'http://localhost:11434')
+        self.provider = self.ai_config.get('provider', 'gemini')
+        self.model = self.ai_config.get('model', 'gemini-1.5-flash')
+        self.base_url = self.ai_config.get('base_url', '')
         self._client = None
         self._available = False
         self._init_client()

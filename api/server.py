@@ -1151,7 +1151,7 @@ async def run_scan_async(config: ScanConfig):
             },
             'ai': {
                 'enabled': True,
-                'provider': 'ollama',
+                'provider': 'gemini',
                 'model': 'llama3:latest',
                 'base_url': 'http://localhost:11434'
             },

@@ -9,7 +9,6 @@ httpx>=0.25.0
 
 # AI/LLM Integration
 openai>=1.6.0
-ollama>=0.1.0
 langchain>=0.1.0
 google-generativeai>=0.8.0  # Google Gemini API
 
@@ -90,6 +89,7 @@ python-dotenv>=1.0.0
 tqdm>=4.66.0
 dnspython>=2.4.0  # For domain TXT record verification
 psutil>=5.9.0  # System monitoring for scan recovery
+defusedxml>=0.7.1  # Secure XML parsing for knowledge service
 
 # FastAPI Server
 fastapi>=0.109.0

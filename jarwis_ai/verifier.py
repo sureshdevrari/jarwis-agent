@@ -1,6 +1,6 @@
 """
 JARWIS AGI PEN TEST - AI-Powered Vulnerability Verifier
-Uses Ollama to verify and analyze detected vulnerabilities
+Uses AI to verify and analyze detected vulnerabilities
 Reduces false positives through intelligent contextual analysis
 """
 

@@ -3,7 +3,6 @@ JARWIS AGI PEN TEST - Jarwis Human Intelligence Engine
 Jarwis-powered test planning and intelligent decision making
 
 Supports multiple AI providers:
-- Ollama (local, free)
 - OpenAI (cloud, paid)
 - Google Gemini (cloud, free tier available)
 """
@@ -145,15 +144,15 @@ If no valuable tests remain, respond with:
 
     def __init__(
         self,
-        provider: str = "ollama",
-        model: str = "jarwis",
+        provider: str = "gemini",
+        model: str = "gemini-1.5-flash",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None
     ):
         self.provider = provider.lower()
         self.model = model
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or "http://localhost:11434"
+        self.base_url = base_url
         self._client = None
         self._init_client()
     

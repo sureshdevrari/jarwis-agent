@@ -22,7 +22,7 @@ async def test_scan():
         },
         'proxy': {'enabled': False},
         'ai': {
-            'provider': 'ollama',
+            'provider': 'gemini',
             'model': 'llama3:latest',
             'base_url': 'http://localhost:11434'
         },

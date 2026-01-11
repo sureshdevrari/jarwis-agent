@@ -3,7 +3,6 @@ JARWIS AGI PEN TEST - Jarwis Human Intelligence Engine
 Jarwis-powered test planning and intelligent decision making
 
 Supports multiple AI providers:
-- Ollama (local, free)
 - OpenAI (cloud, paid)
 - Google Gemini (cloud, free tier available)
 """
@@ -145,15 +144,15 @@ If no valuable tests remain, respond with:
 
     def __init__(
         self,
-        provider: str = "ollama",
-        model: str = "jarwis",
+        provider: str = "gemini",
+        model: str = "gemini-1.5-flash",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None
     ):
         self.provider = provider.lower()
         self.model = model
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or "http://localhost:11434"
+        self.base_url = base_url
         self._client = None
         self._init_client()
     
@@ -198,51 +197,6 @@ If no valuable tests remain, respond with:
                 logger.warning(f"Failed to initialize Gemini: {e}")
                 self._client = None
                 
-        elif self.provider == "ollama":
-            try:
-                import ollama
-                self._client = ollama.Client(host=self.base_url)
-                # Verify model exists by listing available models
-                try:
-                    response = self._client.list()
-                    # Handle both old dict-style and new object-style API
-                    if hasattr(response, 'models'):
-                        # New ollama library (0.4+) returns ListResponse object
-                        available = [m.model for m in response.models]
-                    elif isinstance(response, dict):
-                        # Old ollama library returns dict
-                        available = [m.get('name', m.get('model', '')) for m in response.get('models', [])]
-                    else:
-                        available = []
-                    
-                    if available:
-                        logger.info(f"Jarwis intelligence engine ready. Available models: {available}")
-                    else:
-                        logger.warning("Jarwis intelligence engine connected but needs model setup.")
-                    
-                    # Try to match model name with or without :latest tag
-                    if self.model not in available:
-                        # Try adding :latest if not specified
-                        if ':' not in self.model and f"{self.model}:latest" in available:
-                            self.model = f"{self.model}:latest"
-                            logger.info(f"Jarwis using model: {self.model}")
-                        elif available:
-                            # Fallback to first available model
-                            self.model = available[0]
-                            logger.info(f"Model not found, Jarwis falling back to: {self.model}")
-                        else:
-                            logger.warning(f"No models available. Jarwis will use heuristic responses.")
-                            self._client = None
-                    else:
-                        logger.info(f"Jarwis intelligence engine ready with model: {self.model}")
-                        
-                except Exception as e:
-                    logger.warning(f"Jarwis intelligence engine connection issue: {e}")
-                    logger.warning("Jarwis will use heuristic-based analysis instead.")
-                    self._client = None
-            except ImportError:
-                logger.warning("Jarwis intelligence dependencies not installed.")
-                self._client = None
         elif self.provider == "openai":
             try:
                 from openai import OpenAI
@@ -342,28 +296,6 @@ Respond with ONLY valid JSON:
                     if result:
                         self._log('success', 'Jarwis has completed website analysis')
                         return result
-            
-            # Use Ollama if configured
-            elif self._client and self.provider == "ollama":
-                self._log('jarwis', 'Jarwis is thinking like a human security expert...')
-                response = self._client.chat(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are Jarwis, an expert security analyst with human-like intelligence. Analyze websites thoroughly."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                if hasattr(response, 'message'):
-                    content = response.message.content
-                elif isinstance(response, dict):
-                    content = response['message']['content']
-                else:
-                    return self._default_website_analysis(url, has_login, has_signup, has_forgot, has_payment, has_upload, has_api, has_admin, has_profiles)
-                
-                result = self._parse_response(content)
-                if result:
-                    self._log('success', 'Jarwis has completed website analysis')
-                    return result
             
             return self._default_website_analysis(url, has_login, has_signup, has_forgot, has_payment, has_upload, has_api, has_admin, has_profiles)
             
