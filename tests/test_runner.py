@@ -23,8 +23,7 @@ async def test_scan():
         'proxy': {'enabled': False},
         'ai': {
             'provider': 'gemini',
-            'model': 'llama3:latest',
-            'base_url': 'http://localhost:11434'
+            'model': 'gemini-2.5-flash'
         },
         'owasp': {
             'injection': {'enabled': True},

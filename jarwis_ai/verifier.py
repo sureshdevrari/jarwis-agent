@@ -7,9 +7,18 @@ Reduces false positives through intelligent contextual analysis
 import json
 import logging
 import re
+import os
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from shared.ai_config import get_ai_config
+
+# Try to import Gemini
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +134,39 @@ Respond in JSON format ONLY:
     
     def _init_client(self):
         """Initialize the AI client"""
-        if self.provider == "gemini":
+        if self.provider in ["gemini", "google"]:
+            if not GEMINI_AVAILABLE:
+                logger.warning("google-generativeai package not installed")
+                self._available = False
+                return
+            try:
+                central_config = get_ai_config()
+                api_key = self.ai_config.get('api_key') or central_config.api_key
+                if not api_key:
+                    logger.warning("Gemini API key not configured")
+                    self._available = False
+                    return
+                genai.configure(api_key=api_key)
+                # Safety settings for security content
+                safety_settings = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                ]
+                self._client = genai.GenerativeModel(
+                    model_name=self.model,
+                    safety_settings=safety_settings
+                )
+                self._available = True
+                logger.info(f"AI Verifier connected to Gemini ({self.model})")
+            except Exception as e:
+                logger.warning(f"Gemini not available for verification: {e}")
+                self._available = False
+        elif self.provider == "ollama":
             try:
                 import ollama
                 self._client = ollama.Client(host=self.base_url)
-                # Test connection
                 self._client.list()
                 self._available = True
                 logger.info(f"AI Verifier connected to Ollama at {self.base_url}")
@@ -147,17 +184,24 @@ Respond in JSON format ONLY:
             return None
         
         try:
-            response = self._client.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.3}
-            )
-            
-            # Handle both old and new ollama library formats
-            if hasattr(response, 'message'):
-                return response.message.content
-            elif isinstance(response, dict):
-                return response.get('message', {}).get('content', '')
+            # Gemini provider
+            if self.provider in ["gemini", "google"]:
+                response = self._client.generate_content(prompt)
+                if response and response.text:
+                    return response.text
+                return None
+            # Ollama provider
+            elif self.provider == "ollama":
+                response = self._client.chat(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    options={"temperature": 0.3}
+                )
+                # Handle both old and new ollama library formats
+                if hasattr(response, 'message'):
+                    return response.message.content
+                elif isinstance(response, dict):
+                    return response.get('message', {}).get('content', '')
             return None
         except Exception as e:
             logger.error(f"LLM query failed: {e}")

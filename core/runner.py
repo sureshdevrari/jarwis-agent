@@ -144,8 +144,7 @@ class PenTestRunner:
             'ai': {
                 'enabled': False,
                 'provider': 'gemini',
-                'model': 'llama3:latest',
-                'base_url': 'http://localhost:11434'
+                'model': 'gemini-2.5-flash'
             },
             'browser': {
                 'headless': False,  # Set True for headless mode (API), False for visible browser

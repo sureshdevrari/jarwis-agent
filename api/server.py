@@ -1152,8 +1152,7 @@ async def run_scan_async(config: ScanConfig):
             'ai': {
                 'enabled': True,
                 'provider': 'gemini',
-                'model': 'llama3:latest',
-                'base_url': 'http://localhost:11434'
+                'model': 'gemini-2.5-flash'
             },
             'attacks': {
                 'enabled': {

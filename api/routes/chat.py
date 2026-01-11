@@ -58,8 +58,7 @@ def _load_chat_config():
             'ai': {
                 'provider': 'gemini',
                 'model': 'gemini-2.5-flash',
-                'api_key': os.environ.get('GEMINI_API_KEY', ''),
-                'base_url': 'http://localhost:11434'
+                'api_key': os.environ.get('GEMINI_API_KEY', '')
             }
         }
     return _chatbot_config

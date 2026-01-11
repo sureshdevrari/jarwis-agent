@@ -172,8 +172,8 @@ auth:
   enabled: false  # Start with unauthenticated scan
 
 ai:
-  provider: "ollama"
-  model: "llama3.1"
+  provider: "gemini"  # gemini (default), openai, anthropic
+  model: "gemini-2.5-flash"
 ```
 
 ### 3. Run the Scan
@@ -216,9 +216,9 @@ auth:
 
 # AI Configuration
 ai:
-  provider: "ollama"  # ollama, openai
-  model: "llama3.1"
-  base_url: "http://localhost:11434"
+  provider: "gemini"  # gemini, openai, anthropic, ollama
+  model: "gemini-2.5-flash"
+  # api_key: "your-api-key"  # Or set GEMINI_API_KEY env var
 
 # Attack Settings
 attacks:

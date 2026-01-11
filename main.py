@@ -360,17 +360,21 @@ def get_scan_configuration():
     config["ai"]["enabled"] = get_yes_no("Enable AI-powered test planning?", default="y")
     
     if config["ai"]["enabled"]:
-        ai_providers = ["Ollama (Local/Free)", "OpenAI (Cloud/Paid)"]
+        ai_providers = ["Gemini (Cloud/Free tier)", "OpenAI (Cloud/Paid)", "Anthropic (Cloud/Paid)"]
         ai_choice = select_option("Select AI provider:", ai_providers)
         
         if ai_choice == 0:
-            config["ai"]["provider"] = "ollama"
-            config["ai"]["model"] = get_input("Ollama model name", default="llama3")
-            config["ai"]["base_url"] = get_input("Ollama URL", default="http://localhost:11434")
-        else:
+            config["ai"]["provider"] = "gemini"
+            config["ai"]["api_key"] = get_password("Gemini API Key (or press Enter to use .env)")
+            config["ai"]["model"] = get_input("Gemini model", default="gemini-2.5-flash")
+        elif ai_choice == 1:
             config["ai"]["provider"] = "openai"
             config["ai"]["api_key"] = get_password("OpenAI API Key")
             config["ai"]["model"] = get_input("OpenAI model", default="gpt-4")
+        else:
+            config["ai"]["provider"] = "anthropic"
+            config["ai"]["api_key"] = get_password("Anthropic API Key")
+            config["ai"]["model"] = get_input("Anthropic model", default="claude-3-5-sonnet-20241022")
     
     # Section 5: Output Configuration
     print_section("OUTPUT CONFIGURATION")
@@ -433,9 +437,8 @@ def save_config_to_yaml(config, filepath):
         },
         "ai": {
             "enabled": config["ai"].get("enabled", False),
-            "provider": config["ai"].get("provider", "ollama"),
-            "model": config["ai"].get("model", "llama3"),
-            "base_url": config["ai"].get("base_url", "http://localhost:11434"),
+            "provider": config["ai"].get("provider", "gemini"),
+            "model": config["ai"].get("model", "gemini-2.5-flash"),
             "api_key": config["ai"].get("api_key", "")
         },
         "output": {

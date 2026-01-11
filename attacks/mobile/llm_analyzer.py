@@ -17,6 +17,7 @@ import aiohttp
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+from shared.ai_config import get_ai_config
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +98,12 @@ Always respond in valid JSON format."""
 
     def __init__(self, config: dict = None):
         self.config = config or {}
-        self.provider = config.get('ai', {}).get('provider', 'ollama')
-        self.model = config.get('ai', {}).get('model', 'jarwis:latest')
-        self.ollama_url = config.get('ai', {}).get('ollama_url', 'http://localhost:11434')
-        self.openai_key = config.get('ai', {}).get('openai_key', '')
+        # Use centralized AI config for defaults
+        central_config = get_ai_config()
+        self.provider = config.get('ai', {}).get('provider', central_config.provider)
+        self.model = config.get('ai', {}).get('model', central_config.model)
+        self.base_url = config.get('ai', {}).get('base_url', central_config.base_url or '')
+        self.api_key = config.get('ai', {}).get('api_key', central_config.api_key)
         self._session = None
     
     async def _get_session(self) -> aiohttp.ClientSession:

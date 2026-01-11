@@ -2122,9 +2122,8 @@ async def _run_legacy_scan(db, scan, scan_id: str, runner_config: dict, update_p
         'browser': runner_config['browser'],
         'proxy': {'enabled': False},
         'ai': {
-            'provider': 'ollama',
-            'model': 'llama3:latest',
-            'base_url': 'http://localhost:11434'
+            'provider': 'gemini',
+            'model': 'gemini-2.5-flash'
         },
         'attacks': {
             'rate_limit': runner_config.get('rate_limit', 10),
