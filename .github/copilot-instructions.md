@@ -606,13 +606,13 @@ pytest tests/ -v --asyncio-mode=auto
 ## LLM Integration Notes
 
 `AIPlanner` in [core/ai_planner.py](core/ai_planner.py):
-- Defaults to Ollama at `localhost:11434` with `llama3.1`
-- Falls back to mock responses if Ollama unavailable
+- Uses Gemini API (`gemini-2.5-flash`) via centralized config
+- Configuration in `shared/ai_config.py` - single source of truth
 - JSON-only responses expected from LLM (see `SYSTEM_PROMPT`)
 - Returns `TestRecommendation` dataclass with tool, target, payload_type
 
 Chatbot in [core/chatbot.py](core/chatbot.py):
-- Uses Google Gemini (`gemini-2.0-flash`) as primary
+- Uses Google Gemini (`gemini-2.5-flash`) as primary
 - Token tracking is per-month in `chat_gateway.py`
 - Limits: Free 50K, Pro 500K, Enterprise 5M tokens/month
 
