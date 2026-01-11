@@ -10,6 +10,7 @@ Jarwis is an automated penetration testing tool that leverages AI to perform com
 
 - [Features](#-features)
 - [Architecture](#-architecture)
+- [Scan Lifecycle](#scan-lifecycle)
 - [Requirements](#-requirements)
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
@@ -61,6 +62,10 @@ Jarwis is an automated penetration testing tool that leverages AI to perform com
 â”‚   Reporter   â”‚
 â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
+
+## Scan Lifecycle
+
+- For lifecycle details (stop, recovery, graceful shutdown, stale detection) for web and mobile scans, see [docs/SCAN_LIFECYCLE.md](docs/SCAN_LIFECYCLE.md).
 
 ---
 
