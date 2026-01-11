@@ -84,8 +84,7 @@ D:\jarwis-ai-pentest\
     ├── .git/               # Git repository
     ├── .github/            # GitHub workflows, copilot-instructions
     ├── .venv/              # Python virtual environment
-    ├── .vscode/            # VS Code settings
-    └── .copilot_memory/    # AI assistant context
+    └── .vscode/            # VS Code settings
 ```
 
 ### API Layer (api/) - COMPLETE
@@ -293,6 +292,7 @@ database/
 ```
 shared/
 ├── __init__.py
+├── ai_config.py           # ⭐ AI CONFIG (single source of truth for Gemini)
 ├── api_endpoints.py       # ALL endpoint URLs (single source of truth)
 ├── constants.py           # Plan limits, enums, settings
 ├── generate_frontend_types.py  # Generates JS config files
@@ -605,16 +605,42 @@ pytest tests/ -v --asyncio-mode=auto
 
 ## LLM Integration Notes
 
-`AIPlanner` in [core/ai_planner.py](core/ai_planner.py):
-- Uses Gemini API (`gemini-2.5-flash`) via centralized config
-- Configuration in `shared/ai_config.py` - single source of truth
-- JSON-only responses expected from LLM (see `SYSTEM_PROMPT`)
-- Returns `TestRecommendation` dataclass with tool, target, payload_type
+### ⚠️ CRITICAL: AI Configuration (Gemini Only)
 
-Chatbot in [core/chatbot.py](core/chatbot.py):
-- Uses Google Gemini (`gemini-2.5-flash`) as primary
-- Token tracking is per-month in `chat_gateway.py`
-- Limits: Free 50K, Pro 500K, Enterprise 5M tokens/month
+All AI features use **Google Gemini only** (no Ollama, no Bedrock).
+
+**Single Source of Truth**: `shared/ai_config.py`
+```python
+from shared.ai_config import get_ai_config
+ai_config = get_ai_config()  # Returns AIConfig dataclass
+# ai_config.provider = "gemini"
+# ai_config.model = "gemini-2.5-flash"
+# ai_config.api_key = from GEMINI_API_KEY env var
+```
+
+**Required Package**: `google-generativeai>=0.8.0`
+
+**API Key**: Set `GEMINI_API_KEY` in `.env` file
+
+### Files That Use AI Config:
+- `core/ai_planner.py` - LLM-guided attack planning
+- `core/ai_verifier.py` - AI-powered vulnerability verification
+- `core/chatbot.py` - JarwisChatbot (Suru 1.1 / Savi 3.1 models)
+- `api/routes/chat.py` - Chat endpoint
+- `api/routes/chat_gateway.py` - Token-limited chat gateway
+
+### AI Models:
+| Model Name | Gemini Model | Purpose |
+|------------|--------------|--------|
+| Suru 1.1 | gemini-2.5-flash | Fast responses (Pro users) |
+| Savi 3.1 | gemini-2.5-pro | Deep analysis (Enterprise) |
+
+### Token Limits (per month):
+| Plan | Tokens/Month |
+|------|-------------|
+| Free | 50,000 |
+| Pro | 500,000 |
+| Enterprise | 5,000,000 |
 
 ## Frontend Architecture
 
