@@ -399,27 +399,6 @@ Respond with ONLY valid JSON:
 }}"""
 
         try:
-            if self._client and self.provider == "ollama":
-                self._log('jarwis', 'Jarwis is planning the attack like an expert...')
-                response = self._client.chat(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are Jarwis, a senior penetration tester. Create detailed, actionable security testing plans."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                if hasattr(response, 'message'):
-                    content = response.message.content
-                elif isinstance(response, dict):
-                    content = response['message']['content']
-                else:
-                    return self._default_scan_plan(website_analysis, endpoints)
-                
-                result = self._parse_response(content)
-                if result:
-                    self._log('success', 'Jarwis has prepared the attack strategy')
-                    return result
-            
             return self._default_scan_plan(website_analysis, endpoints)
             
         except Exception as e:

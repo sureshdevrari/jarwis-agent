@@ -41,11 +41,10 @@ proxy:
 
 # AI/LLM Configuration
 ai:
-  provider: "gemini"  # ollama, openai, gemini (google)
+  provider: "gemini"  # openai, gemini (google)
   model: "gemini-2.5-flash"  # Suru 1.1 - Fast model for Pro users
   model_thinking: "gemini-2.5-pro"  # Savi 3.1 Thinking - Deep analysis for Enterprise
   api_key: "AIzaSyASpuSZ63PvdhjtousXDHDf8EEyiK51ZAU"  # Gemini API Key
-  base_url: "http://localhost:11434"  # Only needed for Ollama
   max_tokens: 4096
   temperature: 0.3
   
