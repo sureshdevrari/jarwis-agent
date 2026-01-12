@@ -71,6 +71,15 @@ from .attack_engine import (
     PathTraversalAttack,
 )
 
+# NEW: OOB Callback Server for blind vulnerability detection (SSRF, XXE)
+from .oob_callback_server import (
+    OOBCallbackServer,
+    OOBIntegration,
+    OOBPayloadTemplates,
+    get_callback_server,
+    ensure_callback_server_running,
+)
+
 # NEW: Web scan orchestrator
 from .web_scan_runner import WebScanRunner
 
@@ -97,6 +106,13 @@ __all__ = [
     "MITMProxy",
     "AIPlanner",
     "ReportGenerator",
+    
+    # OOB Callback Server (for blind SSRF/XXE)
+    "OOBCallbackServer",
+    "OOBIntegration",
+    "OOBPayloadTemplates",
+    "get_callback_server",
+    "ensure_callback_server_running",
     
     # Data storage
     "RequestStore",

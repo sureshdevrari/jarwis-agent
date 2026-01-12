@@ -1,6 +1,12 @@
 """
 JARWIS AGI PEN TEST - MITM Proxy for HTTPS Interception
 True man-in-the-middle proxy using mitmproxy for HTTPS traffic interception
+
+Enhanced Features:
+- Per-scan port allocation via MITMPortManager
+- Scope filtering (only capture target domain traffic)
+- Scan ID tagging for multi-tenant traffic separation
+- Per-scan traffic logs (~/.jarwis/mitm_logs/traffic_{scan_id}.json)
 """
 
 import asyncio
@@ -8,6 +14,7 @@ import logging
 import json
 import os
 import sys
+import socket
 import threading
 import subprocess
 from pathlib import Path
@@ -41,6 +48,11 @@ class JarwisMITMProxy:
     MITM Proxy for intercepting HTTPS traffic.
     Uses mitmproxy under the hood with automatic certificate generation.
     
+    Enhanced for multi-tenant operation:
+    - Each scan gets a unique port via MITMPortManager
+    - Scope filtering to capture only target domain traffic
+    - Per-scan traffic logs for isolation
+    
     Callbacks:
         on_request: Called when a request is captured (url, method, headers, body)
         on_response: Called when a response is captured (request_id, status, headers, body)
@@ -49,12 +61,17 @@ class JarwisMITMProxy:
     def __init__(
         self, 
         host: str = "127.0.0.1", 
-        port: int = 8080,
+        port: int = None,  # None = auto-allocate from PortManager
+        scan_id: str = None,  # Required for multi-tenant operation
+        scope: List[str] = None,  # Scope patterns like ["*.company.com"]
         on_request: Optional[Callable] = None,
         on_response: Optional[Callable] = None
     ):
         self.host = host
-        self.port = port
+        self._requested_port = port  # User-requested port (may be overridden)
+        self.port = port or 8080  # Will be set by PortManager if None
+        self.scan_id = scan_id
+        self.scope = scope or []
         self.running = False
         self.requests: List[MITMRequest] = []
         self._request_id = 0
@@ -66,8 +83,19 @@ class JarwisMITMProxy:
         # Callbacks for request/response capture
         self._on_request = on_request
         self._on_response = on_response
-        self._traffic_log_path = self._cert_dir / "traffic_log.json"
+        
+        # Traffic log path - per-scan if scan_id provided
+        self._mitm_logs_dir = Path.home() / ".jarwis" / "mitm_logs"
+        if scan_id:
+            self._traffic_log_path = self._mitm_logs_dir / f"traffic_{scan_id}.json"
+        else:
+            self._traffic_log_path = self._cert_dir / "traffic_log.json"
+        
         self._last_processed_index = 0
+        
+        # Port manager integration
+        self._port_manager = None
+        self._port_allocated = False
         
     @property
     def ca_cert_path(self) -> Path:
@@ -169,10 +197,68 @@ addons = [JarwisAddon()]
         self._mitm_script_path.write_text(addon_script)
         logger.info(f"Created MITM addon script: {self._mitm_script_path}")
     
+    def _allocate_port(self) -> int:
+        """Allocate a port from the port manager or use requested port"""
+        # If a specific port was requested and we have no scan_id, use it directly
+        if self._requested_port and not self.scan_id:
+            self.port = self._requested_port
+            return self.port
+        
+        # Use port manager for multi-tenant operation
+        try:
+            from .mitm_port_manager import get_port_manager
+            self._port_manager = get_port_manager()
+            
+            if self.scan_id:
+                # Check if already allocated
+                existing_port = self._port_manager.get_port_for_scan(self.scan_id)
+                if existing_port:
+                    self.port = existing_port
+                    self._port_allocated = False  # Don't release, already allocated
+                else:
+                    self.port = self._port_manager.allocate(
+                        scan_id=self.scan_id,
+                        scope=self.scope
+                    )
+                    self._port_allocated = True
+                    # Update traffic log path from port manager
+                    self._traffic_log_path = self._port_manager.get_traffic_log_path(self.scan_id)
+            else:
+                # No scan_id, use requested port or default
+                self.port = self._requested_port or 8080
+        except ImportError:
+            logger.warning("MITMPortManager not available, using default port")
+            self.port = self._requested_port or 8080
+        except Exception as e:
+            logger.warning(f"Port allocation failed: {e}, using default port")
+            self.port = self._requested_port or 8080
+        
+        return self.port
+    
+    def _wait_for_port_ready(self, timeout: float = 10.0) -> bool:
+        """Wait for the MITM proxy port to be ready for connections"""
+        import time
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex((self.host, self.port))
+                sock.close()
+                if result == 0:
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.2)
+        return False
+    
     async def start(self):
-        """Start the MITM proxy server"""
+        """Start the MITM proxy server with port allocation"""
         self._ensure_cert_directory()
-        self._create_mitm_addon_script()
+        self._mitm_logs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Allocate port (uses PortManager if scan_id provided)
+        self._allocate_port()
         
         # Check if mitmproxy is installed (with timeout)
         try:
@@ -199,8 +285,10 @@ addons = [JarwisAddon()]
             logger.error(f"Failed to check/install mitmproxy: {e}")
             return False
         
-        # Start mitmdump as a subprocess (headless version of mitmproxy)
-        traffic_log_path = self._cert_dir / "traffic_log.json"
+        # Use the per-scan traffic log path
+        traffic_log_path = self._traffic_log_path
+        
+        # Build command with scope filtering options
         cmd = [
             "mitmdump",
             "--mode", "regular",
@@ -213,6 +301,15 @@ addons = [JarwisAddon()]
             "-q"  # Quiet mode
         ]
         
+        # Add scan_id for traffic tagging
+        if self.scan_id:
+            cmd.extend(["--set", f"jarwis_scan_id={self.scan_id}"])
+        
+        # Add scope patterns for filtering
+        if self.scope:
+            scope_str = ",".join(self.scope)
+            cmd.extend(["--set", f"jarwis_scope={scope_str}"])
+        
         try:
             self._process = subprocess.Popen(
                 cmd,
@@ -220,25 +317,42 @@ addons = [JarwisAddon()]
                 stderr=subprocess.PIPE
             )
             
-            # Wait a bit for proxy to start
-            await asyncio.sleep(2)
+            # Wait a bit for proxy to start, then verify port is ready
+            await asyncio.sleep(1)
             
             if self._process.poll() is None:
-                self.running = True
-                logger.info(f"Jarwis MITM Proxy started on {self.host}:{self.port}")
-                logger.info(f"CA Certificate: {self.ca_cert_path}")
-                return True
+                # Wait for port to actually be ready for connections
+                if self._wait_for_port_ready(timeout=10.0):
+                    self.running = True
+                    logger.info(f"Jarwis MITM Proxy started on {self.host}:{self.port} (scan_id={self.scan_id})")
+                    logger.info(f"CA Certificate: {self.ca_cert_path}")
+                    logger.info(f"Traffic log: {self._traffic_log_path}")
+                    if self.scope:
+                        logger.info(f"Scope filter: {self.scope}")
+                    return True
+                else:
+                    logger.error(f"MITM proxy started but port {self.port} not ready")
+                    await self.stop()
+                    return False
             else:
                 stderr = self._process.stderr.read().decode()
                 logger.error(f"MITM proxy failed to start: {stderr}")
+                # Release port on failure
+                if self._port_allocated and self._port_manager and self.scan_id:
+                    self._port_manager.release(self.scan_id)
+                    self._port_allocated = False
                 return False
                 
         except Exception as e:
             logger.error(f"Failed to start MITM proxy: {e}")
+            # Release port on failure
+            if self._port_allocated and self._port_manager and self.scan_id:
+                self._port_manager.release(self.scan_id)
+                self._port_allocated = False
             return False
     
     async def stop(self):
-        """Stop the MITM proxy server"""
+        """Stop the MITM proxy server and release port"""
         if self._process:
             self._process.terminate()
             try:
@@ -247,8 +361,17 @@ addons = [JarwisAddon()]
                 self._process.kill()
             self._process = None
         
+        # Release port allocation
+        if self._port_allocated and self._port_manager and self.scan_id:
+            try:
+                self._port_manager.release(self.scan_id)
+                self._port_allocated = False
+                logger.info(f"Released port {self.port} for scan {self.scan_id}")
+            except Exception as e:
+                logger.warning(f"Failed to release port: {e}")
+        
         self.running = False
-        logger.info("Jarwis MITM Proxy stopped")
+        logger.info(f"Jarwis MITM Proxy stopped (port {self.port})")
     
     def get_proxy_settings(self) -> Dict:
         """Get proxy settings for browser/tools configuration"""

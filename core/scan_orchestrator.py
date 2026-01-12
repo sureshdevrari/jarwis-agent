@@ -597,7 +597,7 @@ class WebAttackOrchestrator:
             scan_id="abc123",
             target_url="https://example.com",
             auth_config={"username": "...", "password": "..."},
-            proxy_port=8082
+            proxy_port=mitm_proxy.port  # Use allocated port from MITMPortManager
         )
         findings = await orchestrator.run_full_scan()
     """
@@ -608,7 +608,7 @@ class WebAttackOrchestrator:
         target_url: str,
         config: Optional[Dict[str, Any]] = None,
         auth_config: Optional[Dict[str, Any]] = None,
-        proxy_port: int = 8082,
+        proxy_port: int = None,  # None = auto-allocate via MITMPortManager
         db_path: Optional[str] = None,
         checkpoint_dir: Optional[str] = None
     ):
@@ -620,7 +620,7 @@ class WebAttackOrchestrator:
             target_url: Target URL to scan
             config: Scan configuration
             auth_config: Authentication configuration for post-login scanning
-            proxy_port: Port for MITM proxy (default: 8082)
+            proxy_port: Port for MITM proxy (None = auto-allocate, or use allocated port)
             db_path: Path for SQLite request store (default: data/requests_{scan_id}.db)
             checkpoint_dir: Directory for checkpoint files
         """
@@ -628,7 +628,7 @@ class WebAttackOrchestrator:
         self.target_url = target_url
         self.config = config or {}
         self.auth_config = auth_config
-        self.proxy_port = proxy_port
+        self.proxy_port = proxy_port or 8080  # Default fallback
         
         # Set up paths
         self.db_path = db_path or f"data/requests_{scan_id}.db"

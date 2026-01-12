@@ -626,6 +626,81 @@ def check_scan_access(scan_id: str, user: Optional[User] = None) -> dict:
     return job
 
 
+async def get_scan_report_path(scan_id: str, format: str = 'html', db: AsyncSession = None) -> Optional[Path]:
+    """
+    Get report path from in-memory cache or database.
+    Falls back to database if not in scan_jobs.
+    """
+    from database import crud
+    from uuid import UUID
+    
+    # First check in-memory scan_jobs
+    if scan_id in scan_jobs:
+        job = scan_jobs[scan_id]
+        report_path = job.get('report_path')
+        if report_path:
+            path = Path(report_path)
+            # For non-html formats, derive from html path
+            if format == 'html':
+                return path if path.exists() else None
+            elif format == 'pdf':
+                pdf_path = path.with_suffix('.pdf')
+                return pdf_path if pdf_path.exists() else path  # Return html for conversion
+            elif format == 'json':
+                json_path = path.with_name(path.stem + '.json')
+                return json_path if json_path.exists() else None
+            elif format == 'sarif':
+                sarif_path = path.with_name(path.stem + '.sarif')
+                return sarif_path if sarif_path.exists() else None
+    
+    # Fall back to database lookup
+    if db is None:
+        # Create a new session for database lookup
+        from database.connection import AsyncSessionLocal
+        async with AsyncSessionLocal() as db_session:
+            return await _get_report_from_db(scan_id, format, db_session)
+    else:
+        return await _get_report_from_db(scan_id, format, db)
+
+
+async def _get_report_from_db(scan_id: str, format: str, db: AsyncSession) -> Optional[Path]:
+    """Helper to get report path from database"""
+    from database import crud
+    from uuid import UUID
+    
+    try:
+        scan_uuid = UUID(scan_id)
+    except ValueError:
+        # Not a valid UUID, try lookup by string scan_id
+        scan = await crud.get_scan_by_id(db, scan_id)
+        if not scan:
+            return None
+    else:
+        scan = await crud.get_scan_by_uuid(db, scan_uuid)
+        if not scan:
+            return None
+    
+    # Get the appropriate report path based on format
+    report_path = None
+    if format == 'html' and scan.report_html:
+        report_path = Path(scan.report_html)
+    elif format == 'json' and scan.report_json:
+        report_path = Path(scan.report_json)
+    elif format == 'sarif' and scan.report_sarif:
+        report_path = Path(scan.report_sarif)
+    elif format == 'pdf':
+        # PDF is generated from HTML
+        if scan.report_html:
+            html_path = Path(scan.report_html)
+            pdf_path = html_path.with_suffix('.pdf')
+            return pdf_path if pdf_path.exists() else html_path
+    
+    if report_path and report_path.exists():
+        return report_path
+    
+    return None
+
+
 @app.get('/', response_class=HTMLResponse)
 async def serve():
     """Serve React frontend"""
@@ -1064,25 +1139,71 @@ async def get_all_vulnerabilities(
 
 @app.get('/api/reports')
 async def list_reports():
-    """List all available reports"""
-    reports = []
+    """List all available reports from filesystem and database"""
+    from database.connection import AsyncSessionLocal
+    from database import crud
+    from sqlalchemy import select
+    from database.models import ScanHistory
     
-    # Check report directories
-    report_dirs = ['reports', 'report1']
+    reports = []
+    seen_paths = set()  # Track seen report paths to avoid duplicates
+    
+    # Check report directories (including data/reports where new reports go)
+    report_dirs = ['reports', 'report1', 'data/reports']
     for report_dir in report_dirs:
         report_path = Path(report_dir)
         if report_path.exists():
             for report_file in report_path.glob('*.html'):
-                reports.append({
-                    'name': report_file.name,
-                    'path': f'/api/reports/{report_dir}/{report_file.name}',
-                    'dir': report_dir,
-                    'modified': report_file.stat().st_mtime,
-                    'size': report_file.stat().st_size
-                })
+                path_key = str(report_file.resolve())
+                if path_key not in seen_paths:
+                    seen_paths.add(path_key)
+                    reports.append({
+                        'name': report_file.name,
+                        'path': f'/api/reports/{report_dir}/{report_file.name}',
+                        'dir': report_dir,
+                        'modified': report_file.stat().st_mtime,
+                        'size': report_file.stat().st_size,
+                        'source': 'filesystem'
+                    })
+    
+    # Also check database for completed scans with reports
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(ScanHistory)
+                .where(ScanHistory.status == 'completed')
+                .where(ScanHistory.report_html.isnot(None))
+                .order_by(ScanHistory.ended_at.desc())
+                .limit(100)
+            )
+            scans = result.scalars().all()
+            
+            for scan in scans:
+                if scan.report_html:
+                    html_path = Path(scan.report_html)
+                    path_key = str(html_path.resolve()) if html_path.exists() else scan.report_html
+                    
+                    if path_key not in seen_paths:
+                        seen_paths.add(path_key)
+                        
+                        # Extract relative dir for API path
+                        if html_path.exists():
+                            rel_dir = html_path.parent.name or 'reports'
+                            reports.append({
+                                'name': html_path.name,
+                                'path': f'/api/scan/{scan.id}/report',
+                                'scan_id': str(scan.id),
+                                'dir': rel_dir,
+                                'modified': html_path.stat().st_mtime if html_path.exists() else 0,
+                                'size': html_path.stat().st_size if html_path.exists() else 0,
+                                'target': scan.target_url,
+                                'source': 'database'
+                            })
+    except Exception as e:
+        logger.warning(f"Could not fetch reports from database: {e}")
     
     # Sort by modified time (newest first)
-    reports.sort(key=lambda x: x['modified'], reverse=True)
+    reports.sort(key=lambda x: x.get('modified', 0), reverse=True)
     
     return {'reports': reports}
 
@@ -1173,12 +1294,12 @@ async def get_scan_report_pdf(
     """Get the PDF report for a scan"""
     from core.reporters import ReportGenerator
     
-    job = check_scan_access(scan_id, current_user)
+    # Get HTML path (database-aware lookup)
+    html_path = await get_scan_report_path(scan_id, 'html')
     
-    if not job.get('report_path'):
-        raise HTTPException(status_code=404, detail='Report not ready yet')
+    if not html_path:
+        raise HTTPException(status_code=404, detail='Report not ready yet or scan not found')
     
-    html_path = Path(job['report_path'])
     if not html_path.exists():
         raise HTTPException(status_code=404, detail='Report file not found')
     
@@ -1218,14 +1339,52 @@ async def get_scan_report(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Get the HTML report for a scan"""
-    job = check_scan_access(scan_id, current_user)
+    # Use database-aware lookup
+    report_path = await get_scan_report_path(scan_id, 'html')
     
-    if not job.get('report_path'):
-        raise HTTPException(status_code=404, detail='Report not ready yet')
+    if not report_path:
+        raise HTTPException(status_code=404, detail='Report not ready yet or scan not found')
     
-    report_path = Path(job['report_path'])
     if report_path.exists():
-        return FileResponse(report_path)
+        return FileResponse(report_path, media_type='text/html')
+    
+    raise HTTPException(status_code=404, detail='Report file not found')
+
+
+@app.get('/api/scan/{scan_id}/report/json')
+async def get_scan_report_json(
+    scan_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get the JSON report for a scan"""
+    report_path = await get_scan_report_path(scan_id, 'json')
+    
+    if not report_path:
+        raise HTTPException(status_code=404, detail='JSON report not available')
+    
+    if report_path.exists():
+        return FileResponse(report_path, media_type='application/json')
+    
+    raise HTTPException(status_code=404, detail='Report file not found')
+
+
+@app.get('/api/scan/{scan_id}/report/sarif')
+async def get_scan_report_sarif(
+    scan_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get the SARIF report for a scan (for IDE integration)"""
+    report_path = await get_scan_report_path(scan_id, 'sarif')
+    
+    if not report_path:
+        raise HTTPException(status_code=404, detail='SARIF report not available')
+    
+    if report_path.exists():
+        return FileResponse(
+            report_path, 
+            media_type='application/sarif+json',
+            headers={"Content-Disposition": f"attachment; filename={report_path.name}"}
+        )
     
     raise HTTPException(status_code=404, detail='Report file not found')
 

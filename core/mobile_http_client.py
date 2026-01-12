@@ -17,7 +17,7 @@ This ensures all mobile attack traffic is captured for PoC documentation.
 Usage:
     client = MobileHTTPClient(
         proxy_host="127.0.0.1",
-        proxy_port=8082,
+        proxy_port=mitm_proxy.port,  # Use allocated port from MITMPortManager
         request_store=mobile_request_store
     )
     await client.start()
@@ -150,7 +150,7 @@ class MobileHTTPClient:
     def __init__(
         self,
         proxy_host: str = "127.0.0.1",
-        proxy_port: int = 8082,
+        proxy_port: int = None,  # None = get from MITM proxy instance or use 8080
         use_proxy: bool = True,
         timeout: int = 30,
         max_connections: int = 30,
@@ -161,9 +161,9 @@ class MobileHTTPClient:
         platform: str = "android"
     ):
         self.proxy_host = proxy_host
-        self.proxy_port = proxy_port
+        self.proxy_port = proxy_port or 8080  # Default fallback
         self.use_proxy = use_proxy
-        self.proxy_url = f"http://{proxy_host}:{proxy_port}" if use_proxy else None
+        self.proxy_url = f"http://{proxy_host}:{self.proxy_port}" if use_proxy else None
         
         self.timeout = timeout
         self.max_connections = max_connections

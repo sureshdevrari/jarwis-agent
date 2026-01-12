@@ -2,7 +2,7 @@
 Jarwis AGI Pen Test - XXE (XML External Entity) Injection Scanner
 Detects XXE vulnerabilities (A03:2021 - Injection)
 Based on Web Hacking 101 techniques - adapted for 2025
-"""
+Now includes OOB (Out-of-Band) callback detection for blind XXE!"""
 
 import asyncio
 import logging
@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from urllib.parse import urlparse, urljoin
 import aiohttp
 import ssl
+
+# OOB callback server for blind XXE detection
+try:
+    from core.oob_callback_server import OOBIntegration, OOBPayloadTemplates, ensure_callback_server_running
+    HAS_OOB_SERVER = True
+except ImportError:
+    HAS_OOB_SERVER = False
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +228,11 @@ class XXEScanner:
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
         
+        # OOB callback integration for blind XXE
+        self.oob_integration: Optional[OOBIntegration] = None
+        self.scan_id = config.get('scan_id', 'unknown')
+        self.enable_oob = config.get('enable_oob_callbacks', True) and HAS_OOB_SERVER
+        
     async def scan(self) -> List[ScanResult]:
         """Main scan method"""
         logger.info("Starting XXE vulnerability scan...")
@@ -232,6 +244,16 @@ class XXEScanner:
         
         if not base_url:
             return self.results
+        
+        # Initialize OOB callback server for blind XXE detection
+        if self.enable_oob:
+            try:
+                self.oob_integration = OOBIntegration(self.scan_id, "xxe")
+                await self.oob_integration.setup()
+                logger.info("OOB callback server enabled for blind XXE detection")
+            except Exception as e:
+                logger.warning(f"OOB callback server unavailable: {e}")
+                self.oob_integration = None
         
         # Collect endpoints
         urls_to_test = set()
@@ -259,11 +281,67 @@ class XXEScanner:
                 try:
                     await asyncio.sleep(1 / self.rate_limit)
                     await self._test_xxe(session, url)
+                    
+                    # Also test blind XXE with OOB callbacks
+                    if self.oob_integration:
+                        await self._test_blind_xxe(session, url)
+                        
                 except Exception as e:
                     logger.debug(f"Error testing {url}: {e}")
         
+        # Check for OOB callbacks after all tests
+        if self.oob_integration:
+            received = await self.oob_integration.wait_and_check(timeout=5.0)
+            for callback in received:
+                result = ScanResult(
+                    id=f"XXE-BLIND-OOB-{len(self.results)+1}",
+                    category="A03:2021 - Injection",
+                    severity="critical",
+                    title="Blind XXE Confirmed via OOB Callback",
+                    description="Blind XXE detected - target processed external entity and contacted our callback server",
+                    url=callback.get('payload_context', base_url),
+                    method="POST",
+                    parameter="",
+                    evidence=f"Callback received from {callback.get('source_ip')} at {callback.get('received_at')}",
+                    remediation="Disable external entity processing. Use defusedxml library.",
+                    cwe_id="CWE-611",
+                    poc=f"OOB callback to: {callback.get('path')}",
+                    reasoning="External entity was processed and made outbound HTTP request"
+                )
+                self.results.append(result)
+                logger.info(f"BLIND XXE CONFIRMED via OOB callback from {callback.get('source_ip')}")
+        
         logger.info(f"XXE scan complete. Found {len(self.results)} vulnerabilities")
         return self.results
+    
+    async def _test_blind_xxe(self, session: aiohttp.ClientSession, url: str):
+        """Test for blind XXE using OOB callbacks"""
+        if not self.oob_integration:
+            return
+        
+        # Generate callback URL
+        callback_id, callback_url = self.oob_integration.generate_callback(
+            context=f"url={url}"
+        )
+        
+        # Create XXE payloads with callback URL
+        oob_payloads = [
+            OOBPayloadTemplates.xxe_external_dtd(callback_url),
+            OOBPayloadTemplates.xxe_parameter_entity(callback_url),
+        ]
+        
+        for payload in oob_payloads:
+            try:
+                headers = {
+                    'Content-Type': 'application/xml',
+                    'User-Agent': 'Mozilla/5.0',
+                }
+                async with session.post(url, data=payload, headers=headers) as response:
+                    # We don't care about the response for blind XXE
+                    # The callback server will detect if it worked
+                    await response.text()
+            except Exception:
+                pass  # Expected for blind XXE
     
     async def _test_xxe(self, session: aiohttp.ClientSession, url: str):
         """Test endpoint for XXE vulnerabilities"""

@@ -15,7 +15,8 @@ Flow:
 This ensures ALL attack traffic is captured and can be replayed/analyzed.
 
 Usage:
-    client = JarwisHTTPClient(proxy_host="127.0.0.1", proxy_port=8082)
+    # Port is now auto-allocated per scan via MITMPortManager
+    client = JarwisHTTPClient(proxy_host="127.0.0.1", proxy_port=mitm_proxy.port)
     await client.start()
     
     response = await client.send_attack(
@@ -111,7 +112,7 @@ class JarwisHTTPClient:
     def __init__(
         self,
         proxy_host: str = "127.0.0.1",
-        proxy_port: int = 8082,
+        proxy_port: int = None,  # None = get from MITM proxy instance or use 8080
         use_proxy: bool = True,
         timeout: int = 30,
         max_connections: int = 50,
@@ -120,9 +121,9 @@ class JarwisHTTPClient:
         verify_ssl: bool = False
     ):
         self.proxy_host = proxy_host
-        self.proxy_port = proxy_port
+        self.proxy_port = proxy_port or 8080  # Default fallback
         self.use_proxy = use_proxy
-        self.proxy_url = f"http://{proxy_host}:{proxy_port}" if use_proxy else None
+        self.proxy_url = f"http://{proxy_host}:{self.proxy_port}" if use_proxy else None
         
         self.timeout = timeout
         self.max_connections = max_connections
@@ -547,7 +548,7 @@ _client_instance: Optional[JarwisHTTPClient] = None
 
 def get_http_client(
     proxy_host: str = "127.0.0.1",
-    proxy_port: int = 8082,
+    proxy_port: int = None,  # None = use default from JarwisHTTPClient
     use_proxy: bool = True
 ) -> JarwisHTTPClient:
     """Get or create the singleton HTTP client instance"""

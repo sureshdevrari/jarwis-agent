@@ -1834,7 +1834,7 @@ async def run_security_scan(
                 'scan_profile': scan_profile,
                 'proxy': {
                     'enabled': (scan.config or {}).get('proxy_enabled', True),  # Allow disabling proxy
-                    'port': (scan.config or {}).get('proxy_port', 8888)
+                    'port': (scan.config or {}).get('proxy_port', None)  # None = auto-allocate via PortManager
                 },
                 'scan_id': scan_id,  # Pass scan_id for manual auth coordination
                 # Use rate_limit from user config, default to 10
@@ -2324,7 +2324,7 @@ async def run_scan_with_orchestrator(
             'scan_profile': scan_profile,
             'proxy': {
                 'enabled': (scan.config or {}).get('proxy_enabled', True),
-                'port': (scan.config or {}).get('proxy_port', 8888)
+                'port': (scan.config or {}).get('proxy_port', None)  # None = auto-allocate via PortManager
             },
             'scan_id': scan_id,
             'target_url': target_url,

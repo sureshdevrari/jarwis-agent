@@ -58,6 +58,10 @@ class JarwisAddon:
         # Request timing for response time calculation
         self._request_times: Dict[int, float] = {}
         
+        # Scope filtering for multi-tenant isolation
+        self.scope_patterns: List[str] = []
+        self.scan_id: Optional[str] = None
+        
         # Statistics
         self.stats = {
             'crawl_requests': 0,
@@ -65,7 +69,8 @@ class JarwisAddon:
             'attack_requests': 0,
             'attack_responses': 0,
             'total_bytes_sent': 0,
-            'total_bytes_received': 0
+            'total_bytes_received': 0,
+            'out_of_scope': 0
         }
         
     def load(self, loader):
@@ -88,6 +93,18 @@ class JarwisAddon:
             default="",
             help="Path to write attack traffic log"
         )
+        loader.add_option(
+            name="jarwis_scope",
+            typespec=str,
+            default="",
+            help="Comma-separated list of domain patterns to include (e.g., 'example.com,*.example.com')"
+        )
+        loader.add_option(
+            name="jarwis_scan_id",
+            typespec=str,
+            default="",
+            help="Scan ID for multi-tenant traffic isolation"
+        )
     
     def configure(self, updates):
         """Configure from mitmproxy options"""
@@ -99,6 +116,38 @@ class JarwisAddon:
         
         if ctx.options.jarwis_attack_log:
             self.attack_log_file = ctx.options.jarwis_attack_log
+        
+        # Configure scope filtering
+        if ctx.options.jarwis_scope:
+            self.scope_patterns = [p.strip().lower() for p in ctx.options.jarwis_scope.split(',') if p.strip()]
+        else:
+            self.scope_patterns = []
+        
+        # Configure scan ID for multi-tenant isolation
+        if ctx.options.jarwis_scan_id:
+            self.scan_id = ctx.options.jarwis_scan_id
+        else:
+            self.scan_id = None
+    
+    def _matches_scope(self, host: str) -> bool:
+        """Check if host matches any scope pattern"""
+        if not self.scope_patterns:
+            # No scope = match all
+            return True
+        
+        host_lower = host.lower()
+        for pattern in self.scope_patterns:
+            if pattern.startswith('*.'):
+                # Wildcard pattern - match domain and subdomains
+                domain = pattern[2:]  # Remove *.
+                if host_lower == domain or host_lower.endswith('.' + domain):
+                    return True
+            else:
+                # Exact match
+                if host_lower == pattern:
+                    return True
+        
+        return False
     
     def _is_attack_request(self, flow: http.HTTPFlow) -> bool:
         """Check if this is an attack request from JarwisHTTPClient"""
@@ -136,6 +185,14 @@ class JarwisAddon:
     def request(self, flow: http.HTTPFlow):
         """Called when a request is received - BEFORE forwarding to target"""
         
+        # Scope filtering - skip out-of-scope traffic
+        host = flow.request.host
+        if not self._matches_scope(host):
+            self.stats['out_of_scope'] += 1
+            # Mark flow so we skip it in response handler too
+            flow.metadata['jarwis_out_of_scope'] = True
+            return
+        
         # Record request time for response timing
         self._request_times[id(flow)] = time.time()
         
@@ -157,7 +214,8 @@ class JarwisAddon:
             "headers": dict(flow.request.headers),
             "is_https": flow.request.scheme == "https",
             "is_attack": is_attack,
-            "traffic_type": "attack" if is_attack else "crawl"
+            "traffic_type": "attack" if is_attack else "crawl",
+            "scan_id": self.scan_id
         }
         
         # Add body for stateful requests
@@ -191,6 +249,10 @@ class JarwisAddon:
     
     def response(self, flow: http.HTTPFlow):
         """Called when a response is received from target"""
+        
+        # Skip out-of-scope flows
+        if flow.metadata.get('jarwis_out_of_scope'):
+            return
         
         # Calculate response time
         request_time = self._request_times.pop(id(flow), None)
@@ -226,7 +288,8 @@ class JarwisAddon:
             "is_https": flow.request.scheme == "https",
             "is_attack": is_attack,
             "traffic_type": "attack" if is_attack else "crawl",
-            "response_time_ms": round(response_time_ms, 2)
+            "response_time_ms": round(response_time_ms, 2),
+            "scan_id": self.scan_id
         }
         
         # Add attack metadata to response

@@ -184,17 +184,34 @@ class ScanCheckpoint:
                 for k, v in data['phases'].items()
             }
         
-        # Atomic write with temp file
+        # Write checkpoint to disk (Windows-compatible)
         temp_path = self.checkpoint_path.with_suffix('.tmp')
         try:
             with open(temp_path, 'w') as f:
                 json.dump(data, f, indent=2, default=str)
-            temp_path.replace(self.checkpoint_path)
+            
+            # Windows-safe atomic move: use shutil.move which handles cross-device moves
+            # and Windows file locking better than Path.replace()
+            try:
+                shutil.move(str(temp_path), str(self.checkpoint_path))
+            except (PermissionError, OSError) as move_err:
+                # Fallback: If move fails (file locked), write directly
+                logger.warning(f"Atomic move failed ({move_err}), writing directly")
+                if temp_path.exists():
+                    temp_path.unlink()
+                with open(self.checkpoint_path, 'w') as f:
+                    json.dump(data, f, indent=2, default=str)
+                    
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
             if temp_path.exists():
-                temp_path.unlink()
-            raise
+                try:
+                    temp_path.unlink()
+                except:
+                    pass
+            # Don't re-raise - checkpoint failures shouldn't crash the scan
+            # The scan can still complete, we just lose resume capability
+            logger.warning(f"Checkpoint save failed but scan will continue")
     
     def start_phase(self, phase: str) -> PhaseCheckpoint:
         """Mark a phase as started"""

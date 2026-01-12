@@ -444,25 +444,44 @@ class WebScanRunner:
         
         target_url = self.config.get('target', {}).get('url', '')
         
+        # Extract scope pattern from target URL for MITM filtering
+        scope_pattern = None
+        if target_url:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(target_url)
+                if parsed.netloc:
+                    # Include both exact domain and wildcard subdomains
+                    scope_pattern = f"{parsed.netloc},*.{parsed.netloc}"
+            except Exception:
+                pass
+        
         # Initialize request store
         self.request_store = RequestStore(self.scan_id)
         
         # Check if proxy is enabled
         proxy_config = self.config.get('proxy', {})
         proxy_enabled_in_config = proxy_config.get('enabled', True)  # Default True
-        proxy_port = proxy_config.get('port', 8080)
+        proxy_port = proxy_config.get('port', None)  # None = auto-allocate via PortManager
         
         self.proxy_enabled = False
         
-        if proxy_enabled_in_config and proxy_port > 0:
-            # Initialize MITM proxy with callback to store requests
+        if proxy_enabled_in_config:
+            # Initialize MITM proxy with scan_id and scope for multi-tenant isolation
             self.mitm_proxy = MITMProxy(
-                port=proxy_port,
+                port=proxy_port,  # None = auto-allocate
                 on_request=self._on_request_captured,
-                on_response=self._on_response_captured
+                on_response=self._on_response_captured,
+                scan_id=self.scan_id,
+                scope=scope_pattern
             )
             mitm_started = await self.mitm_proxy.start()
             self.proxy_enabled = bool(mitm_started and getattr(self.mitm_proxy, "running", False))
+            
+            # Get the actual allocated port
+            if self.proxy_enabled:
+                proxy_port = self.mitm_proxy.port
+                logger.info(f"MITM proxy started on port {proxy_port} for scan {self.scan_id}")
 
             if not self.proxy_enabled:
                 logger.warning("MITM proxy unavailable, falling back to direct connection. Traffic capture will be limited.")
@@ -470,6 +489,7 @@ class WebScanRunner:
         else:
             logger.info("MITM proxy disabled in config, using direct connection")
             self.mitm_proxy = None
+            proxy_port = 0
         
         # Initialize browser with proxy settings (BrowserController expects host/port flags)
         # headless defaults to True for production safety (servers without display)
@@ -1035,11 +1055,25 @@ class WebScanRunner:
         )
         
         # Generate reports using the correct method signature
-        report_paths = await reporter.generate(
+        report_paths_list = await reporter.generate(
             findings=findings,
             context=context_obj,
             config=self.config
         )
+        
+        # Convert list of paths to dict keyed by format (html, json, sarif)
+        # ReportGenerator.generate() returns List[str], but crud expects dict
+        report_paths_dict = {}
+        for path in report_paths_list:
+            path_lower = path.lower()
+            if path_lower.endswith('.html'):
+                report_paths_dict['html'] = path
+            elif path_lower.endswith('.json'):
+                report_paths_dict['json'] = path
+            elif path_lower.endswith('.sarif'):
+                report_paths_dict['sarif'] = path
+            elif path_lower.endswith('.pdf'):
+                report_paths_dict['pdf'] = path
         
         return {
             'findings_count': len(findings),
@@ -1050,7 +1084,7 @@ class WebScanRunner:
                 'low': len([f for f in findings if f.get('severity') == 'low']),
                 'info': len([f for f in findings if f.get('severity') == 'info']),
             },
-            'report_paths': report_paths
+            'report_paths': report_paths_dict
         }
     
     async def _cleanup(self):

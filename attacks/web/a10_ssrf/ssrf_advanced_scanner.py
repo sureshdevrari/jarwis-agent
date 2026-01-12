@@ -2,7 +2,7 @@
 Jarwis AGI Pen Test - SSRF Scanner (Advanced)
 Detects Server-Side Request Forgery vulnerabilities (A10:2021 - SSRF)
 Based on Web Hacking 101 techniques - adapted for 2025
-"""
+Now includes OOB (Out-of-Band) callback detection for blind SSRF!"""
 
 import asyncio
 import logging
@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from urllib.parse import urlparse, urljoin, quote
 import aiohttp
 import ssl
+
+# OOB callback server for blind SSRF detection
+try:
+    from core.oob_callback_server import OOBIntegration, ensure_callback_server_running
+    HAS_OOB_SERVER = True
+except ImportError:
+    HAS_OOB_SERVER = False
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +156,11 @@ class SSRFScanner:
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
         
+        # OOB callback integration for blind SSRF
+        self.oob_integration: Optional[OOBIntegration] = None
+        self.scan_id = config.get('scan_id', 'unknown')
+        self.enable_oob = config.get('enable_oob_callbacks', True) and HAS_OOB_SERVER
+        
     async def scan(self) -> List[ScanResult]:
         """Main scan method"""
         logger.info("Starting Advanced SSRF scan...")
@@ -160,6 +172,16 @@ class SSRFScanner:
         
         if not base_url:
             return self.results
+        
+        # Initialize OOB callback server for blind SSRF detection
+        if self.enable_oob:
+            try:
+                self.oob_integration = OOBIntegration(self.scan_id, "ssrf")
+                await self.oob_integration.setup()
+                logger.info("OOB callback server enabled for blind SSRF detection")
+            except Exception as e:
+                logger.warning(f"OOB callback server unavailable: {e}")
+                self.oob_integration = None
         
         connector = aiohttp.TCPConnector(ssl=self.ssl_context, limit=10)
         
@@ -180,12 +202,60 @@ class SSRFScanner:
             # Test IP bypass techniques
             await self._test_ip_bypass(session, base_url)
             
+            # Test OOB/blind SSRF if enabled
+            if self.oob_integration:
+                await self._test_blind_ssrf(session, base_url)
+            
             # Test discovered endpoints
             if hasattr(self.context, 'endpoints'):
                 for endpoint in self.context.endpoints[:20]:
                     ep_url = endpoint.get('url', '') if isinstance(endpoint, dict) else str(endpoint)
                     if ep_url:
                         await self._test_ssrf_endpoint(session, ep_url)
+        
+        # Check for OOB callbacks after all tests
+        if self.oob_integration:
+            received = await self.oob_integration.wait_and_check(timeout=5.0)
+            for callback in received:
+                result = ScanResult(
+                    id=f"SSRF-BLIND-OOB-{len(self.results)+1}",
+                    category="A10:2021 - SSRF",
+                    severity="critical",
+                    title="Blind SSRF Confirmed via OOB Callback",
+                    description=f"Blind SSRF detected - target made external request to our callback server",
+                    url=callback.get('payload_context', base_url),
+                    method="GET",
+                    parameter="",
+                    evidence=f"Callback received from {callback.get('source_ip')} at {callback.get('received_at')}",
+                    remediation="Block outbound HTTP requests or whitelist allowed destinations.",
+                    cwe_id="CWE-918",
+                    poc=f"Target connected to: {callback.get('path')}",
+                    reasoning="OOB callback confirms blind SSRF - target server made external request"
+                )
+                self.results.append(result)
+                logger.info(f"BLIND SSRF CONFIRMED via OOB callback from {callback.get('source_ip')}")
+        
+        logger.info(f"SSRF scan complete. Found {len(self.results)} vulnerabilities")
+        return self.results
+    
+    async def _test_blind_ssrf(self, session: aiohttp.ClientSession, base_url: str):
+        """Test for blind SSRF using OOB callbacks"""
+        if not self.oob_integration:
+            return
+        
+        logger.info("Testing for blind SSRF with OOB callbacks...")
+        
+        # Generate callback URLs and send payloads
+        for param in self.SSRF_PARAMS[:15]:
+            callback_id, callback_url = self.oob_integration.generate_callback(
+                context=f"param={param}"
+            )
+            
+            # Send the blind SSRF payload
+            await self._send_ssrf(
+                session, base_url, param, callback_url, 'blind_oob',
+                suppress_result=True  # Don't add result until callback confirmed
+            )
         
         logger.info(f"SSRF scan complete. Found {len(self.results)} vulnerabilities")
         return self.results
@@ -232,8 +302,13 @@ class SSRFScanner:
                 logger.debug(f"IP bypass generation error: {e}")
     
     async def _send_ssrf(self, session: aiohttp.ClientSession, base_url: str,
-                        param: str, payload: str, attack_type: str):
-        """Send SSRF payload and analyze response"""
+                        param: str, payload: str, attack_type: str,
+                        suppress_result: bool = False):
+        """Send SSRF payload and analyze response
+        
+        Args:
+            suppress_result: If True, don't add to results (for blind SSRF - wait for OOB callback)
+        """
         try:
             await asyncio.sleep(1 / self.rate_limit)
             
@@ -249,6 +324,10 @@ class SSRFScanner:
             async with session.get(test_url, headers=headers) as response:
                 body = await response.text()
                 status = response.status
+                
+                # For blind SSRF with OOB callbacks, don't check response
+                if suppress_result:
+                    return
                 
                 # Check for SSRF indicators
                 if self._check_ssrf_success(body, attack_type, status):
