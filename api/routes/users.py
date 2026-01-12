@@ -29,6 +29,7 @@ from database.subscription import (
     get_plan_config,
     PLAN_CONFIG
 )
+from services.subscription_manager import SubscriptionManager
 from database import crud
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
@@ -493,8 +494,16 @@ async def get_my_subscription(
     Get current user's subscription details, usage stats, and plan limits.
     This endpoint provides all information needed for the frontend to display
     plan limitations and feature availability.
+    
+    Uses SubscriptionManager for accurate ScanHistory-based counting.
     """
-    usage_stats = await get_user_usage_stats(db, current_user)
+    # Use SubscriptionManager for accurate usage stats
+    sub_manager = SubscriptionManager(db, current_user)
+    usage_stats = await sub_manager.get_usage_stats()
+    
+    # Also sync the User.scans_this_month counter with actual count
+    await sub_manager.sync_usage_counter()
+    
     return usage_stats
 
 

@@ -433,10 +433,20 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
             remediation = self._get_finding_attr(f, 'remediation', 'Review and fix according to OWASP guidelines.')
             reasoning = self._get_finding_attr(f, 'reasoning', '')
             
+            # New vulnerability metadata fields
+            impact = self._get_finding_attr(f, 'impact', '')
+            disclosure_days = self._get_finding_attr(f, 'disclosure_days', None)
+            compliance_refs = self._get_finding_attr(f, 'compliance_refs', []) or []
+            attack_type = self._get_finding_attr(f, 'attack_type', '')
+            cvss_score = self._get_finding_attr(f, 'cvss_score', None)
+            
             request_data = self._get_finding_attr(f, 'request_data', '') or ''
             response_data = self._get_finding_attr(f, 'response_data', self._get_finding_attr(f, 'response_snippet', '')) or ''
             
             # Build finding card
+            cvss_display = f'{cvss_score:.1f}' if cvss_score else 'N/A'
+            disclosure_display = f'{disclosure_days} days' if disclosure_days else 'N/A'
+            
             html = f'''
 <div class="finding severity-{severity}">
     <div class="finding-header">
@@ -446,6 +456,7 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
             <div class="finding-tags">
                 <span class="tag tag-category">{category}</span>
                 <span class="tag tag-cwe">{cwe}</span>
+                <span class="tag tag-cvss">CVSS: {cvss_display}</span>
             </div>
         </div>
         <span class="severity-pill {severity}">{severity.upper()}</span>
@@ -468,6 +479,10 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
             <div class="detail-item">
                 <div class="detail-label">Parameter</div>
                 <div class="detail-value">{self._escape_html(parameter)}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Disclosure Timeline</div>
+                <div class="detail-value">{disclosure_display}</div>
             </div>
         </div>'''
             
@@ -511,10 +526,27 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
                 
                 html += '</div>'
             
+            # Add impact section if available
+            if impact:
+                html += f'''
+        <div class="finding-section">
+            <div class="finding-section-title">⚠️ Impact</div>
+            <div class="impact-box">{self._escape_html(impact)}</div>
+        </div>'''
+            
+            # Add compliance section if available
+            if compliance_refs and len(compliance_refs) > 0:
+                compliance_tags = ' '.join([f'<span class="compliance-tag">{self._escape_html(ref)}</span>' for ref in compliance_refs[:8]])
+                html += f'''
+        <div class="finding-section">
+            <div class="finding-section-title">📋 Compliance Impact</div>
+            <div class="compliance-refs">{compliance_tags}</div>
+        </div>'''
+            
             # Add remediation
             html += f'''
         <div class="remediation-box">
-            <div class="remediation-header">âœ" Remediation</div>
+            <div class="remediation-header">✔ Remediation</div>
             <div class="remediation-content">{self._escape_html(remediation)}</div>
         </div>
     </div>
@@ -853,7 +885,16 @@ The <strong>{severity}-severity finding</strong> involves {self._escape_html(tit
                 'method': getattr(finding, 'method', ''),
                 'parameter': getattr(finding, 'parameter', ''),
                 'evidence': getattr(finding, 'evidence', ''),
-                'remediation': getattr(finding, 'remediation', '')
+                'remediation': getattr(finding, 'remediation', ''),
+                # New vulnerability metadata fields
+                'attack_type': getattr(finding, 'attack_type', ''),
+                'impact': getattr(finding, 'impact', ''),
+                'disclosure_days': getattr(finding, 'disclosure_days', None),
+                'cwe_id': getattr(finding, 'cwe_id', ''),
+                'cvss_score': getattr(finding, 'cvss_score', None),
+                'compliance_refs': getattr(finding, 'compliance_refs', []),
+                'request_data': getattr(finding, 'request_data', ''),
+                'response_data': getattr(finding, 'response_data', ''),
             }
 
     # ========================

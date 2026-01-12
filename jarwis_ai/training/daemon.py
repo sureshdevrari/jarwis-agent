@@ -35,6 +35,7 @@ import os
 import signal
 import sys
 import time
+import httpx
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -2950,6 +2951,7 @@ class AutonomousTrainer:
     # Configuration for retry system
     MAX_RETRIES = 3  # Maximum retry attempts per source
     RETRY_DELAY_BASE = 60  # Base delay in seconds (exponential backoff)
+    NETWORK_CHECK_INTERVAL = 30  # Seconds between network checks
     
     def __init__(self, data_dir: Path = None):
         # Store all training data INSIDE jarwis_ai folder - keeps AI self-contained
@@ -2968,6 +2970,8 @@ class AutonomousTrainer:
         
         self.running = False
         self.paused = False
+        self._last_network_check = 0
+        self._network_available = True
         
         # Retry stack - failed sources go here for retry
         self.retry_stack: List[RetryItem] = []
@@ -2980,6 +2984,39 @@ class AutonomousTrainer:
         
         # Load retry stack from disk (in case of restart)
         self._load_retry_stack()
+    
+    def _check_network(self) -> bool:
+        """Check network connectivity"""
+        import socket
+        for host in ["8.8.8.8", "1.1.1.1"]:
+            try:
+                socket.create_connection((host, 53), timeout=5)
+                return True
+            except (socket.timeout, socket.error):
+                continue
+        return False
+    
+    async def _wait_for_network(self):
+        """Wait for network connectivity to be restored"""
+        if self._check_network():
+            self._network_available = True
+            return
+        
+        logger.warning("[NETWORK] Connection lost. Saving state and waiting...")
+        self._save_stats()
+        self._save_sources()
+        self.learner.save()
+        
+        wait_time = 10
+        max_wait = 300  # 5 minutes max wait between checks
+        
+        while not self._check_network():
+            logger.info(f"[NETWORK] Still offline. Checking again in {wait_time}s...")
+            await asyncio.sleep(wait_time)
+            wait_time = min(wait_time * 1.5, max_wait)
+        
+        logger.info("[NETWORK] Connection restored! Resuming training...")
+        self._network_available = True
     
     def _load_sources(self):
         """Load training sources from config or use defaults"""
@@ -3138,8 +3175,12 @@ class AutonomousTrainer:
         return needs_refresh
     
     async def crawl_source(self, source: TrainingSource) -> Optional[CrawlSession]:
-        """Crawl a single source"""
-        logger.info(f"Crawling: {source.name} ({source.url})")
+        """Crawl a single source with network resilience"""
+        logger.info(f"[CRAWL] Starting: {source.name} ({source.url})")
+        
+        # Check network before starting
+        if not self._check_network():
+            await self._wait_for_network()
         
         try:
             session = await self.crawler.crawl_site(
@@ -3149,7 +3190,8 @@ class AutonomousTrainer:
                 max_depth=source.max_depth,
                 max_pages=source.max_pages,
                 include_patterns=source.include_patterns if source.include_patterns else None,
-                exclude_patterns=source.exclude_patterns if source.exclude_patterns else None
+                exclude_patterns=source.exclude_patterns if source.exclude_patterns else None,
+                resume=True  # Enable checkpoint/resume
             )
             
             source.last_crawled = datetime.now()
@@ -3157,15 +3199,21 @@ class AutonomousTrainer:
             self.stats.sources_crawled[source.name] = \
                 self.stats.sources_crawled.get(source.name, 0) + 1
             
-            logger.info(f"Crawled {session.pages_crawled} pages from {source.name}")
+            logger.info(f"[CRAWL OK] {source.name}: {session.pages_crawled} pages")
             
             # Save crawl session
             self.crawler.save_session(session)
             
             return session
+        
+        except (httpx.ConnectError, httpx.TimeoutException, ConnectionError) as e:
+            logger.warning(f"[NETWORK ERROR] {source.name}: {e}")
+            # Network error - wait and return None (will be retried)
+            await self._wait_for_network()
+            return None
             
         except Exception as e:
-            logger.error(f"Failed to crawl {source.name}: {e}")
+            logger.error(f"[CRAWL FAILED] {source.name}: {e}")
             self.stats.errors.append(f"{datetime.now()}: {source.name} - {e}")
             return None
     
@@ -3194,15 +3242,36 @@ class AutonomousTrainer:
         self.stats.total_words_indexed = len(self.learner.word_freq)
     
     async def train_cycle(self):
-        """Run one training cycle - crawl 20 websites concurrently"""
+        """Run one training cycle - crawl websites with network resilience"""
         logger.info("=" * 60)
         logger.info("Starting training cycle")
         logger.info("=" * 60)
         
+        # Check network first
+        if not self._check_network():
+            logger.warning("[NETWORK] No connection at cycle start. Waiting...")
+            await self._wait_for_network()
+        
         sources_to_crawl = self.get_next_sources()
         
         if not sources_to_crawl:
-            logger.info("No sources need refreshing")
+            # Calculate time until next source needs refresh
+            next_refresh_hours = float('inf')
+            next_source_name = ""
+            for s in self.sources:
+                if s.last_crawled:
+                    hours_since = (datetime.now() - s.last_crawled).total_seconds() / 3600
+                    hours_until = s.refresh_hours - hours_since
+                    if hours_until > 0 and hours_until < next_refresh_hours:
+                        next_refresh_hours = hours_until
+                        next_source_name = s.name
+            
+            if next_refresh_hours < float('inf'):
+                logger.info(f"[COMPLETE] All {len(self.sources)} sources crawled!")
+                logger.info(f"[WAITING] Next refresh in {next_refresh_hours:.1f} hours ({next_source_name})")
+                logger.info(f"[TIP] Use --force flag or 'reset' command to re-crawl immediately")
+            else:
+                logger.info("No sources need refreshing")
             return
         
         logger.info(f"Sources to crawl: {len(sources_to_crawl)}")
@@ -3214,8 +3283,13 @@ class AutonomousTrainer:
             if not self.running or self.paused:
                 break
             
+            # Check network before each batch
+            if not self._check_network():
+                logger.warning("[NETWORK] Connection lost before batch. Waiting...")
+                await self._wait_for_network()
+            
             batch = sources_to_crawl[i:i + BATCH_SIZE]
-            logger.info(f"\n--- Batch {i//BATCH_SIZE + 1}: Crawling {len(batch)} sites concurrently ---")
+            logger.info(f"\n--- Batch {i//BATCH_SIZE + 1}: Crawling {len(batch)} sites ---")
             
             # Create tasks for concurrent crawling
             async def crawl_and_process(source):
@@ -3317,7 +3391,7 @@ class AutonomousTrainer:
             logger.info("Retry stack is now empty - all sources processed!")
     
     async def run_forever(self):
-        """Run the daemon continuously"""
+        """Run the daemon continuously with network resilience"""
         self.running = True
         logger.info("=" * 60)
         logger.info("JARWIS AI AUTONOMOUS TRAINER STARTED")
@@ -3325,8 +3399,23 @@ class AutonomousTrainer:
         logger.info(f"Data directory: {self.data_dir}")
         logger.info(f"Sources configured: {len(self.sources)}")
         logger.info(f"Retry stack: {len(self.retry_stack)} pending")
+        
+        # Check for existing checkpoints (resume capability)
+        checkpoint_dir = self.data_dir / "crawl_cache" / "checkpoints"
+        if checkpoint_dir.exists():
+            checkpoints = list(checkpoint_dir.glob("*_checkpoint.json"))
+            if checkpoints:
+                logger.info(f"[RESUME] Found {len(checkpoints)} checkpoints - will resume interrupted crawls")
+        
         logger.info("Press Ctrl+C to stop")
         logger.info("")
+        
+        # Check network at startup
+        if not self._check_network():
+            logger.warning("[NETWORK] No internet connection at startup. Waiting...")
+            await self._wait_for_network()
+        else:
+            logger.info("[NETWORK] Connection verified")
         
         # Track signal count for force exit
         self._signal_count = 0
@@ -3336,6 +3425,7 @@ class AutonomousTrainer:
             self._signal_count += 1
             if self._signal_count == 1:
                 logger.info("\nShutdown signal received... finishing current operation")
+                logger.info("All progress will be saved and can be resumed")
                 logger.info("Press Ctrl+C again to force exit immediately")
                 self.running = False
             else:
@@ -3373,27 +3463,37 @@ class AutonomousTrainer:
                 if next_sources:
                     # Something needs refresh soon
                     wait_time = 60  # Check again in 1 minute
+                    logger.info(f"[ACTIVE] {len(next_sources)} sources pending. Next check in 1 minute...")
                 else:
                     # Find minimum time until next refresh
                     min_wait = float('inf')
+                    next_source = ""
                     for s in self.sources:
                         if s.last_crawled:
                             next_refresh = s.last_crawled + timedelta(hours=s.refresh_hours)
                             wait = (next_refresh - datetime.now()).total_seconds()
-                            if wait > 0:
-                                min_wait = min(min_wait, wait)
+                            if wait > 0 and wait < min_wait:
+                                min_wait = wait
+                                next_source = s.name
                     
                     # Cap at 1 hour
                     wait_time = min(min_wait, 3600)
                     if wait_time == float('inf'):
                         wait_time = 3600
+                    
+                    # Show clear message about training being complete
+                    hours = wait_time / 3600
+                    if hours > 1:
+                        logger.info(f"[IDLE] Training complete! Next refresh in {hours:.1f} hours")
+                        logger.info(f"       Daemon will stay running and auto-refresh sources.")
+                        logger.info(f"       Use --force to re-train now, or Ctrl+C to stop.")
+                    else:
+                        logger.info(f"[IDLE] Waiting {wait_time/60:.1f} minutes for next refresh ({next_source})")
                 
-                logger.info(f"Next cycle in {wait_time/60:.1f} minutes")
-                
-                # Wait (check every 10 seconds for stop signal)
+                # Wait (check every 60 seconds for stop signal - no need to spam logs)
                 wait_end = time.time() + wait_time
                 while time.time() < wait_end and self.running:
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(60)
                 
             except Exception as e:
                 logger.error(f"Error in training cycle: {e}")
@@ -3490,7 +3590,7 @@ def stop_daemon():
 
 
 def show_status():
-    """Show daemon status"""
+    """Show daemon status with checkpoint information"""
     if is_daemon_running():
         with open(PID_FILE) as f:
             pid = f.read().strip()
@@ -3526,8 +3626,44 @@ def show_status():
                         print(f"   ... and {len(retry_data) - 5} more")
             else:
                 print(f"\n[RETRY STACK] Empty - all sources processed successfully")
+        
+        # Show active checkpoints (in-progress crawls that can be resumed)
+        checkpoint_dir = PROJECT_ROOT / "jarwis_ai" / "training" / "data" / "crawl_cache" / "checkpoints"
+        if checkpoint_dir.exists():
+            checkpoints = list(checkpoint_dir.glob("*_checkpoint.json"))
+            if checkpoints:
+                print(f"\n[CHECKPOINTS] {len(checkpoints)} crawls can be resumed:")
+                for cp_file in checkpoints[:10]:
+                    try:
+                        with open(cp_file) as f:
+                            cp_data = json.load(f)
+                        name = cp_data.get('site_name', 'Unknown')
+                        pages = cp_data.get('successful_pages', 0)
+                        queued = len(cp_data.get('queued_urls', []))
+                        print(f"   - {name}: {pages} pages done, {queued} in queue")
+                    except:
+                        pass
+                if len(checkpoints) > 10:
+                    print(f"   ... and {len(checkpoints) - 10} more")
     else:
         print("[STOPPED] Daemon is not running")
+        
+        # Still show checkpoint info even when stopped
+        checkpoint_dir = PROJECT_ROOT / "jarwis_ai" / "training" / "data" / "crawl_cache" / "checkpoints"
+        if checkpoint_dir.exists():
+            checkpoints = list(checkpoint_dir.glob("*_checkpoint.json"))
+            if checkpoints:
+                print(f"\n[RESUME INFO] {len(checkpoints)} crawls will resume from checkpoint on next start:")
+                for cp_file in checkpoints[:5]:
+                    try:
+                        with open(cp_file) as f:
+                            cp_data = json.load(f)
+                        name = cp_data.get('site_name', 'Unknown')
+                        pages = cp_data.get('successful_pages', 0)
+                        last_cp = cp_data.get('last_checkpoint', 'Unknown')
+                        print(f"   - {name}: {pages} pages (last checkpoint: {last_cp})")
+                    except:
+                        pass
 
 
 async def main():
@@ -3539,6 +3675,9 @@ async def main():
 Examples:
   # Run in foreground (Ctrl+C to stop)
   python -m jarwis_ai.training.daemon run
+  
+  # Force re-crawl all sources (ignore refresh timers)
+  python -m jarwis_ai.training.daemon run --force
   
   # Start as background process
   python -m jarwis_ai.training.daemon start
@@ -3552,13 +3691,18 @@ Examples:
     )
     parser.add_argument(
         "command",
-        choices=["run", "start", "stop", "status"],
-        help="Command to execute"
+        choices=["run", "start", "stop", "status", "reset"],
+        help="Command to execute (reset = clear last_crawled times to force re-crawl)"
     )
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Verbose output"
+    )
+    parser.add_argument(
+        "-f", "--force",
+        action="store_true",
+        help="Force re-crawl all sources (ignore refresh timers)"
     )
     
     args = parser.parse_args()
@@ -3575,6 +3719,15 @@ Examples:
         write_pid()
         try:
             trainer = AutonomousTrainer()
+            
+            # Force re-crawl if requested
+            if args.force:
+                print("[FORCE] Resetting all sources for immediate re-crawl...")
+                for source in trainer.sources:
+                    source.last_crawled = None
+                trainer._save_sources()
+                print(f"[FORCE] Reset {len(trainer.sources)} sources")
+            
             await trainer.run_forever()
         finally:
             remove_pid()
@@ -3589,8 +3742,11 @@ Examples:
         # On Windows, use pythonw or subprocess
         import subprocess
         script_path = Path(__file__)
+        cmd = [sys.executable, str(script_path), "run"]
+        if args.force:
+            cmd.append("--force")
         subprocess.Popen(
-            [sys.executable, str(script_path), "run"],
+            cmd,
             stdout=open(LOG_DIR / "daemon_stdout.log", "w"),
             stderr=open(LOG_DIR / "daemon_stderr.log", "w"),
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -3602,6 +3758,21 @@ Examples:
     
     elif args.command == "status":
         show_status()
+    
+    elif args.command == "reset":
+        # Reset all last_crawled times
+        print("Resetting all source crawl times...")
+        sources_file = PROJECT_ROOT / "jarwis_ai" / "training" / "data" / "sources.json"
+        if sources_file.exists():
+            with open(sources_file, "r") as f:
+                data = json.load(f)
+            for s in data:
+                s["last_crawled"] = None
+            with open(sources_file, "w") as f:
+                json.dump(data, f, indent=2)
+            print(f"Reset {len(data)} sources. Run 'start' or 'run' to begin fresh crawl.")
+        else:
+            print("No sources file found.")
 
 
 if __name__ == "__main__":

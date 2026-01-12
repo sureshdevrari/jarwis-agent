@@ -13,7 +13,7 @@
       "/www-project-"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:45.360084"
+    "last_crawled": "2026-01-11T22:42:27.298049"
   },
   {
     "name": "OWASP Cheat Sheets",
@@ -28,7 +28,7 @@
       "cheatsheets/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.424008"
+    "last_crawled": "2026-01-11T22:42:25.829813"
   },
   {
     "name": "CWE Top 25",
@@ -43,7 +43,7 @@
       "/data/definitions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:45.752357"
+    "last_crawled": "2026-01-11T22:42:27.440280"
   },
   {
     "name": "PortSwigger Web Security",
@@ -61,7 +61,7 @@
       "/burp/",
       "/blog/"
     ],
-    "last_crawled": "2026-01-10T22:56:37.789867"
+    "last_crawled": "2026-01-11T22:43:28.179445"
   },
   {
     "name": "HackTricks",
@@ -74,7 +74,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:47.646654"
+    "last_crawled": "2026-01-11T22:42:29.259488"
   },
   {
     "name": "OWASP Testing Guide",
@@ -89,7 +89,7 @@
       "/www-project-web-security-testing-guide/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:59:52.208292"
+    "last_crawled": "2026-01-11T22:47:36.646309"
   },
   {
     "name": "Exploit Database",
@@ -105,7 +105,7 @@
       "/papers/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.542934"
+    "last_crawled": "2026-01-11T22:42:25.671787"
   },
   {
     "name": "NIST NVD",
@@ -120,7 +120,7 @@
       "/vuln/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:46.047498"
+    "last_crawled": "2026-01-11T22:42:28.073521"
   },
   {
     "name": "PayloadsAllTheThings",
@@ -133,7 +133,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:45.167527"
+    "last_crawled": "2026-01-11T22:42:27.090072"
   },
   {
     "name": "SecLists Documentation",
@@ -146,7 +146,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.723243"
+    "last_crawled": "2026-01-12T01:22:27.196368"
   },
   {
     "name": "Math is Fun - Probability",
@@ -161,7 +161,7 @@
       "/data/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.705117"
+    "last_crawled": "2026-01-12T01:21:38.621215"
   },
   {
     "name": "Math is Fun - Statistics",
@@ -176,7 +176,7 @@
       "/data/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.721297"
+    "last_crawled": "2026-01-12T01:21:28.425384"
   },
   {
     "name": "Statistics How To",
@@ -191,7 +191,7 @@
       "/probability-and-statistics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.707354"
+    "last_crawled": "2026-01-12T01:20:48.167250"
   },
   {
     "name": "Stat Trek - Probability",
@@ -206,7 +206,7 @@
       "/probability/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.724778"
+    "last_crawled": "2026-01-12T01:20:52.799900"
   },
   {
     "name": "Seeing Theory - Visual Probability",
@@ -219,7 +219,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.727917"
+    "last_crawled": "2026-01-12T01:20:57.785328"
   },
   {
     "name": "Stat Trek - Statistics",
@@ -234,7 +234,7 @@
       "/statistics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.712709"
+    "last_crawled": "2026-01-12T01:20:49.426351"
   },
   {
     "name": "OnlineStatBook",
@@ -247,7 +247,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.714447"
+    "last_crawled": "2026-01-12T01:24:09.416367"
   },
   {
     "name": "Probability Course",
@@ -260,7 +260,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.726519"
+    "last_crawled": "2026-01-12T01:21:22.121082"
   },
   {
     "name": "StatQuest Concepts",
@@ -273,7 +273,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.720012"
+    "last_crawled": "2026-01-12T01:20:48.922070"
   },
   {
     "name": "Khan Academy Statistics",
@@ -288,7 +288,7 @@
       "/math/statistics-probability/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.716591"
+    "last_crawled": "2026-01-12T01:20:48.105093"
   },
   {
     "name": "Math is Fun - Algebra",
@@ -303,7 +303,7 @@
       "/algebra/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.729226"
+    "last_crawled": "2026-01-12T01:22:23.059097"
   },
   {
     "name": "Math is Fun - Calculus",
@@ -318,7 +318,7 @@
       "/calculus/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.076978"
+    "last_crawled": "2026-01-12T02:09:06.513552"
   },
   {
     "name": "Paul's Math Notes - Calculus I",
@@ -333,7 +333,7 @@
       "/Classes/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.079994"
+    "last_crawled": "2026-01-12T02:13:12.485334"
   },
   {
     "name": "Paul's Math Notes - Calculus II",
@@ -348,7 +348,7 @@
       "/Classes/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.088598"
+    "last_crawled": "2026-01-12T02:12:41.294009"
   },
   {
     "name": "Paul's Math Notes - Linear Algebra",
@@ -363,7 +363,7 @@
       "/Classes/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.074116"
+    "last_crawled": "2026-01-12T02:12:56.549116"
   },
   {
     "name": "3Blue1Brown Essence of Linear Algebra",
@@ -376,7 +376,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.084039"
+    "last_crawled": "2026-01-12T02:09:10.622655"
   },
   {
     "name": "Khan Academy - Algebra",
@@ -391,7 +391,7 @@
       "/math/algebra/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.078452"
+    "last_crawled": "2026-01-12T02:08:46.734951"
   },
   {
     "name": "Khan Academy - Linear Algebra",
@@ -406,7 +406,7 @@
       "/math/linear-algebra/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.082710"
+    "last_crawled": "2026-01-12T02:08:46.740126"
   },
   {
     "name": "Khan Academy - Calculus",
@@ -421,7 +421,7 @@
       "/math/calculus/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.093943"
+    "last_crawled": "2026-01-12T02:08:46.750273"
   },
   {
     "name": "Math is Fun - Geometry",
@@ -436,7 +436,7 @@
       "/geometry/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.092695"
+    "last_crawled": "2026-01-12T02:10:38.351129"
   },
   {
     "name": "Math is Fun - Logic",
@@ -451,7 +451,7 @@
       "/sets/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.095275"
+    "last_crawled": "2026-01-12T02:09:03.332333"
   },
   {
     "name": "Brilliant - Logic",
@@ -464,7 +464,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.102601"
+    "last_crawled": "2026-01-12T02:10:10.226465"
   },
   {
     "name": "Stanford Encyclopedia - Logic",
@@ -477,7 +477,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:14.966301"
+    "last_crawled": null
   },
   {
     "name": "Stanford Encyclopedia - Reasoning",
@@ -490,7 +490,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:14.888922"
+    "last_crawled": null
   },
   {
     "name": "Stanford Encyclopedia - Probability",
@@ -503,7 +503,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:14.736106"
+    "last_crawled": null
   },
   {
     "name": "Critical Thinking Web",
@@ -516,7 +516,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.182728"
+    "last_crawled": null
   },
   {
     "name": "Logical Fallacies",
@@ -529,7 +529,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:14.988992"
+    "last_crawled": null
   },
   {
     "name": "Internet Encyclopedia of Philosophy - Logic",
@@ -542,7 +542,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.194038"
+    "last_crawled": null
   },
   {
     "name": "Propositional Logic",
@@ -557,7 +557,7 @@
       "/discrete_mathematics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.090073"
+    "last_crawled": "2026-01-12T02:08:46.505714"
   },
   {
     "name": "Brilliant - Reasoning",
@@ -570,7 +570,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.081244"
+    "last_crawled": "2026-01-12T02:08:46.828271"
   },
   {
     "name": "GeeksforGeeks - Algorithms",
@@ -586,7 +586,7 @@
       "/data-structures/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.100588"
+    "last_crawled": "2026-01-11T22:42:25.374453"
   },
   {
     "name": "GeeksforGeeks - Data Structures",
@@ -601,7 +601,7 @@
       "/data-structures/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.039034"
+    "last_crawled": "2026-01-11T22:42:25.396326"
   },
   {
     "name": "Visualgo - Algorithm Visualizations",
@@ -614,7 +614,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.086646"
+    "last_crawled": "2026-01-12T02:14:35.645008"
   },
   {
     "name": "Big-O Cheat Sheet",
@@ -627,7 +627,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.091448"
+    "last_crawled": "2026-01-12T02:08:49.214715"
   },
   {
     "name": "Algorithm Wiki",
@@ -640,7 +640,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.096546"
+    "last_crawled": "2026-01-12T02:09:20.821584"
   },
   {
     "name": "CP Algorithms",
@@ -653,7 +653,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:56:13.111326"
+    "last_crawled": "2026-01-11T22:42:56.793251"
   },
   {
     "name": "Algorithm Design Manual",
@@ -666,7 +666,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.085314"
+    "last_crawled": "2026-01-12T02:11:16.264025"
   },
   {
     "name": "TutorialsPoint - Algorithms",
@@ -681,7 +681,7 @@
       "/data_structures_algorithms/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.101179"
+    "last_crawled": "2026-01-12T02:09:32.193418"
   },
   {
     "name": "Programiz - Algorithms",
@@ -696,7 +696,7 @@
       "/dsa/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.099707"
+    "last_crawled": "2026-01-12T02:09:44.146629"
   },
   {
     "name": "LeetCode Patterns",
@@ -709,7 +709,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:44.097853"
+    "last_crawled": "2026-01-12T02:08:46.866825"
   },
   {
     "name": "Teach Yourself CS",
@@ -722,7 +722,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.131453"
+    "last_crawled": "2026-01-12T02:15:44.628989"
   },
   {
     "name": "CS Fundamentals - BaseCS",
@@ -735,7 +735,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.145108"
+    "last_crawled": "2026-01-12T02:15:43.026459"
   },
   {
     "name": "Computer Science Wiki",
@@ -748,7 +748,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.143535"
+    "last_crawled": "2026-01-12T02:15:44.174426"
   },
   {
     "name": "MIT OpenCourseWare - CS",
@@ -761,7 +761,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.146404"
+    "last_crawled": "2026-01-12T02:16:36.526237"
   },
   {
     "name": "Operating Systems Concepts",
@@ -776,7 +776,7 @@
       "/operating-systems/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.135006"
+    "last_crawled": "2026-01-12T02:16:54.462861"
   },
   {
     "name": "Database Concepts",
@@ -791,7 +791,7 @@
       "/database-management-system/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.140372"
+    "last_crawled": "2026-01-12T02:15:43.770573"
   },
   {
     "name": "Compilers - Crafting Interpreters",
@@ -804,7 +804,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.148186"
+    "last_crawled": "2026-01-12T02:16:02.246566"
   },
   {
     "name": "Computer Architecture",
@@ -819,7 +819,7 @@
       "/computer-organization-and-architecture-tutorials/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.136827"
+    "last_crawled": "2026-01-12T02:15:44.262648"
   },
   {
     "name": "Automata Theory",
@@ -832,7 +832,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.138401"
+    "last_crawled": "2026-01-12T02:21:54.988961"
   },
   {
     "name": "Distributed Systems",
@@ -845,7 +845,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.141969"
+    "last_crawled": "2026-01-12T02:31:26.471296"
   },
   {
     "name": "Physics Classroom",
@@ -860,7 +860,7 @@
       "/class/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.199112"
+    "last_crawled": null
   },
   {
     "name": "HyperPhysics",
@@ -873,7 +873,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.059740"
+    "last_crawled": null
   },
   {
     "name": "Khan Academy - Physics",
@@ -888,7 +888,7 @@
       "/science/physics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.046166"
+    "last_crawled": null
   },
   {
     "name": "Feynman Lectures",
@@ -901,7 +901,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.012535"
+    "last_crawled": null
   },
   {
     "name": "Physics LibreTexts",
@@ -914,7 +914,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.227201"
+    "last_crawled": null
   },
   {
     "name": "The Physics Hypertextbook",
@@ -927,7 +927,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.241055"
+    "last_crawled": null
   },
   {
     "name": "MIT Physics Courses",
@@ -942,7 +942,7 @@
       "/courses/physics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.108808"
+    "last_crawled": null
   },
   {
     "name": "Physics Stack Exchange Concepts",
@@ -955,7 +955,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.139774"
+    "last_crawled": null
   },
   {
     "name": "Brilliant Physics",
@@ -968,7 +968,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.158298"
+    "last_crawled": null
   },
   {
     "name": "Physics Classroom - Waves",
@@ -983,7 +983,7 @@
       "/class/waves/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.208690"
+    "last_crawled": null
   },
   {
     "name": "Discrete Math - LibreTexts",
@@ -996,7 +996,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.149469"
+    "last_crawled": "2026-01-12T02:20:05.868578"
   },
   {
     "name": "Math is Fun - Number Theory",
@@ -1011,7 +1011,7 @@
       "/numbers/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.154770"
+    "last_crawled": "2026-01-12T02:16:33.321878"
   },
   {
     "name": "Discrete Math Tutorial",
@@ -1026,7 +1026,7 @@
       "/discrete_mathematics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.150745"
+    "last_crawled": "2026-01-12T02:16:26.212951"
   },
   {
     "name": "Khan Academy - Discrete Math",
@@ -1039,7 +1039,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.156718"
+    "last_crawled": "2026-01-12T02:15:43.762442"
   },
   {
     "name": "Graph Theory - GeeksforGeeks",
@@ -1054,7 +1054,7 @@
       "/graph-data-structure-and-algorithms/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.161089"
+    "last_crawled": "2026-01-12T02:15:44.091861"
   },
   {
     "name": "Combinatorics",
@@ -1067,7 +1067,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.158062"
+    "last_crawled": "2026-01-12T02:25:59.172021"
   },
   {
     "name": "Number Theory - GeeksforGeeks",
@@ -1080,7 +1080,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.159509"
+    "last_crawled": "2026-01-12T02:33:18.855201"
   },
   {
     "name": "Set Theory",
@@ -1095,7 +1095,7 @@
       "/discrete_mathematics/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.151967"
+    "last_crawled": "2026-01-12T02:16:22.487613"
   },
   {
     "name": "Boolean Algebra",
@@ -1110,7 +1110,7 @@
       "/boolean/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.162409"
+    "last_crawled": "2026-01-12T02:17:55.428973"
   },
   {
     "name": "Mathematical Proofs",
@@ -1123,7 +1123,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:20.153536"
+    "last_crawled": "2026-01-12T02:17:41.094109"
   },
   {
     "name": "Refactoring Guru - Design Patterns",
@@ -1138,7 +1138,7 @@
       "/design-patterns/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.359667"
+    "last_crawled": "2026-01-12T02:38:14.503012"
   },
   {
     "name": "Python Documentation",
@@ -1154,7 +1154,7 @@
       "/3/library/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:57:09.926732"
+    "last_crawled": "2026-01-11T22:44:36.853690"
   },
   {
     "name": "Real Python",
@@ -1169,7 +1169,7 @@
       "/tutorials/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.367323"
+    "last_crawled": "2026-01-12T02:37:22.822385"
   },
   {
     "name": "Clean Code Concepts",
@@ -1182,7 +1182,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.377958"
+    "last_crawled": "2026-01-12T02:36:47.994758"
   },
   {
     "name": "SOLID Principles",
@@ -1195,7 +1195,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.363721"
+    "last_crawled": "2026-01-12T02:52:15.111557"
   },
   {
     "name": "System Design Primer",
@@ -1208,7 +1208,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.353283"
+    "last_crawled": "2026-01-12T02:39:35.095261"
   },
   {
     "name": "Refactoring Guru - Refactoring",
@@ -1223,7 +1223,7 @@
       "/refactoring/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.370148"
+    "last_crawled": "2026-01-12T02:36:58.327061"
   },
   {
     "name": "Git Documentation",
@@ -1239,7 +1239,7 @@
       "/book/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.365406"
+    "last_crawled": "2026-01-12T02:36:47.787199"
   },
   {
     "name": "REST API Tutorial",
@@ -1252,7 +1252,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.361375"
+    "last_crawled": "2026-01-12T02:37:13.008847"
   },
   {
     "name": "Testing Concepts",
@@ -1267,7 +1267,7 @@
       "/software-testing"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.372146"
+    "last_crawled": "2026-01-12T02:36:47.405700"
   },
   {
     "name": "ML Glossary",
@@ -1280,7 +1280,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.376028"
+    "last_crawled": "2026-01-12T02:37:57.462229"
   },
   {
     "name": "Google ML Crash Course Concepts",
@@ -1295,7 +1295,7 @@
       "/machine-learning/crash-course/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.374033"
+    "last_crawled": "2026-01-12T02:37:50.698962"
   },
   {
     "name": "Distill.pub - ML Explanations",
@@ -1308,7 +1308,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.174877"
+    "last_crawled": null
   },
   {
     "name": "Neural Networks - 3Blue1Brown",
@@ -1321,7 +1321,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.357105"
+    "last_crawled": "2026-01-12T02:37:07.830048"
   },
   {
     "name": "Deep Learning Book",
@@ -1334,7 +1334,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.381816"
+    "last_crawled": "2026-01-12T02:38:57.254985"
   },
   {
     "name": "Towards Data Science - ML",
@@ -1347,7 +1347,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.383637"
+    "last_crawled": "2026-01-12T02:36:47.562855"
   },
   {
     "name": "Scikit-Learn Tutorials",
@@ -1363,7 +1363,7 @@
       "/stable/modules/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.387819"
+    "last_crawled": "2026-01-12T02:36:47.518240"
   },
   {
     "name": "StatQuest ML",
@@ -1376,7 +1376,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.417572"
+    "last_crawled": "2026-01-12T02:36:47.783214"
   },
   {
     "name": "Fast.ai Course Notes",
@@ -1389,7 +1389,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.421237"
+    "last_crawled": "2026-01-12T02:36:51.172711"
   },
   {
     "name": "NLP Concepts",
@@ -1402,7 +1402,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.379589"
+    "last_crawled": "2026-01-12T02:42:44.164151"
   },
   {
     "name": "Crypto101",
@@ -1415,7 +1415,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.893635"
+    "last_crawled": "2026-01-11T22:42:27.270903"
   },
   {
     "name": "Practical Cryptography",
@@ -1428,7 +1428,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.424514"
+    "last_crawled": "2026-01-12T02:37:59.882477"
   },
   {
     "name": "Cryptography - Khan Academy",
@@ -1443,7 +1443,7 @@
       "/computing/computer-science/cryptography/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:06:56.426954"
+    "last_crawled": "2026-01-12T02:36:47.750083"
   },
   {
     "name": "Cryptography Tutorials",
@@ -1458,7 +1458,7 @@
       "/cryptography/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.077105"
+    "last_crawled": "2026-01-12T02:55:48.170186"
   },
   {
     "name": "Information Theory Basics",
@@ -1471,7 +1471,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.080795"
+    "last_crawled": "2026-01-12T02:54:58.454204"
   },
   {
     "name": "Cryptopals Challenges",
@@ -1484,7 +1484,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.067456"
+    "last_crawled": "2026-01-12T02:55:46.663103"
   },
   {
     "name": "SHA and Hash Functions",
@@ -1497,7 +1497,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.088053"
+    "last_crawled": "2026-01-12T02:54:58.518357"
   },
   {
     "name": "Public Key Cryptography",
@@ -1510,7 +1510,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.082796"
+    "last_crawled": "2026-01-12T02:59:38.598179"
   },
   {
     "name": "SSL/TLS Explained",
@@ -1525,7 +1525,7 @@
       "/learning/ssl/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.071873"
+    "last_crawled": "2026-01-12T02:54:57.728157"
   },
   {
     "name": "Entropy and Randomness",
@@ -1538,7 +1538,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.078593"
+    "last_crawled": null
   },
   {
     "name": "Computer Networking Fundamentals",
@@ -1553,7 +1553,7 @@
       "/computer-network-tutorials/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.369381"
+    "last_crawled": "2026-01-11T22:42:26.054719"
   },
   {
     "name": "High Performance Browser Networking",
@@ -1566,7 +1566,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.085767"
+    "last_crawled": "2026-01-12T02:55:32.911564"
   },
   {
     "name": "TCP/IP Guide",
@@ -1579,7 +1579,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.094782"
+    "last_crawled": "2026-01-12T02:55:22.376880"
   },
   {
     "name": "DNS Explained",
@@ -1594,7 +1594,7 @@
       "/learning/dns/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.074210"
+    "last_crawled": "2026-01-12T02:54:57.732264"
   },
   {
     "name": "HTTP Protocol",
@@ -1609,7 +1609,7 @@
       "/docs/Web/HTTP/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:58:17.928223"
+    "last_crawled": "2026-01-11T22:45:50.147017"
   },
   {
     "name": "Linux Networking",
@@ -1622,7 +1622,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.079142"
+    "last_crawled": "2026-01-12T02:54:58.380958"
   },
   {
     "name": "WebSockets",
@@ -1635,7 +1635,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.090010"
+    "last_crawled": "2026-01-12T02:56:52.050821"
   },
   {
     "name": "Load Balancing Concepts",
@@ -1648,7 +1648,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.096978"
+    "last_crawled": "2026-01-12T02:55:11.856503"
   },
   {
     "name": "CDN Concepts",
@@ -1663,7 +1663,7 @@
       "/learning/cdn/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.075705"
+    "last_crawled": "2026-01-12T02:54:57.735550"
   },
   {
     "name": "Network Security",
@@ -1676,7 +1676,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:04:49.088038"
+    "last_crawled": "2026-01-11T22:52:01.897299"
   },
   {
     "name": "Stack Overflow - Security",
@@ -1691,7 +1691,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.702549"
+    "last_crawled": "2026-01-11T22:42:25.874264"
   },
   {
     "name": "Stack Overflow - Python",
@@ -1706,7 +1706,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.706312"
+    "last_crawled": "2026-01-11T22:42:25.871055"
   },
   {
     "name": "Stack Overflow - Algorithms",
@@ -1721,7 +1721,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.407927"
+    "last_crawled": "2026-01-11T22:52:58.887670"
   },
   {
     "name": "Stack Overflow - Data Structures",
@@ -1736,7 +1736,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.400399"
+    "last_crawled": "2026-01-11T22:52:58.803692"
   },
   {
     "name": "Stack Overflow - Cryptography",
@@ -1751,7 +1751,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.384268"
+    "last_crawled": "2026-01-11T22:52:59.975993"
   },
   {
     "name": "Stack Overflow - Networking",
@@ -1766,7 +1766,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.370243"
+    "last_crawled": "2026-01-11T22:52:59.998037"
   },
   {
     "name": "Security Stack Exchange",
@@ -1781,7 +1781,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T22:55:44.451808"
+    "last_crawled": "2026-01-11T22:42:25.577096"
   },
   {
     "name": "Math Stack Exchange",
@@ -1796,7 +1796,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.102378"
+    "last_crawled": "2026-01-11T22:52:58.792082"
   },
   {
     "name": "CS Stack Exchange",
@@ -1811,7 +1811,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.087627"
+    "last_crawled": "2026-01-11T22:52:59.985314"
   },
   {
     "name": "Crypto Stack Exchange",
@@ -1826,7 +1826,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.134815"
+    "last_crawled": "2026-01-11T22:53:00.002585"
   },
   {
     "name": "Network Engineering Stack Exchange",
@@ -1841,7 +1841,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.107694"
+    "last_crawled": "2026-01-11T22:52:59.967772"
   },
   {
     "name": "Server Fault",
@@ -1856,7 +1856,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.128756"
+    "last_crawled": "2026-01-11T22:52:58.967932"
   },
   {
     "name": "Super User",
@@ -1871,7 +1871,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.102765"
+    "last_crawled": "2026-01-12T02:54:57.966977"
   },
   {
     "name": "Unix Stack Exchange",
@@ -1886,7 +1886,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.111569"
+    "last_crawled": "2026-01-11T22:52:58.831983"
   },
   {
     "name": "Ask Ubuntu",
@@ -1901,7 +1901,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.092039"
+    "last_crawled": "2026-01-12T02:54:57.982531"
   },
   {
     "name": "Software Engineering Stack Exchange",
@@ -1916,7 +1916,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.125686"
+    "last_crawled": "2026-01-11T22:52:58.957831"
   },
   {
     "name": "Code Review Stack Exchange",
@@ -1931,7 +1931,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.098862"
+    "last_crawled": "2026-01-12T02:54:57.961328"
   },
   {
     "name": "AI Stack Exchange",
@@ -1946,7 +1946,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.117641"
+    "last_crawled": "2026-01-11T22:52:59.457788"
   },
   {
     "name": "Data Science Stack Exchange",
@@ -1961,7 +1961,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.141665"
+    "last_crawled": "2026-01-11T22:52:58.827012"
   },
   {
     "name": "Cross Validated (Stats)",
@@ -1976,7 +1976,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.144087"
+    "last_crawled": "2026-01-11T22:52:59.355407"
   },
   {
     "name": "Physics Stack Exchange",
@@ -1991,7 +1991,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:05:25.137822"
+    "last_crawled": "2026-01-11T22:52:59.433070"
   },
   {
     "name": "Philosophy Stack Exchange",
@@ -2006,7 +2006,7 @@
       "/questions/"
     ],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.100844"
+    "last_crawled": "2026-01-12T02:54:57.957811"
   },
   {
     "name": "ProofWiki",
@@ -2019,7 +2019,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:11:46.036932"
+    "last_crawled": "2026-01-11T23:01:34.555675"
   },
   {
     "name": "Metamath Proof Explorer",
@@ -2032,7 +2032,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:06:50.258280"
+    "last_crawled": "2026-01-12T00:01:23.636058"
   },
   {
     "name": "Mathworld Wolfram",
@@ -2045,7 +2045,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:06:38.087193"
+    "last_crawled": "2026-01-11T22:55:02.741611"
   },
   {
     "name": "Encyclopedia of Mathematics",
@@ -2058,7 +2058,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:27:06.065676"
+    "last_crawled": "2026-01-11T23:29:10.552420"
   },
   {
     "name": "nLab - Math Wiki",
@@ -2071,7 +2071,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.106260"
+    "last_crawled": "2026-01-12T03:54:16.224059"
   },
   {
     "name": "Cut The Knot - Math",
@@ -2084,7 +2084,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.104741"
+    "last_crawled": "2026-01-12T03:31:55.391176"
   },
   {
     "name": "Art of Problem Solving",
@@ -2097,7 +2097,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-10T23:22:05.314496"
+    "last_crawled": "2026-01-11T23:10:50.637780"
   },
   {
     "name": "Brilliant Math",
@@ -2110,7 +2110,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:16:22.334978"
+    "last_crawled": "2026-01-12T00:11:12.886208"
   },
   {
     "name": "Math Insight",
@@ -2123,7 +2123,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:07:33.107703"
+    "last_crawled": "2026-01-12T03:10:53.213544"
   },
   {
     "name": "Interactive Mathematics",
@@ -2136,7 +2136,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.304934"
+    "last_crawled": null
   },
   {
     "name": "Better Explained Math",
@@ -2149,7 +2149,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:20:45.813638"
+    "last_crawled": "2026-01-12T00:14:46.545399"
   },
   {
     "name": "Math24 Analysis",
@@ -2162,7 +2162,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.300512"
+    "last_crawled": null
   },
   {
     "name": "Abstract Algebra Theory",
@@ -2175,7 +2175,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.303436"
+    "last_crawled": null
   },
   {
     "name": "Linear Algebra Done Right",
@@ -2188,7 +2188,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.298461"
+    "last_crawled": null
   },
   {
     "name": "Immersive Linear Algebra",
@@ -2201,7 +2201,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.315129"
+    "last_crawled": null
   },
   {
     "name": "Set Theory - Stanford",
@@ -2214,7 +2214,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.306266"
+    "last_crawled": null
   },
   {
     "name": "Category Theory nLab",
@@ -2227,7 +2227,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:11:06.409110"
+    "last_crawled": null
   },
   {
     "name": "Number Theory Web",
@@ -2240,7 +2240,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.316673"
+    "last_crawled": null
   },
   {
     "name": "Topology Atlas",
@@ -2253,7 +2253,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:11:06.414095"
+    "last_crawled": null
   },
   {
     "name": "Real Analysis",
@@ -2266,7 +2266,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.325811"
+    "last_crawled": null
   },
   {
     "name": "Stanford Encyclopedia - Logic",
@@ -2279,7 +2279,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:33:21.910670"
+    "last_crawled": "2026-01-12T00:28:11.964791"
   },
   {
     "name": "Internet Encyclopedia of Philosophy",
@@ -2292,7 +2292,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:29.507498"
+    "last_crawled": "2026-01-12T00:10:30.028707"
   },
   {
     "name": "Logical Fallacies",
@@ -2305,7 +2305,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:15.393360"
+    "last_crawled": "2026-01-12T00:10:16.212105"
   },
   {
     "name": "Your Logical Fallacy Is",
@@ -2318,7 +2318,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.608753"
+    "last_crawled": "2026-01-12T00:10:16.210333"
   },
   {
     "name": "Fallacy Files",
@@ -2331,7 +2331,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:16:11.389542"
+    "last_crawled": "2026-01-12T00:11:48.702908"
   },
   {
     "name": "Critical Thinking Web",
@@ -2344,7 +2344,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:17:14.012480"
+    "last_crawled": "2026-01-12T00:12:09.002390"
   },
   {
     "name": "Argumentation Theory",
@@ -2357,7 +2357,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.302108"
+    "last_crawled": null
   },
   {
     "name": "Propositional Logic",
@@ -2370,7 +2370,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:30:11.355648"
+    "last_crawled": "2026-01-12T00:25:01.020614"
   },
   {
     "name": "Modal Logic",
@@ -2383,7 +2383,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.319141"
+    "last_crawled": null
   },
   {
     "name": "First Order Logic",
@@ -2396,7 +2396,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.696891"
+    "last_crawled": "2026-01-12T00:10:15.843709"
   },
   {
     "name": "Logic Matters",
@@ -2409,7 +2409,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.312188"
+    "last_crawled": null
   },
   {
     "name": "Open Logic Project",
@@ -2422,7 +2422,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.320324"
+    "last_crawled": null
   },
   {
     "name": "Formal Epistemology",
@@ -2435,7 +2435,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.308955"
+    "last_crawled": null
   },
   {
     "name": "Decision Theory",
@@ -2448,7 +2448,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.321920"
+    "last_crawled": null
   },
   {
     "name": "Game Theory Stanford",
@@ -2461,7 +2461,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.307640"
+    "last_crawled": null
   },
   {
     "name": "Probability Logic",
@@ -2474,7 +2474,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.324053"
+    "last_crawled": null
   },
   {
     "name": "Inductive Logic",
@@ -2487,7 +2487,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.310815"
+    "last_crawled": null
   },
   {
     "name": "Deductive Reasoning",
@@ -2500,7 +2500,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.313574"
+    "last_crawled": null
   },
   {
     "name": "Wikipedia - Mathematics",
@@ -2513,7 +2513,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.059865"
+    "last_crawled": "2026-01-12T00:10:14.870271"
   },
   {
     "name": "Wikipedia - Computer Science",
@@ -2526,7 +2526,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.056699"
+    "last_crawled": "2026-01-12T00:10:14.858932"
   },
   {
     "name": "Wikipedia - Physics",
@@ -2539,7 +2539,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.051804"
+    "last_crawled": "2026-01-12T00:10:14.879203"
   },
   {
     "name": "Wikipedia - Science",
@@ -2552,7 +2552,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.013343"
+    "last_crawled": "2026-01-12T00:10:14.868429"
   },
   {
     "name": "Wikipedia - Technology",
@@ -2565,7 +2565,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.054760"
+    "last_crawled": "2026-01-12T00:10:14.855139"
   },
   {
     "name": "Wikipedia - Logic",
@@ -2578,7 +2578,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.057781"
+    "last_crawled": "2026-01-12T00:10:14.872065"
   },
   {
     "name": "Wikipedia - Philosophy",
@@ -2591,7 +2591,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.327636"
+    "last_crawled": null
   },
   {
     "name": "Wikipedia - Engineering",
@@ -2604,7 +2604,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:09.317874"
+    "last_crawled": null
   },
   {
     "name": "Wikipedia - Electronics",
@@ -2617,7 +2617,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.356454"
+    "last_crawled": null
   },
   {
     "name": "Wikipedia - Cryptography",
@@ -2630,7 +2630,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:15:14.058865"
+    "last_crawled": "2026-01-12T00:10:14.862171"
   },
   {
     "name": "Wikipedia - Internet",
@@ -2643,7 +2643,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.359762"
+    "last_crawled": null
   },
   {
     "name": "Wikipedia - Software",
@@ -2656,7 +2656,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.363296"
+    "last_crawled": null
   },
   {
     "name": "Simple Wikipedia - Science",
@@ -2669,7 +2669,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.374701"
+    "last_crawled": null
   },
   {
     "name": "Wikibooks - Computing",
@@ -2682,7 +2682,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.372645"
+    "last_crawled": null
   },
   {
     "name": "Wikibooks - Mathematics",
@@ -2695,7 +2695,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.365915"
+    "last_crawled": null
   },
   {
     "name": "Wikibooks - Physics",
@@ -2708,7 +2708,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.369577"
+    "last_crawled": null
   },
   {
     "name": "Wikiversity - Computer Science",
@@ -2721,7 +2721,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.376344"
+    "last_crawled": null
   },
   {
     "name": "Wikiversity - Mathematics",
@@ -2734,7 +2734,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.380143"
+    "last_crawled": null
   },
   {
     "name": "Wikiversity - Physics",
@@ -2747,7 +2747,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.381881"
+    "last_crawled": null
   },
   {
     "name": "How Stuff Works - Tech",
@@ -2760,7 +2760,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.383730"
+    "last_crawled": null
   },
   {
     "name": "How Stuff Works - Science",
@@ -2773,7 +2773,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.378589"
+    "last_crawled": null
   },
   {
     "name": "Explain Like I'm Five",
@@ -2786,7 +2786,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.385366"
+    "last_crawled": null
   },
   {
     "name": "Real Python",
@@ -2799,7 +2799,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:21:39.142252"
+    "last_crawled": "2026-01-12T00:17:01.810851"
   },
   {
     "name": "Python Docs",
@@ -2812,7 +2812,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:19:45.124701"
+    "last_crawled": "2026-01-12T00:15:26.884965"
   },
   {
     "name": "MDN Web Docs",
@@ -2825,7 +2825,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:28:03.566820"
+    "last_crawled": "2026-01-12T00:22:48.529828"
   },
   {
     "name": "W3Schools",
@@ -2838,7 +2838,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.387098"
+    "last_crawled": null
   },
   {
     "name": "DevDocs",
@@ -2851,7 +2851,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:33.378532"
+    "last_crawled": "2026-01-12T00:31:17.313375"
   },
   {
     "name": "freeCodeCamp",
@@ -2864,7 +2864,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.389614"
+    "last_crawled": null
   },
   {
     "name": "Tutorialspoint",
@@ -2877,7 +2877,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.392016"
+    "last_crawled": null
   },
   {
     "name": "Javatpoint",
@@ -2890,7 +2890,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.394099"
+    "last_crawled": null
   },
   {
     "name": "Programiz",
@@ -2903,7 +2903,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.395944"
+    "last_crawled": null
   },
   {
     "name": "LeetCode Discuss",
@@ -2916,7 +2916,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.253816"
+    "last_crawled": "2026-01-12T00:31:16.036436"
   },
   {
     "name": "Codeforces",
@@ -2929,7 +2929,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.245493"
+    "last_crawled": "2026-01-12T00:31:16.044668"
   },
   {
     "name": "TopCoder",
@@ -2942,7 +2942,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.398202"
+    "last_crawled": null
   },
   {
     "name": "HackerRank",
@@ -2955,7 +2955,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:08:48.400011"
+    "last_crawled": null
   },
   {
     "name": "Interview Cake",
@@ -2968,7 +2968,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.142865"
+    "last_crawled": null
   },
   {
     "name": "Tech Interview Handbook",
@@ -2981,7 +2981,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.147093"
+    "last_crawled": null
   },
   {
     "name": "PayloadsAllTheThings",
@@ -2994,7 +2994,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:03:57.270790"
+    "last_crawled": "2026-01-12T01:17:17.011700"
   },
   {
     "name": "SANS Reading Room",
@@ -3007,7 +3007,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:48:06.150446"
+    "last_crawled": "2026-01-12T00:34:34.315787"
   },
   {
     "name": "Krebs on Security",
@@ -3020,7 +3020,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.152466"
+    "last_crawled": null
   },
   {
     "name": "The Hacker News",
@@ -3033,7 +3033,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.139525"
+    "last_crawled": null
   },
   {
     "name": "Dark Reading",
@@ -3046,7 +3046,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.148572"
+    "last_crawled": null
   },
   {
     "name": "Security Weekly",
@@ -3059,7 +3059,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.145512"
+    "last_crawled": null
   },
   {
     "name": "ThreatPost",
@@ -3072,7 +3072,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.149923"
+    "last_crawled": null
   },
   {
     "name": "Hack The Box Blog",
@@ -3085,7 +3085,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:53:41.971299"
+    "last_crawled": "2026-01-12T00:37:21.030794"
   },
   {
     "name": "TryHackMe Blog",
@@ -3098,7 +3098,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.936672"
+    "last_crawled": "2026-01-12T00:31:16.460539"
   },
   {
     "name": "Pentester Land",
@@ -3111,7 +3111,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:46:01.839914"
+    "last_crawled": "2026-01-12T00:31:38.017848"
   },
   {
     "name": "InfoSec Writeups",
@@ -3124,7 +3124,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.549819"
+    "last_crawled": "2026-01-12T00:31:16.205420"
   },
   {
     "name": "Bug Bounty Reports",
@@ -3137,7 +3137,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:33.371096"
+    "last_crawled": "2026-01-12T00:31:17.028780"
   },
   {
     "name": "Physics Classroom",
@@ -3150,7 +3150,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.151179"
+    "last_crawled": null
   },
   {
     "name": "Physics LibreTexts",
@@ -3163,7 +3163,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.153923"
+    "last_crawled": null
   },
   {
     "name": "Math LibreTexts",
@@ -3176,7 +3176,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.155555"
+    "last_crawled": null
   },
   {
     "name": "Chemistry LibreTexts",
@@ -3189,7 +3189,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:11:06.416384"
+    "last_crawled": null
   },
   {
     "name": "Engineering LibreTexts",
@@ -3202,7 +3202,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.156852"
+    "last_crawled": null
   },
   {
     "name": "OpenStax Physics",
@@ -3215,7 +3215,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.159650"
+    "last_crawled": null
   },
   {
     "name": "OpenStax Math",
@@ -3228,7 +3228,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.158114"
+    "last_crawled": null
   },
   {
     "name": "NIST Digital Library",
@@ -3241,7 +3241,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.161015"
+    "last_crawled": null
   },
   {
     "name": "Wolfram Alpha",
@@ -3254,7 +3254,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.163017"
+    "last_crawled": null
   },
   {
     "name": "Papers With Code",
@@ -3267,7 +3267,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:47:23.572348"
+    "last_crawled": "2026-01-12T00:33:10.811028"
   },
   {
     "name": "Distill ML",
@@ -3280,7 +3280,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:46:24.302438"
+    "last_crawled": "2026-01-12T00:32:15.174752"
   },
   {
     "name": "Towards Data Science",
@@ -3293,7 +3293,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.164590"
+    "last_crawled": null
   },
   {
     "name": "Machine Learning Mastery",
@@ -3306,7 +3306,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:00:01.386081"
+    "last_crawled": "2026-01-12T00:41:08.573315"
   },
   {
     "name": "Google AI Blog",
@@ -3319,7 +3319,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:47:32.020306"
+    "last_crawled": "2026-01-12T00:32:51.244878"
   },
   {
     "name": "OpenAI Blog",
@@ -3332,7 +3332,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.641757"
+    "last_crawled": "2026-01-12T00:31:16.064329"
   },
   {
     "name": "DeepMind Blog",
@@ -3345,7 +3345,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:48:25.012753"
+    "last_crawled": "2026-01-12T00:34:03.167775"
   },
   {
     "name": "Hugging Face Blog",
@@ -3358,7 +3358,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:51:28.969347"
+    "last_crawled": "2026-01-12T00:37:02.954168"
   },
   {
     "name": "Fast.ai",
@@ -3371,7 +3371,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:47:53.097849"
+    "last_crawled": "2026-01-12T00:33:46.899900"
   },
   {
     "name": "PyTorch Tutorials",
@@ -3384,7 +3384,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:45:32.657821"
+    "last_crawled": "2026-01-12T00:31:16.358388"
   },
   {
     "name": "TensorFlow Tutorials",
@@ -3397,7 +3397,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T00:52:22.471820"
+    "last_crawled": "2026-01-12T00:38:20.660391"
   },
   {
     "name": "Scikit-learn Docs",
@@ -3410,7 +3410,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.691157"
+    "last_crawled": "2026-01-12T01:29:26.349892"
   },
   {
     "name": "AWS Documentation",
@@ -3423,7 +3423,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.703316"
+    "last_crawled": "2026-01-12T01:20:47.699339"
   },
   {
     "name": "Google Cloud Docs",
@@ -3436,7 +3436,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.695703"
+    "last_crawled": "2026-01-12T01:25:17.473750"
   },
   {
     "name": "Azure Docs",
@@ -3449,7 +3449,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.693593"
+    "last_crawled": "2026-01-12T02:05:05.659182"
   },
   {
     "name": "Docker Docs",
@@ -3462,7 +3462,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.697594"
+    "last_crawled": "2026-01-12T01:21:40.697790"
   },
   {
     "name": "Kubernetes Docs",
@@ -3475,7 +3475,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.718414"
+    "last_crawled": "2026-01-12T01:25:49.761434"
   },
   {
     "name": "Linux Documentation",
@@ -3488,7 +3488,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.710720"
+    "last_crawled": "2026-01-12T01:27:30.200936"
   },
   {
     "name": "Arch Wiki",
@@ -3501,7 +3501,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:05:07.699934"
+    "last_crawled": "2026-01-12T01:30:51.772138"
   },
   {
     "name": "Gentoo Wiki",
@@ -3514,7 +3514,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.166345"
+    "last_crawled": null
   },
   {
     "name": "Nginx Docs",
@@ -3527,7 +3527,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.168436"
+    "last_crawled": null
   },
   {
     "name": "Redis Docs",
@@ -3540,7 +3540,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.169909"
+    "last_crawled": null
   },
   {
     "name": "PostgreSQL Docs",
@@ -3553,7 +3553,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:09:28.171403"
+    "last_crawled": null
   },
   {
     "name": "MongoDB Docs",
@@ -3566,7 +3566,7 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:15.065972"
+    "last_crawled": null
   },
   {
     "name": "Git Documentation",
@@ -3579,6 +3579,6 @@
     "max_depth": 2,
     "include_patterns": [],
     "exclude_patterns": [],
-    "last_crawled": "2026-01-11T01:10:14.579547"
+    "last_crawled": null
   }
 ]

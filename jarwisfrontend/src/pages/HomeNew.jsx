@@ -12,33 +12,57 @@ import {
   UseCasesSlider,
   PrivacyClaim
 } from "../components/landing";
+import AIEngineSection from "../components/solutions/AIEngineSection";
+import { ScrollProgressBar, RevealOnScroll } from "../components/ui";
 
 const HomeNew = () => {
   return (
     <div className="min-h-screen bg-gray-950">
+      {/* Scroll Progress Bar - Palo Alto style */}
+      <ScrollProgressBar />
+
       {/* Hero Section */}
       <HeroSection />
 
       {/* Trusted By / Integrations Marquee */}
-      <TrustedBy />
+      <RevealOnScroll animation="fadeUp" delay={0.1}>
+        <TrustedBy />
+      </RevealOnScroll>
 
       {/* Use Cases - Web, Mobile, Network, Cloud, AI */}
-      <UseCasesSlider />
+      <RevealOnScroll animation="fadeUp">
+        <UseCasesSlider />
+      </RevealOnScroll>
 
       {/* How It Works - Workflow Steps */}
-      <WorkflowSteps />
+      <RevealOnScroll animation="fadeUp">
+        <WorkflowSteps />
+      </RevealOnScroll>
+
+      {/* AI Engine Section - Built by BKD Labs, No LLMs */}
+      <RevealOnScroll animation="zoomIn">
+        <AIEngineSection scanType="web" showInteractiveDemo={true} />
+      </RevealOnScroll>
 
       {/* Stats Section */}
-      <StatsSection />
+      <RevealOnScroll animation="fadeUp">
+        <StatsSection />
+      </RevealOnScroll>
 
       {/* Features Grid */}
-      <FeaturesGrid />
+      <RevealOnScroll animation="fadeUp">
+        <FeaturesGrid />
+      </RevealOnScroll>
 
       {/* Final CTA */}
-      <CTASection />
+      <RevealOnScroll animation="spring">
+        <CTASection />
+      </RevealOnScroll>
 
       {/* Privacy Claim */}
-      <PrivacyClaim />
+      <RevealOnScroll animation="fade">
+        <PrivacyClaim />
+      </RevealOnScroll>
 
       {/* Footer */}
       <FooterNew />

@@ -11,8 +11,8 @@ if exist ".venv\Scripts\activate.bat" (
     call .venv\Scripts\activate.bat
 )
 
-REM Check status
-python jarwis_ai\training\daemon.py status
+REM Check status using module syntax
+python -m jarwis_ai.training.daemon status
 
 echo.
 pause

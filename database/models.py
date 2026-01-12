@@ -351,6 +351,20 @@ class Finding(Base):
     poc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Proof of concept
     reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
+    # NEW: Full request/response for PoC reproduction
+    request_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # Full HTTP request
+    response_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Full HTTP response
+    
+    # NEW: Impact and disclosure
+    impact: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # What damage can occur
+    disclosure_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Days to fix
+    
+    # NEW: Compliance and classification
+    cwe_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # e.g., CWE-89
+    cvss_score: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)  # 0-10
+    compliance_refs: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)  # PCI-DSS, HIPAA, etc.
+    attack_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # sqli, xss, etc.
+    
     # AI verification
     ai_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_confidence: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)

@@ -650,7 +650,7 @@ class PenTestRunner:
         console.print("\n[bold yellow]Phase 6: Jarwis API Security Testing[/bold yellow]")
         console.print("[cyan][OK]  Jarwis is scanning API endpoints for vulnerabilities...[/cyan]")
         
-        from attacks.web.pre_login.api_scanner import APIScanner
+        from attacks.web.api.api_scanner import APIScanner
         
         api_scanner = APIScanner(
             config=self.config['api'],

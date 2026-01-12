@@ -5,6 +5,12 @@ A simple, isolated HTTP crawler for extracting security knowledge from websites.
 Does NOT use Playwright or browser automation - pure HTTP requests for speed.
 
 This module is completely separate from core/browser.py (which is for security scanning).
+
+Features:
+- Robust network resilience with exponential backoff
+- Per-page checkpoint/resume capability
+- Automatic retry on connection failures
+- Network connectivity monitoring
 """
 
 import asyncio
@@ -13,16 +19,25 @@ import json
 import logging
 import re
 import time
+import socket
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+# Network resilience constants
+MAX_REQUEST_RETRIES = 5
+INITIAL_RETRY_DELAY = 2.0  # seconds
+MAX_RETRY_DELAY = 120.0  # 2 minutes max
+CONNECTIVITY_CHECK_HOSTS = ["8.8.8.8", "1.1.1.1"]  # Google DNS, Cloudflare DNS
+CONNECTIVITY_CHECK_TIMEOUT = 5
+CONNECTIVITY_WAIT_INTERVAL = 10  # seconds between connectivity checks
 
 
 @dataclass
@@ -37,6 +52,7 @@ class CrawlResult:
     links: List[str]
     crawl_time: float
     error: Optional[str] = None
+    retry_count: int = 0  # How many retries were needed
     
     @property
     def success(self) -> bool:
@@ -46,6 +62,49 @@ class CrawlResult:
     def content_hash(self) -> str:
         """Hash of content for deduplication"""
         return hashlib.md5(self.text_content.encode()).hexdigest()
+
+
+@dataclass
+class CrawlProgress:
+    """Tracks crawl progress for checkpointing"""
+    site_name: str
+    base_url: str
+    visited_urls: Set[str] = field(default_factory=set)
+    queued_urls: List[Tuple[str, int]] = field(default_factory=list)  # (url, depth)
+    successful_pages: int = 0
+    failed_pages: int = 0
+    last_checkpoint: Optional[datetime] = None
+    total_retries: int = 0
+    network_interruptions: int = 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "site_name": self.site_name,
+            "base_url": self.base_url,
+            "visited_urls": list(self.visited_urls),
+            "queued_urls": self.queued_urls,
+            "successful_pages": self.successful_pages,
+            "failed_pages": self.failed_pages,
+            "last_checkpoint": self.last_checkpoint.isoformat() if self.last_checkpoint else None,
+            "total_retries": self.total_retries,
+            "network_interruptions": self.network_interruptions
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'CrawlProgress':
+        progress = cls(
+            site_name=data["site_name"],
+            base_url=data["base_url"]
+        )
+        progress.visited_urls = set(data.get("visited_urls", []))
+        progress.queued_urls = [tuple(q) for q in data.get("queued_urls", [])]
+        progress.successful_pages = data.get("successful_pages", 0)
+        progress.failed_pages = data.get("failed_pages", 0)
+        progress.total_retries = data.get("total_retries", 0)
+        progress.network_interruptions = data.get("network_interruptions", 0)
+        if data.get("last_checkpoint"):
+            progress.last_checkpoint = datetime.fromisoformat(data["last_checkpoint"])
+        return progress
 
 
 @dataclass
@@ -87,6 +146,11 @@ class WebCrawler:
     - Content deduplication
     - robots.txt respect (optional)
     - Caching for incremental crawls
+    - ROBUST NETWORK RESILIENCE:
+      * Per-request retry with exponential backoff
+      * Network connectivity monitoring
+      * Checkpoint/resume from exact position
+      * Automatic recovery from network failures
     """
     
     def __init__(
@@ -106,8 +170,82 @@ class WebCrawler:
         self._last_request_time: Dict[str, float] = {}
         self._robots_cache: Dict[str, List[str]] = {}
         
-        # Ensure cache directory exists
+        # Checkpoint directory
+        self.checkpoint_dir = self.cache_dir / "checkpoints"
+        
+        # Ensure directories exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Network state
+        self._network_available = True
+        self._last_connectivity_check = 0
+    
+    def _check_network_connectivity(self) -> bool:
+        """Check if network is available by testing connectivity to known hosts"""
+        for host in CONNECTIVITY_CHECK_HOSTS:
+            try:
+                socket.create_connection((host, 53), timeout=CONNECTIVITY_CHECK_TIMEOUT)
+                return True
+            except (socket.timeout, socket.error):
+                continue
+        return False
+    
+    async def _wait_for_network(self):
+        """Wait until network connectivity is restored"""
+        if self._check_network_connectivity():
+            self._network_available = True
+            return
+        
+        logger.warning("[NETWORK] Connection lost. Waiting for network to recover...")
+        
+        while not self._check_network_connectivity():
+            logger.info(f"[NETWORK] Still offline. Retrying in {CONNECTIVITY_WAIT_INTERVAL}s...")
+            await asyncio.sleep(CONNECTIVITY_WAIT_INTERVAL)
+        
+        logger.info("[NETWORK] Connection restored! Resuming crawl...")
+        self._network_available = True
+    
+    def _get_checkpoint_path(self, site_name: str) -> Path:
+        """Get the checkpoint file path for a site"""
+        safe_name = re.sub(r'[^\w\-]', '_', site_name)
+        return self.checkpoint_dir / f"{safe_name}_checkpoint.json"
+    
+    def _save_checkpoint(self, progress: CrawlProgress):
+        """Save crawl progress checkpoint"""
+        progress.last_checkpoint = datetime.now()
+        checkpoint_path = self._get_checkpoint_path(progress.site_name)
+        
+        try:
+            with open(checkpoint_path, "w", encoding="utf-8") as f:
+                json.dump(progress.to_dict(), f, indent=2)
+            logger.debug(f"[CHECKPOINT] Saved progress for {progress.site_name}: {progress.successful_pages} pages")
+        except Exception as e:
+            logger.error(f"[CHECKPOINT] Failed to save: {e}")
+    
+    def _load_checkpoint(self, site_name: str) -> Optional[CrawlProgress]:
+        """Load crawl progress checkpoint if exists"""
+        checkpoint_path = self._get_checkpoint_path(site_name)
+        
+        if not checkpoint_path.exists():
+            return None
+        
+        try:
+            with open(checkpoint_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            progress = CrawlProgress.from_dict(data)
+            logger.info(f"[CHECKPOINT] Loaded progress for {site_name}: {progress.successful_pages} pages already crawled")
+            return progress
+        except Exception as e:
+            logger.warning(f"[CHECKPOINT] Failed to load: {e}")
+            return None
+    
+    def _clear_checkpoint(self, site_name: str):
+        """Clear checkpoint after successful completion"""
+        checkpoint_path = self._get_checkpoint_path(site_name)
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+            logger.debug(f"[CHECKPOINT] Cleared checkpoint for {site_name}")
     
     async def crawl_site(
         self,
@@ -117,7 +255,8 @@ class WebCrawler:
         max_depth: int = 2,
         max_pages: int = 100,
         include_patterns: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None
+        exclude_patterns: Optional[List[str]] = None,
+        resume: bool = True  # Enable checkpoint/resume by default
     ) -> CrawlSession:
         """
         Crawl a website starting from the given URL.
@@ -130,6 +269,7 @@ class WebCrawler:
             max_pages: Maximum pages to crawl
             include_patterns: Regex patterns for URLs to include
             exclude_patterns: Regex patterns for URLs to exclude
+            resume: If True, resume from checkpoint if available
             
         Returns:
             CrawlSession with all results
@@ -155,33 +295,63 @@ class WebCrawler:
         
         session.start_time = time.time()
         
-        logger.info(f"Starting crawl of {site_name} ({start_url})")
+        # Try to load checkpoint
+        progress = None
+        if resume:
+            progress = self._load_checkpoint(site_name)
+        
+        if progress:
+            # Resume from checkpoint
+            session.visited = progress.visited_urls.copy()
+            queue = progress.queued_urls.copy()
+            logger.info(f"[RESUME] Resuming {site_name}: {len(session.visited)} pages already done, {len(queue)} in queue")
+        else:
+            # Fresh start
+            progress = CrawlProgress(site_name=site_name, base_url=start_url)
+            queue = [(start_url, 0)]
+            session.queued.add(start_url)
+            logger.info(f"[START] Starting fresh crawl of {site_name} ({start_url})")
+        
+        # Track pages saved in current session
+        checkpoint_interval = 5  # Save checkpoint every 5 pages
+        pages_since_checkpoint = 0
         
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=True,
             headers={"User-Agent": self.user_agent}
         ) as client:
-            # BFS crawl
-            queue = [(start_url, 0)]  # (url, depth)
-            session.queued.add(start_url)
-            
-            while queue and len(session.results) < max_pages:
+            while queue and len(session.results) + len(session.visited) - len(progress.visited_urls) < max_pages:
                 url, depth = queue.pop(0)
                 
                 if url in session.visited:
                     continue
                 
+                # Check network before each request
+                if not self._network_available or (time.time() - self._last_connectivity_check > 60):
+                    if not self._check_network_connectivity():
+                        # Save checkpoint before waiting
+                        progress.queued_urls = queue.copy()
+                        progress.queued_urls.insert(0, (url, depth))  # Re-add current URL
+                        progress.network_interruptions += 1
+                        self._save_checkpoint(progress)
+                        
+                        await self._wait_for_network()
+                    self._last_connectivity_check = time.time()
+                
                 # Rate limit
                 await self._rate_limit(url)
                 
-                # Crawl page
-                result = await self._crawl_page(client, url)
+                # Crawl page with retry logic
+                result = await self._crawl_page_with_retry(client, url)
                 session.visited.add(url)
+                progress.visited_urls.add(url)
                 session.results.append(result)
                 
                 if result.success:
-                    logger.debug(f"Crawled: {url} ({result.status_code})")
+                    progress.successful_pages += 1
+                    progress.total_retries += result.retry_count
+                    logger.debug(f"[OK] {url} ({result.status_code})")
                     
                     # Add new links to queue
                     if depth < max_depth:
@@ -191,16 +361,86 @@ class WebCrawler:
                                     queue.append((link, depth + 1))
                                     session.queued.add(link)
                 else:
-                    logger.warning(f"Failed: {url} - {result.error}")
+                    progress.failed_pages += 1
+                    logger.warning(f"[FAIL] {url} - {result.error}")
+                
+                # Periodic checkpoint
+                pages_since_checkpoint += 1
+                if pages_since_checkpoint >= checkpoint_interval:
+                    progress.queued_urls = queue.copy()
+                    self._save_checkpoint(progress)
+                    pages_since_checkpoint = 0
         
         session.end_time = time.time()
+        
+        # Clear checkpoint on successful completion
+        self._clear_checkpoint(site_name)
+        
         logger.info(
-            f"Completed crawl of {site_name}: "
-            f"{session.pages_crawled} pages in {session.duration:.1f}s"
+            f"[COMPLETE] {site_name}: "
+            f"{session.pages_crawled} pages in {session.duration:.1f}s "
+            f"(retries: {progress.total_retries}, interruptions: {progress.network_interruptions})"
         )
         
         return session
     
+    async def _crawl_page_with_retry(self, client: httpx.AsyncClient, url: str) -> CrawlResult:
+        """Crawl a single page with exponential backoff retry on network errors"""
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < MAX_REQUEST_RETRIES:
+            result = await self._crawl_page(client, url)
+            
+            # Success or non-retryable error
+            if result.success or result.error in ["Not HTML content"]:
+                result.retry_count = retry_count
+                return result
+            
+            # Check if error is retryable (network-related)
+            retryable_errors = [
+                "Timeout", "Connection", "Network", "Reset", "Refused",
+                "EOF", "Closed", "SSLError", "ConnectError"
+            ]
+            
+            is_retryable = any(err.lower() in (result.error or "").lower() for err in retryable_errors)
+            
+            if not is_retryable:
+                # Non-retryable error (e.g., 404, 403)
+                result.retry_count = retry_count
+                return result
+            
+            retry_count += 1
+            last_error = result.error
+            
+            if retry_count < MAX_REQUEST_RETRIES:
+                # Exponential backoff with jitter
+                import random
+                delay = min(INITIAL_RETRY_DELAY * (2 ** (retry_count - 1)), MAX_RETRY_DELAY)
+                jitter = delay * 0.2 * random.random()
+                actual_delay = delay + jitter
+                
+                logger.debug(f"[RETRY {retry_count}/{MAX_REQUEST_RETRIES}] {url} after {actual_delay:.1f}s - {last_error}")
+                await asyncio.sleep(actual_delay)
+                
+                # Check network connectivity before retry
+                if not self._check_network_connectivity():
+                    await self._wait_for_network()
+        
+        # All retries exhausted
+        return CrawlResult(
+            url=url,
+            status_code=0,
+            content_type="",
+            html="",
+            title="",
+            text_content="",
+            links=[],
+            crawl_time=0,
+            error=f"Max retries ({MAX_REQUEST_RETRIES}) exceeded: {last_error}",
+            retry_count=retry_count
+        )
+
     async def _crawl_page(self, client: httpx.AsyncClient, url: str) -> CrawlResult:
         """Crawl a single page"""
         start = time.time()

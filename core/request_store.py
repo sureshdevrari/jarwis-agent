@@ -10,7 +10,7 @@ import logging
 import hashlib
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,9 @@ class RequestStore:
         
         # Authentication tokens for post-login
         self.auth_tokens: Dict[str, str] = {}  # token_type -> token_value
-        self.token_expiry: Optional[datetime] = None
+        self.token_expiry: Dict[str, datetime] = {}  # token_type -> expiry time
+        self.token_refresh_callbacks: Dict[str, Any] = {}  # token_type -> refresh callback
+        self.refresh_threshold_seconds: int = 60  # Refresh when < 60s remaining
         
         # File paths
         self.pre_login_file = self.storage_dir / "pre_login_requests.json"
@@ -345,6 +347,239 @@ class RequestStore:
     def get_current_auth_token(self, token_type: str = 'jwt') -> Optional[str]:
         """Get current authentication token"""
         return self.auth_tokens.get(token_type)
+    
+    def get_auth_headers(self) -> Dict[str, str]:
+        """
+        Get authentication headers for making HTTP requests.
+        
+        Returns a dict suitable for passing to aiohttp requests with
+        Authorization header if JWT/Bearer tokens are present.
+        
+        Returns:
+            Dict with Authorization header if tokens exist, empty otherwise
+        """
+        headers = {}
+        
+        # Check for JWT or bearer token
+        for token_type in ['jwt', 'bearer', 'access_token']:
+            token = self.auth_tokens.get(token_type)
+            if token:
+                headers['Authorization'] = f'Bearer {token}'
+                break
+        
+        # Check for API key
+        api_key = self.auth_tokens.get('api_key')
+        if api_key and 'Authorization' not in headers:
+            headers['X-API-Key'] = api_key
+        
+        return headers
+    
+    def get_auth_cookies(self) -> Dict[str, str]:
+        """
+        Get authentication cookies for making HTTP requests.
+        
+        Returns a dict suitable for passing to aiohttp.ClientSession(cookies=...)
+        
+        Returns:
+            Dict with session cookies if present, empty otherwise
+        """
+        cookies = {}
+        
+        # Session cookie types to include
+        session_types = ['session_cookie', 'session', 'sessionid', 'JSESSIONID', 'PHPSESSID', 'ASP.NET_SessionId', 'token', 'auth_token', 'sid']
+        
+        for token_type, token_value in self.auth_tokens.items():
+            if token_type in session_types or 'session' in token_type.lower() or 'cookie' in token_type.lower():
+                # Use a normalized name for common session cookie
+                cookie_name = token_type if token_type not in ['session_cookie'] else 'session'
+                cookies[cookie_name] = token_value
+        
+        return cookies
+    
+    def get_authenticated_session_kwargs(self) -> Dict[str, Any]:
+        """
+        Get kwargs for creating an authenticated aiohttp.ClientSession.
+        
+        Usage:
+            session_kwargs = request_store.get_authenticated_session_kwargs()
+            async with aiohttp.ClientSession(**session_kwargs) as session:
+                # session now has auth cookies and headers
+                
+        Returns:
+            Dict with 'cookies' and 'headers' keys ready for ClientSession
+        """
+        auth_headers = self.get_auth_headers()
+        auth_cookies = self.get_auth_cookies()
+        
+        result = {}
+        if auth_cookies:
+            result['cookies'] = auth_cookies
+        if auth_headers:
+            result['headers'] = auth_headers
+            
+        logger.debug(f"Auth session kwargs: {len(auth_cookies)} cookies, {len(auth_headers)} headers")
+        return result
+    
+    def has_authentication(self) -> bool:
+        """Check if any authentication tokens are stored"""
+        return len(self.auth_tokens) > 0
+    
+    # =========================================================================
+    # Token Refresh Support
+    # =========================================================================
+    
+    def set_token_with_expiry(
+        self, 
+        token_type: str, 
+        token_value: str, 
+        expires_in: Optional[int] = None,
+        expiry_time: Optional[datetime] = None
+    ):
+        """
+        Set a token with explicit expiry information.
+        
+        Args:
+            token_type: Type of token (jwt, bearer, session_cookie, api_key)
+            token_value: The actual token value
+            expires_in: Seconds until token expires (optional)
+            expiry_time: Explicit expiry datetime (optional)
+        """
+        self.auth_tokens[token_type] = token_value
+        
+        if expiry_time:
+            self.token_expiry[token_type] = expiry_time
+        elif expires_in:
+            self.token_expiry[token_type] = datetime.now() + timedelta(seconds=expires_in)
+        elif token_type in ['jwt', 'bearer', 'access_token']:
+            # Try to extract expiry from JWT
+            expiry = self._extract_jwt_expiry(token_value)
+            if expiry:
+                self.token_expiry[token_type] = expiry
+        
+        logger.info(f"Set {token_type} token with expiry: {self.token_expiry.get(token_type, 'unknown')}")
+    
+    def _extract_jwt_expiry(self, token: str) -> Optional[datetime]:
+        """Extract expiry time from JWT token"""
+        import base64
+        try:
+            # JWT format: header.payload.signature
+            parts = token.split('.')
+            if len(parts) != 3:
+                return None
+            
+            # Decode payload (add padding if needed)
+            payload_b64 = parts[1]
+            padding = 4 - len(payload_b64) % 4
+            if padding != 4:
+                payload_b64 += '=' * padding
+            
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+            
+            if 'exp' in payload:
+                return datetime.fromtimestamp(payload['exp'])
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Failed to extract JWT expiry: {e}")
+            return None
+    
+    def is_token_expiring(self, token_type: str = 'jwt') -> bool:
+        """Check if token is expiring soon (within threshold)"""
+        if token_type not in self.token_expiry:
+            return False
+        
+        expiry = self.token_expiry[token_type]
+        remaining = (expiry - datetime.now()).total_seconds()
+        
+        return remaining < self.refresh_threshold_seconds
+    
+    def is_token_expired(self, token_type: str = 'jwt') -> bool:
+        """Check if token is already expired"""
+        if token_type not in self.token_expiry:
+            return False
+        
+        return datetime.now() >= self.token_expiry[token_type]
+    
+    def get_token_remaining_seconds(self, token_type: str = 'jwt') -> Optional[int]:
+        """Get seconds remaining until token expires"""
+        if token_type not in self.token_expiry:
+            return None
+        
+        remaining = (self.token_expiry[token_type] - datetime.now()).total_seconds()
+        return max(0, int(remaining))
+    
+    def set_refresh_callback(self, token_type: str, callback):
+        """
+        Set a callback function to refresh a token when it expires.
+        
+        The callback should be an async function that returns (new_token, expires_in).
+        
+        Args:
+            token_type: Type of token to refresh
+            callback: Async function returning (token_value, expires_in_seconds)
+        """
+        self.token_refresh_callbacks[token_type] = callback
+        logger.info(f"Set refresh callback for {token_type} token")
+    
+    async def refresh_token_if_needed(self, token_type: str = 'jwt') -> bool:
+        """
+        Refresh token if it's expiring soon.
+        
+        Returns True if refresh was successful or not needed.
+        Returns False if refresh failed.
+        """
+        if not self.is_token_expiring(token_type):
+            return True
+        
+        if token_type not in self.token_refresh_callbacks:
+            logger.warning(f"Token {token_type} expiring but no refresh callback set")
+            return False
+        
+        try:
+            logger.info(f"Refreshing {token_type} token...")
+            callback = self.token_refresh_callbacks[token_type]
+            
+            import asyncio
+            if asyncio.iscoroutinefunction(callback):
+                result = await callback()
+            else:
+                result = callback()
+            
+            if result:
+                new_token, expires_in = result
+                self.set_token_with_expiry(token_type, new_token, expires_in=expires_in)
+                logger.info(f"Successfully refreshed {token_type} token")
+                return True
+            
+        except Exception as e:
+            logger.error(f"Failed to refresh {token_type} token: {e}")
+        
+        return False
+    
+    def get_all_auth_info(self) -> Dict[str, Any]:
+        """
+        Get comprehensive auth information for debugging/logging.
+        
+        Returns:
+            Dict with tokens, expiry info, and status
+        """
+        info = {
+            'has_auth': self.has_authentication(),
+            'token_types': list(self.auth_tokens.keys()),
+            'tokens_with_expiry': list(self.token_expiry.keys()),
+            'expiring_soon': [],
+            'expired': [],
+        }
+        
+        for token_type in self.auth_tokens:
+            if self.is_token_expired(token_type):
+                info['expired'].append(token_type)
+            elif self.is_token_expiring(token_type):
+                info['expiring_soon'].append(token_type)
+                remaining = self.get_token_remaining_seconds(token_type)
+                info[f'{token_type}_remaining_seconds'] = remaining
+        
+        return info
     
     def save_to_disk(self):
         """Save captured data to disk"""

@@ -24,10 +24,11 @@ Before committing any changes, verify:
 |-----------|-----------------|
 | API routes | `api/routes/` |
 | Business logic | `services/` |
-| Scanners (web) | `attacks/web/pre_login/` or `post_login/` |
-| Scanners (cloud) | `attacks/cloud/` |
+| Scanners (web) | `attacks/web/a01-a10/` (OWASP organized) |
+| Scanners (cloud) | `attacks/cloud/{aws,azure,gcp,kubernetes}/` |
 | Scanners (network) | `attacks/network/` |
-| Scanners (mobile) | `attacks/mobile/` |
+| Scanners (mobile) | `attacks/mobile/{static,dynamic,platform}/` |
+| Scanners (SAST) | `attacks/sast/{providers,analyzers}/` |
 | Core engines | `core/` |
 | Database models | `database/` |
 | React pages | `jarwisfrontend/src/pages/` |

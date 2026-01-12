@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check, Sparkles, CreditCard, Shield, Lock } from "lucide-react";
 import Footer from "../components/Footer";
 import PaymentModal from "../components/payment/PaymentModal";
 import { getUserCountry, getCurrencyInfo } from "../services/paymentService";
 import { useAuth } from "../context/AuthContext";
+import { ScrollProgressBar, RevealOnScroll, StaggerContainer, StaggerItem } from "../components/ui";
 
 const PricingPlans = () => {
   const navigate = useNavigate();
@@ -130,9 +132,13 @@ const PricingPlans = () => {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8 relative">
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 sm:mb-12 text-center space-y-3 sm:space-y-4">
+        <RevealOnScroll animation="fadeUp">
+          <div className="mb-8 sm:mb-12 text-center space-y-3 sm:space-y-4">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-light text-white mb-2">
             Choose a{" "}
             <span className="bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent">
@@ -155,23 +161,30 @@ const PricingPlans = () => {
               <span>Prices shown in {currencyInfo.code}</span>
             </div>
           )}
-        </div>
+          </div>
+        </RevealOnScroll>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+        <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {plans.map((plan, index) => (
-            <div
-              key={index}
-              className={`bg-gray-800 rounded-xl sm:rounded-lg border transition-all duration-300 p-5 sm:p-6 lg:p-8 ${
+            <StaggerItem key={index} direction="up">
+              <div
+                className={`relative bg-gray-800 rounded-xl sm:rounded-lg border transition-all duration-300 p-5 sm:p-6 lg:p-8 h-full ${
                 plan.highlighted
-                  ? "border-2 border-cyan-500 ring-2 ring-cyan-500/20 order-first md:order-none"
-                  : "border-t-2 border-teal-900 hover:border-teal-500"
+                  ? "border-2 border-cyan-500 shadow-[0_0_40px_-10px_rgba(6,182,212,0.5)] order-first md:order-none"
+                  : "border-t-2 border-teal-900 hover:border-teal-500 hover:shadow-lg hover:shadow-cyan-500/10"
               }`}
             >
+              {/* Animated glow background for highlighted */}
+              {plan.highlighted && (
+                <div className="absolute inset-0 rounded-xl sm:rounded-lg bg-gradient-to-r from-cyan-500/10 via-blue-500/5 to-cyan-500/10 animate-pulse pointer-events-none" />
+              )}
+              
               {/* Popular badge */}
               {plan.highlighted && (
-                <div className="mb-3 sm:mb-4">
-                  <span className="px-3 py-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-semibold rounded-full">
+                <div className="relative mb-3 sm:mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-semibold rounded-full shadow-lg shadow-cyan-500/30">
+                    <Sparkles className="w-3 h-3" />
                     MOST POPULAR
                   </span>
                 </div>
@@ -199,7 +212,7 @@ const PricingPlans = () => {
 
               <button
                 onClick={() => handlePlanClick(plan.id)}
-                className={`w-full py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-md mb-6 sm:mb-8 transition-all duration-200 font-medium text-sm sm:text-base min-h-[48px] touch-target ${
+                className={`w-full py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-md mb-6 sm:mb-8 transition-all duration-200 font-medium text-sm sm:text-base min-h-[48px] touch-target flex items-center justify-center gap-2 ${
                   plan.highlighted
                     ? "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg hover:shadow-cyan-500/25"
                     : plan.id === "enterprise"
@@ -208,7 +221,7 @@ const PricingPlans = () => {
                 }`}
               >
                 {plan.isPaid && (
-                  <span className="mr-2"></span>
+                  <CreditCard className="w-4 h-4" />
                 )}
                 {plan.buttonText}
               </button>
@@ -238,28 +251,23 @@ const PricingPlans = () => {
                 </div>
               </div>
             </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerContainer>
 
         {/* Trust badges */}
         <div className="mt-10 sm:mt-16 text-center px-4">
           <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-4 sm:gap-8 text-gray-500">
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500" />
               <span className="text-xs sm:text-sm">Secure Payments via Razorpay</span>
             </div>
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500" />
               <span className="text-xs sm:text-sm">256-bit SSL Encryption</span>
             </div>
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
+              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500" />
               <span className="text-xs sm:text-sm">All Major Cards Accepted</span>
             </div>
           </div>

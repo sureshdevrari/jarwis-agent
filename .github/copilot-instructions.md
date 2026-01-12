@@ -35,7 +35,12 @@ D:\jarwis-ai-pentest\
 │   ├── services/           # Business logic layer
 │   ├── database/           # SQLAlchemy models, migrations
 │   ├── shared/             # Contracts, schemas, constants
-│   └── attacks/            # Scanner modules (web/mobile/network/cloud)
+│   └── attacks/            # Scanner modules (99 total, OWASP organized)
+│       ├── registry.py     # Unified scanner discovery
+│       ├── web/            # OWASP Top 10 2021 (a01-a10 folders)
+│       ├── cloud/          # Provider-based (aws/azure/gcp/k8s)
+│       ├── mobile/         # Phase-based (static/dynamic/platform)
+│       └── sast/           # Function-based (providers/analyzers)
 │
 ├── 💻 FRONTEND
 │   └── jarwisfrontend/     # React application
@@ -121,8 +126,9 @@ api/
 ```
 services/
 ├── __init__.py
+├── scan_orchestrator_service.py # ⭐ RECOMMENDED: Combined service + orchestration
 ├── auth_service.py        # Authentication logic
-├── scan_service.py        # Scan CRUD operations
+├── scan_service.py        # Scan CRUD operations (legacy)
 ├── subscription_service.py # Plan/billing logic
 ├── dashboard_service.py   # Dashboard stats
 ├── otp_service.py         # OTP generation/verification
@@ -140,14 +146,21 @@ services/
 ```
 core/
 ├── __init__.py
-├── runner.py              # PenTestRunner (main orchestrator)
+├── runner.py              # PenTestRunner (legacy CLI orchestrator)
+├── scan_orchestrator.py   # Unified ScanOrchestrator (Layer 4 alternative)
+├── engine_protocol.py     # ScanEngineProtocol interface
+├── progress_tracker.py    # Unified progress tracking
+├── engines/               # Engine adapters
+│   ├── __init__.py
+│   └── legacy_adapter.py  # Wraps existing runners
 ├── web_scan_runner.py     # Web scanning phases
 ├── browser.py             # BrowserController (Playwright)
 ├── mobile_attack_engine.py # Mobile app analysis
 ├── network_scan_runner.py # Network scanning
 ├── cloud_scan_runner.py   # Cloud scanning
+├── sast_scan_runner.py    # SAST scanning
 ├── reporters.py           # Report generation (HTML/PDF/JSON/SARIF)
-├── ai_planner.py          # LLM integration (Ollama/OpenAI)
+├── ai_planner.py          # LLM integration (Gemini)
 ├── ai_verifier.py         # AI-powered verification
 ├── chatbot.py             # AI chatbot (Gemini)
 ├── http_helper.py         # HTTP utilities
@@ -169,78 +182,80 @@ core/
 └── cloud_scanner_registry.py # Cloud scanner registration
 ```
 
-### Attack Modules (attacks/) - COMPLETE
+### Attack Modules (attacks/) - OWASP-ORGANIZED (Jan 2026)
 ```
 attacks/
 ├── __init__.py            # AttackDispatcher - routes to scan type
-├── scanner_registry.py    # Scanner registration (also in shared/)
-├── unified_registry.py    # Unified scanner registry (also in shared/)
-├── web/                   # Web security scanners
+├── registry.py            # UNIFIED scanner registry (99 scanners)
+├── web/                   # Web security scanners (OWASP Top 10 2021)
 │   ├── __init__.py        # WebAttacks aggregator
-│   ├── pre_login/         # 45+ unauthenticated scanners
-│   │   ├── __init__.py
-│   │   ├── sqli_advanced_scanner.py
-│   │   ├── xss_scanner.py, xss_advanced_scanner.py, xss_reflected_scanner.py, xss_stored_scanner.py
-│   │   ├── ssrf_scanner.py, ssrf_advanced_scanner.py
-│   │   ├── csrf_scanner.py
-│   │   ├── idor_scanner.py
-│   │   ├── auth_scanner.py, auth_bypass_scanner.py
-│   │   ├── injection_scanner.py
-│   │   ├── jwt_scanner.py
-│   │   ├── cors_scanner.py
-│   │   ├── security_headers_scanner.py
-│   │   ├── rate_limit_scanner.py
-│   │   ├── file_upload_scanner.py, upload_scanner.py
-│   │   ├── path_traversal_scanner.py
-│   │   ├── xxe_scanner.py
-│   │   ├── ssti_scanner.py
-│   │   ├── open_redirect_scanner.py
-│   │   ├── clickjacking_scanner.py
-│   │   ├── graphql_scanner.py
-│   │   ├── websocket_scanner.py
-│   │   ├── oauth_scanner.py, oauth_saml_scanner.py
-│   │   ├── session_scanner.py
-│   │   ├── api_scanner.py, api_security_scanner.py
-│   │   ├── ldap_injection_scanner.py
-│   │   ├── host_header_scanner.py
-│   │   ├── hpp_scanner.py
-│   │   ├── smuggling_scanner.py
-│   │   ├── prototype_pollution_scanner.py
-│   │   ├── race_condition_scanner.py
-│   │   ├── subdomain_takeover_scanner.py
-│   │   ├── info_disclosure_scanner.py
-│   │   ├── sensitive_data_scanner.py
-│   │   ├── misconfig_scanner.py
-│   │   ├── framework_scanner.py
-│   │   ├── captcha_scanner.py
-│   │   ├── business_logic_scanner.py
+│   ├── a01_broken_access/ # A01:2021 - Broken Access Control
 │   │   ├── access_control_scanner.py
-│   │   ├── mobile_security_scanner.py
-│   │   ├── response_manipulation_scanner.py
-│   │   └── response_swap_scanner.py
+│   │   ├── idor_scanner.py
+│   │   ├── auth_bypass_scanner.py
+│   │   └── path_traversal_scanner.py
+│   ├── a02_crypto/        # A02:2021 - Cryptographic Failures
+│   │   ├── jwt_scanner.py
+│   │   └── session_scanner.py
+│   ├── a03_injection/     # A03:2021 - Injection (SQL, XSS, etc.)
+│   │   ├── injection_scanner.py
+│   │   ├── xss_scanner.py, xss_advanced_scanner.py
+│   │   ├── xss_reflected_scanner.py, xss_stored_scanner.py
+│   │   ├── sqli_advanced_scanner.py
+│   │   ├── ssti_scanner.py, xxe_scanner.py
+│   │   └── ldap_injection_scanner.py
+│   ├── a04_insecure_design/ # A04:2021 - Insecure Design
+│   │   ├── business_logic_scanner.py
+│   │   ├── race_condition_scanner.py
+│   │   └── captcha_scanner.py
+│   ├── a05_misconfig/     # A05:2021 - Security Misconfiguration
+│   │   ├── cors_scanner.py, security_headers_scanner.py
+│   │   ├── host_header_scanner.py, open_redirect_scanner.py
+│   │   ├── info_disclosure_scanner.py, framework_scanner.py
+│   │   ├── hpp_scanner.py, misconfig_scanner.py
+│   │   └── response_manipulation_scanner.py
+│   ├── a06_vulnerable_components/ # A06:2021 - Vulnerable Components
+│   │   └── subdomain_takeover_scanner.py
+│   ├── a07_auth_failures/ # A07:2021 - Auth Failures
+│   │   ├── auth_scanner.py, csrf_scanner.py
+│   │   ├── clickjacking_scanner.py
+│   │   └── oauth_scanner.py, oauth_saml_scanner.py
+│   ├── a08_integrity/     # A08:2021 - Integrity Failures
+│   │   └── prototype_pollution_scanner.py
+│   ├── a09_logging/       # A09:2021 - Logging Failures
+│   │   └── sensitive_data_scanner.py
+│   ├── a10_ssrf/          # A10:2021 - SSRF
+│   │   ├── ssrf_scanner.py
+│   │   └── ssrf_advanced_scanner.py
+│   ├── api/               # API Security
+│   │   ├── api_scanner.py, api_security_scanner.py
+│   │   ├── graphql_scanner.py, websocket_scanner.py
+│   ├── file_upload/       # File Upload Security
+│   │   └── file_upload_scanner.py, upload_scanner.py
+│   ├── other/             # Other scanners
+│   │   └── smuggling_scanner.py, rate_limit_scanner.py
+│   ├── pre_login/         # BACKWARD COMPAT (imports from OWASP folders)
 │   └── post_login/        # Authenticated scanners
-│       ├── __init__.py
-│       ├── idor_privesc_scanner.py
-│       ├── csrf_postlogin_scanner.py
-│       ├── xss_reflected_scanner_postlogin.py
-│       ├── xss_stored_scanner_postlogin.py
-│       └── post_method_scanner_postlogin.py
-├── cloud/                 # Cloud security scanners
+├── cloud/                 # Cloud security (Provider-based)
 │   ├── __init__.py
-│   ├── base.py
-│   ├── aws_scanner.py
-│   ├── azure_scanner.py, azure_scanner_complete.py
-│   ├── gcp_scanner.py
-│   ├── kubernetes_scanner.py
-│   ├── container_scanner.py
-│   ├── iac_scanner.py
-│   ├── ciem_scanner.py
-│   ├── data_security_scanner.py
-│   ├── drift_scanner.py
-│   ├── runtime_scanner.py
-│   ├── compliance_mapper.py
-│   └── sbom_generator.py
-├── network/               # Network scanners
+│   ├── aws/               # AWS-specific scanners
+│   │   └── aws_scanner.py
+│   ├── azure/             # Azure-specific scanners
+│   │   └── azure_scanner.py
+│   ├── gcp/               # GCP-specific scanners
+│   │   └── gcp_scanner.py
+│   ├── kubernetes/        # Kubernetes scanners
+│   │   ├── kubernetes_scanner.py
+│   │   └── container_scanner.py
+│   ├── cnapp/             # CNAPP features
+│   │   ├── ciem_scanner.py, runtime_scanner.py
+│   │   ├── drift_scanner.py, data_security_scanner.py
+│   │   └── sbom_generator.py
+│   └── shared/            # Shared cloud utilities
+│       ├── base.py, cloud_scanner.py
+│       ├── iac_scanner.py, compliance_mapper.py
+│       └── config.py, schemas.py, exceptions.py
+├── network/               # Network scanners (already organized)
 │   ├── __init__.py
 │   ├── base.py
 │   ├── network_scanner.py
@@ -252,19 +267,65 @@ attacks/
 │   ├── orchestrator.py
 │   ├── install_tools.py
 │   └── scanners/          # Sub-scanners
-└── mobile/                # Mobile app scanners
+├── mobile/                # Mobile scanners (Phase-based)
+│   ├── __init__.py
+│   ├── static/            # Static analysis
+│   │   ├── static_analyzer.py
+│   │   └── unpacker.py
+│   ├── dynamic/           # Dynamic/runtime analysis
+│   │   ├── runtime_analyzer.py
+│   │   ├── app_crawler.py, dynamic_crawler.py
+│   │   └── frida_ssl_bypass.py
+│   ├── platform/android/  # Android-specific
+│   │   ├── android_attacks.py
+│   │   └── emulator_manager.py
+│   ├── platform/ios/      # iOS-specific
+│   │   ├── ios_attacks.py
+│   │   └── ios_simulator_manager.py
+│   ├── api/               # Mobile API security
+│   │   ├── api_discovery.py
+│   │   ├── mobile_mitm.py
+│   │   └── burp_interceptor.py
+│   ├── orchestration/     # Orchestration
+│   │   ├── mobile_orchestrator.py
+│   │   ├── mobile_scanner.py
+│   │   └── mobile_post_scanner.py
+│   └── utils/             # Utilities
+│       ├── auth_detector.py, otp_handler.py
+│       ├── llm_analyzer.py, deeplink_scanner.py
+│       └── mobile_xss_scanner.py
+└── sast/                  # SAST scanners (Function-based)
     ├── __init__.py
-    ├── static_analyzer.py
-    ├── dynamic_crawler.py
-    ├── mobile_scanner.py
-    ├── mobile_orchestrator.py
-    ├── mobile_post_scanner.py
-    ├── emulator_manager.py
-    ├── ios_simulator_manager.py
-    ├── frida_ssl_bypass.py
-    ├── llm_analyzer.py
-    ├── otp_handler.py
-    └── [other mobile scanners]
+    ├── providers/         # SCM integrations
+    │   ├── github_scanner.py, gitlab_scanner.py
+    │   ├── bitbucket_scanner.py, azure_devops_scanner.py
+    │   ├── aws_codecommit_scanner.py, gitea_scanner.py
+    │   └── generic_scanner.py
+    ├── analyzers/         # Analysis engines
+    │   ├── secret_scanner.py
+    │   ├── dependency_scanner.py
+    │   └── code_analyzer.py
+    └── language_analyzers/ # Language-specific
+        └── python, javascript, java, go analyzers
+```
+
+### Import Examples (NEW - Jan 2026)
+```python
+# RECOMMENDED: Import from OWASP-organized folders
+from attacks.web.a03_injection import InjectionScanner, XSSScanner
+from attacks.web.a01_broken_access import IDORScanner, AccessControlScanner
+from attacks.cloud.aws import AWSSecurityScanner
+from attacks.mobile.static import StaticAnalyzer
+from attacks.sast.providers import GitHubScanner
+
+# ALSO WORKS: Backward-compatible imports
+from attacks.web.pre_login import InjectionScanner, XSSScanner
+from attacks.mobile import MobileSecurityScanner
+from attacks.cloud import CloudSecurityScanner
+
+# Registry for scanner discovery
+from attacks.registry import ScannerRegistry
+scanners = ScannerRegistry.get_scanners(ScanType.WEB)
 ```
 
 ### Database Layer (database/) - COMPLETE
@@ -472,9 +533,56 @@ Jarwis is an AI-powered OWASP Top 10 penetration testing framework with a **phas
 5. **Phase 5 - AI Planning**: LLM recommends targeted tests based on findings
 6. **Phase 6 - Reporting**: Multi-format output (HTML, JSON, SARIF)
 
-**Core orchestration**: [core/runner.py](core/runner.py) (`PenTestRunner`) coordinates all phases and maintains `ScanContext` state across components.
+### Orchestration Options (January 11, 2026)
 
-## Layered Architecture (NEW!)
+**Feature Flag:** `USE_UNIFIED_ORCHESTRATOR`
+
+| Value | Implementation | Description |
+|-------|----------------|-------------|
+| `"false"` | Legacy `run_security_scan()` | Default - logic in scans.py |
+| `"service"` | `ScanOrchestratorService` | **RECOMMENDED** - Layer 3 |
+| `"true"` | `ScanOrchestrator` | Layer 4 (more hops) |
+
+### Recommended: Service Approach (Layer 3)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│     API Route → ScanOrchestratorService → Runner        │
+│        ↓                  ↓                  ↓          │
+│     (HTTP)        (business +           (scanning)      │
+│                   lifecycle)                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**File:** [services/scan_orchestrator_service.py](../services/scan_orchestrator_service.py)
+
+This merges orchestration INTO the services layer:
+- Business logic (validation, subscriptions, domains)
+- Lifecycle management (state, progress, checkpoints)
+- Engine coordination (delegates to appropriate runner)
+
+```bash
+$env:USE_UNIFIED_ORCHESTRATOR = "service"
+```
+
+### Alternative: Separate Orchestrator (Layer 4)
+
+**File:** [core/scan_orchestrator.py](../core/scan_orchestrator.py)
+
+Stricter separation but more layers.
+
+**Key Components:**
+| Component | Location | Purpose |
+|-----------|----------|--------|
+| `ScanOrchestratorService` | [services/scan_orchestrator_service.py](../services/scan_orchestrator_service.py) | **Combined service + orchestration** |
+| `ScanOrchestrator` | [core/scan_orchestrator.py](../core/scan_orchestrator.py) | Separate orchestrator (alternative) |
+| `ScanEngineProtocol` | [core/engine_protocol.py](../core/engine_protocol.py) | Interface for scan engines |
+| `ProgressTracker` | [core/progress_tracker.py](../core/progress_tracker.py) | Centralized progress updates |
+| `LegacyEngineAdapter` | [core/engines/legacy_adapter.py](../core/engines/legacy_adapter.py) | Wraps existing runners |
+
+**Legacy CLI**: [core/runner.py](../core/runner.py) (`PenTestRunner`) still works for CLI usage.
+
+## Layered Architecture
 
 The project follows a **contract-first, layered architecture**:
 
@@ -526,20 +634,45 @@ The project follows a **contract-first, layered architecture**:
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `PenTestRunner` | [core/runner.py](core/runner.py) | Main orchestrator, config normalization |
+| `ScanOrchestrator` | [core/scan_orchestrator.py](core/scan_orchestrator.py) | ⭐ **Unified orchestrator** for all scan types |
+| `ScanOrchestratorService` | [services/scan_orchestrator_service.py](services/scan_orchestrator_service.py) | ⭐ **Layer 3 orchestrator** (RECOMMENDED) |
+| `ScannerRegistry` | [attacks/registry.py](attacks/registry.py) | ⭐ **Unified scanner registry** (99 scanners) |
+| `ScanEngineProtocol` | [core/engine_protocol.py](core/engine_protocol.py) | Interface for scan engines |
+| `ProgressTracker` | [core/progress_tracker.py](core/progress_tracker.py) | Centralized progress tracking |
+| `LegacyEngineAdapter` | [core/engines/legacy_adapter.py](core/engines/legacy_adapter.py) | Wraps existing runners |
+| `PenTestRunner` | [core/runner.py](core/runner.py) | Legacy CLI orchestrator |
 | `BrowserController` | [core/browser.py](core/browser.py) | Playwright automation, endpoint discovery |
-| `AIPlanner` | [core/ai_planner.py](core/ai_planner.py) | Ollama/OpenAI LLM integration |
-| `PreLoginAttacks` | [attacks/pre_login/__init__.py](attacks/pre_login/__init__.py) | Scanner aggregator |
+| `AIPlanner` | [core/ai_planner.py](core/ai_planner.py) | Gemini LLM integration |
+| `PreLoginAttacks` | [attacks/web/pre_login/__init__.py](attacks/web/pre_login/__init__.py) | Backward-compat imports |
 | `ReportGenerator` | [core/reporters.py](core/reporters.py) | HTML/JSON/SARIF/PDF output |
 | **Services** | [services/](services/) | Business logic layer |
 | **Contracts** | [shared/](shared/) | Single source of truth |
 
 ## Adding New Attack Scanners
 
-New scanners go in `attacks/pre_login/` or `attacks/post_login/`. Follow this pattern:
+New scanners go in the appropriate **OWASP category folder**. Use `attacks/registry.py` for discovery.
+
+### 1. Choose the Right Folder
+
+| Vulnerability Type | Folder | OWASP Category |
+|-------------------|--------|----------------|
+| Access Control, IDOR, Auth Bypass | `attacks/web/a01_broken_access/` | A01:2021 |
+| JWT, Session, Crypto | `attacks/web/a02_crypto/` | A02:2021 |
+| SQLi, XSS, SSTI, XXE, Command Injection | `attacks/web/a03_injection/` | A03:2021 |
+| Business Logic, Race Conditions | `attacks/web/a04_insecure_design/` | A04:2021 |
+| CORS, Headers, Misconfig | `attacks/web/a05_misconfig/` | A05:2021 |
+| Subdomain Takeover, Outdated Components | `attacks/web/a06_vulnerable_components/` | A06:2021 |
+| CSRF, Clickjacking, OAuth/SAML | `attacks/web/a07_auth_failures/` | A07:2021 |
+| Prototype Pollution, Deserialization | `attacks/web/a08_integrity/` | A08:2021 |
+| Sensitive Data Exposure | `attacks/web/a09_logging/` | A09:2021 |
+| SSRF | `attacks/web/a10_ssrf/` | A10:2021 |
+| API, GraphQL, WebSocket | `attacks/web/api/` | API Security |
+| File Upload | `attacks/web/file_upload/` | File Security |
+
+### 2. Create the Scanner
 
 ```python
-# attacks/pre_login/new_scanner.py
+# attacks/web/a03_injection/new_scanner.py
 from dataclasses import dataclass
 
 @dataclass
@@ -566,7 +699,18 @@ class NewScanner:
         pass
 ```
 
-**Register new scanner** in [attacks/pre_login/__init__.py](attacks/pre_login/__init__.py) within `PreLoginAttacks.__init__()`.
+### 3. Export from __init__.py
+
+Add your scanner to the folder's `__init__.py`:
+
+```python
+# attacks/web/a03_injection/__init__.py
+from .new_scanner import NewScanner
+```
+
+### 4. Register in PreLoginAttacks (optional, for backward compat)
+
+The scanner will be auto-discovered by `ScannerRegistry`. For backward compat, optionally add to `attacks/web/pre_login/__init__.py`.
 
 ## Configuration System
 
@@ -767,7 +911,7 @@ ScanWizard.jsx → api.js → scans.py → runner_config → WebScanRunner
 ❌ Creating services/scan.py when services/scan_service.py exists  
 ❌ Creating jarwisfrontend/src/api.js when services/api.js exists
 ❌ Creating new context files when they exist in context/
-❌ Creating attacks/pre_login/ at root (use attacks/web/pre_login/)
+❌ Creating scanners in attacks/web/pre_login/ (use OWASP folders like a03_injection/)
 ❌ Creating core/scanner.py when core/runner.py exists
 ❌ Creating start_*.py at root (use scripts/startup/)
 ❌ Creating logs/ or reports/ at root (use data/logs/, data/reports/)
@@ -780,10 +924,11 @@ ScanWizard.jsx → api.js → scans.py → runner_config → WebScanRunner
 |-------------|-----------|
 | New API endpoint | `api/routes/` - extend existing file or create new route file |
 | New business logic | `services/` - extend existing service or create new *_service.py |
-| New scanner | `attacks/web/pre_login/` or `attacks/web/post_login/` |
-| New cloud check | `attacks/cloud/` |
-| New network check | `attacks/network/` |
-| New mobile check | `attacks/mobile/` |
+| New web scanner | `attacks/web/a0X_*/` - OWASP category folder (see table above) |
+| New cloud scanner | `attacks/cloud/aws/`, `azure/`, `gcp/`, `kubernetes/`, or `cnapp/` |
+| New network scanner | `attacks/network/scanners/` |
+| New mobile scanner | `attacks/mobile/static/`, `dynamic/`, `platform/`, `api/`, or `utils/` |
+| New SAST scanner | `attacks/sast/providers/` or `analyzers/` |
 | New frontend page | `jarwisfrontend/src/pages/dashboard/` |
 | New component | `jarwisfrontend/src/components/` (check existing folders first) |
 | New API call | Use existing `services/api.js` - NEVER create new API files |

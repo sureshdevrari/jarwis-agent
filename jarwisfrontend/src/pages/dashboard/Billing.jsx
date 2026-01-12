@@ -300,13 +300,37 @@ const Billing = () => {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Scans This Month", used: usage?.scansThisMonth || 0, limit: currentPlan?.maxScansPerMonth || 3, icon: <Search className="w-5 h-5" /> },
-              { label: "Websites", used: usage?.websitesThisMonth || 0, limit: currentPlan?.maxWebsitesPerMonth || 1, icon: <Globe className="w-5 h-5" /> },
-              { label: "Team Members", used: usage?.teamMembers || 1, limit: currentPlan?.maxTeamMembers || 1, icon: <Users className="w-5 h-5" /> },
-              { label: "AI Questions Today", used: usage?.chatbotQuestionsToday || 0, limit: currentPlan?.maxChatbotQuestionsPerDay || 0, icon: <MessageSquare className="w-5 h-5" /> },
+              { 
+                label: "Scans This Month", 
+                used: serverUsage?.usage?.scans?.used ?? usage?.scansThisMonth ?? 0, 
+                limit: serverUsage?.usage?.scans?.limit ?? currentPlan?.maxScansPerMonth ?? 3,
+                unlimited: serverUsage?.usage?.scans?.unlimited ?? false,
+                icon: <Search className="w-5 h-5" /> 
+              },
+              { 
+                label: "Websites", 
+                used: serverUsage?.usage?.websites?.used ?? usage?.websitesThisMonth ?? 0, 
+                limit: serverUsage?.usage?.websites?.limit ?? currentPlan?.maxWebsitesPerMonth ?? 1,
+                unlimited: serverUsage?.usage?.websites?.unlimited ?? false,
+                icon: <Globe className="w-5 h-5" /> 
+              },
+              { 
+                label: "Team Members", 
+                used: serverUsage?.usage?.team_members?.used ?? usage?.teamMembers ?? 1, 
+                limit: serverUsage?.usage?.team_members?.limit ?? currentPlan?.maxTeamMembers ?? 1,
+                unlimited: serverUsage?.usage?.team_members?.unlimited ?? false,
+                icon: <Users className="w-5 h-5" /> 
+              },
+              { 
+                label: "AI Questions Today", 
+                used: usage?.chatbotQuestionsToday ?? 0, 
+                limit: currentPlan?.maxChatbotQuestionsPerDay ?? 0,
+                unlimited: false,
+                icon: <MessageSquare className="w-5 h-5" /> 
+              },
             ].map((item, i) => {
               const percentage = item.limit === 0 ? 0 : Math.min(100, (item.used / item.limit) * 100);
-              const isUnlimited = item.limit === -1 || item.limit === Infinity;
+              const isUnlimited = item.unlimited || item.limit === -1 || item.limit === Infinity;
               
               return (
                 <div key={i} className={`p-4 rounded-xl ${isDarkMode ? "bg-slate-700/50" : "bg-gray-50"}`}>

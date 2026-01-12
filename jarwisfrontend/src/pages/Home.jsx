@@ -3,18 +3,22 @@ import BuildMore from "../components/BuildMore";
 import Footer from "../components/Footer";
 import WhyJarwis from "../components/WhyJarwis";
 import ImageToggleInterface from "../components/ImageToggleInterface";
+import { ScrollProgressBar, RevealOnScroll } from "../components/ui";
 
 const Home = () => {
   const navigate = useNavigate();
 
   return (
     <div>
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
+
       {/* Hero Section */}
       <div className="px-4 sm:px-6 relative lg:px-8 py-6 sm:py-8 lg:py-10 xl:py-10">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-8 lg:gap-12 xl:gap-16">
             {/* Left Content */}
-            <div className="flex-1 max-w-full xl:max-w-2xl">
+            <RevealOnScroll animation="fadeLeft" className="flex-1 max-w-full xl:max-w-2xl">
               <h1 className="text-4xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl font-bold mb-6 sm:mb-8 leading-tight">
                 Meet{" "}
                 <span className="bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent">
@@ -42,20 +46,26 @@ const Home = () => {
                 vulnerabilities across your entire digital infrastructure with
                 just simple prompts.
               </p>
-            </div>
+            </RevealOnScroll>
 
             {/* Right Content - Slack/Linear Interface Mockup */}
-            <ImageToggleInterface
-              imageOne={"/imageOne.jpg"}
-              imageTwo={"/imageTwo.jpg"}
-            />
+            <RevealOnScroll animation="fadeRight" delay={0.2}>
+              <ImageToggleInterface
+                imageOne={"/imageOne.jpg"}
+                imageTwo={"/imageTwo.jpg"}
+              />
+            </RevealOnScroll>
           </div>
         </div>
       </div>
 
       <div className="relative">
-        <WhyJarwis />
-        <BuildMore />
+        <RevealOnScroll animation="fadeUp">
+          <WhyJarwis />
+        </RevealOnScroll>
+        <RevealOnScroll animation="fadeUp">
+          <BuildMore />
+        </RevealOnScroll>
         <Footer />
       </div>
     </div>

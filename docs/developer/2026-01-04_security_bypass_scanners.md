@@ -161,13 +161,18 @@ attacks:
 ### Programmatic Usage
 
 ```python
-from attacks.pre_login import (
+# New OWASP-organized imports (recommended)
+from attacks.web.a07_auth_failures import AuthBypassScanner, SessionSecurityScanner
+from attacks.web.a04_insecure_design import RateLimitBypassScanner, CaptchaBypassScanner
+from attacks.web.a07_auth_failures import OAuthSecurityScanner
+
+# Or use backward-compatible imports
+from attacks.web.pre_login import (
     AuthBypassScanner,
     SessionSecurityScanner,
     RateLimitBypassScanner,
     OAuthSecurityScanner,
     CaptchaBypassScanner,
-    MobileSecurityScanner
 )
 
 # Individual scanner usage

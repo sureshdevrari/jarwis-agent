@@ -87,9 +87,251 @@ class ScanConfig:
             self.scan_id = str(uuid.uuid4())[:8]
 
 
+# Background task handle for stale scan detector
+_stale_detector_task: Optional[asyncio.Task] = None
+
+
+async def recover_running_scans():
+    """
+    Recover scan state on startup.
+    
+    Query database for scans with status="running", load their checkpoints,
+    and either mark as "stalled" (if stale) or rebuild scan_progress dict entries.
+    """
+    from database.connection import get_db
+    from database import crud
+    from core.scan_checkpoint import ScanCheckpoint
+    from api.routes.scans import scan_progress
+    from datetime import datetime, timedelta
+    
+    STALE_THRESHOLD_MINUTES = 60  # 1 hour with no updates = stale
+    
+    try:
+        async for db in get_db():
+            # Get all scans marked as "running" in database
+            from sqlalchemy import select
+            from database.models import ScanHistory
+            
+            result = await db.execute(
+                select(ScanHistory).where(ScanHistory.status == "running")
+            )
+            running_scans = result.scalars().all()
+            
+            if not running_scans:
+                print("[OK] No orphaned running scans found")
+                return
+            
+            print(f"[INFO] Found {len(running_scans)} scans marked as 'running' in database")
+            
+            for scan in running_scans:
+                scan_id = scan.scan_id
+                
+                # Check if checkpoint exists and when it was last updated
+                try:
+                    checkpoint = ScanCheckpoint(scan_id)
+                    state = checkpoint.load()
+                    
+                    if state:
+                        # Check if checkpoint is stale
+                        last_update = datetime.fromisoformat(state.updated_at)
+                        age_minutes = (datetime.utcnow() - last_update).total_seconds() / 60
+                        
+                        if age_minutes > STALE_THRESHOLD_MINUTES:
+                            # Mark as stalled in database
+                            await crud.update_scan_status(
+                                db, scan, "stalled", 
+                                phase=f"Stalled - no updates for {int(age_minutes)} minutes",
+                                validate_transition=False
+                            )
+                            print(f"  [STALLED] Scan {scan_id}: no updates for {int(age_minutes)} min")
+                        else:
+                            # Rebuild scan_progress entry for active tracking
+                            scan_progress[scan_id] = {
+                                "phase": state.current_phase,
+                                "progress": len(state.phases) * 10,  # Estimate progress
+                                "logs": [],
+                                "stop": False,
+                                "recovered": True,
+                            }
+                            print(f"  [RECOVERED] Scan {scan_id}: last update {int(age_minutes)} min ago")
+                    else:
+                        # No checkpoint - mark as stalled
+                        await crud.update_scan_status(
+                            db, scan, "stalled",
+                            phase="Stalled - no checkpoint data",
+                            validate_transition=False
+                        )
+                        print(f"  [STALLED] Scan {scan_id}: no checkpoint found")
+                        
+                except Exception as e:
+                    logger.warning(f"Error processing scan {scan_id}: {e}")
+                    # Mark as error if we can't process
+                    await crud.update_scan_status(
+                        db, scan, "error",
+                        error_message=f"Recovery failed: {e}",
+                        validate_transition=False
+                    )
+            
+            await db.commit()
+            break  # Only need one db session
+            
+    except Exception as e:
+        logger.error(f"Scan recovery failed: {e}")
+        print(f"  [WARN] Scan recovery error: {e}")
+
+
+async def stale_scan_detector():
+    """
+    Background task that runs every 5 minutes to detect stalled scans.
+    
+    Checks for scans marked as "running" in DB that have no in-memory tracking
+    and haven't been updated recently.
+    """
+    from database.connection import get_db
+    from database import crud
+    from api.routes.scans import scan_progress
+    from core.scan_orchestrator import ScanOrchestrator
+    from datetime import datetime, timedelta
+    
+    STALE_THRESHOLD_MINUTES = 60  # 1 hour
+    CHECK_INTERVAL_SECONDS = 300  # 5 minutes
+    
+    while True:
+        try:
+            await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+            
+            async for db in get_db():
+                from sqlalchemy import select
+                from database.models import ScanHistory
+                
+                # Find running scans
+                result = await db.execute(
+                    select(ScanHistory).where(ScanHistory.status == "running")
+                )
+                running_scans = result.scalars().all()
+                
+                stalled_count = 0
+                for scan in running_scans:
+                    scan_id = scan.scan_id
+                    
+                    # Skip if actively tracked in memory
+                    if scan_id in scan_progress and not scan_progress[scan_id].get("recovered"):
+                        continue
+                    
+                    # Skip if orchestrator is active
+                    if ScanOrchestrator.get_active_scan(scan_id):
+                        continue
+                    
+                    # Check how long since started/updated
+                    check_time = scan.updated_at or scan.started_at
+                    if check_time:
+                        age_minutes = (datetime.utcnow() - check_time).total_seconds() / 60
+                        
+                        if age_minutes > STALE_THRESHOLD_MINUTES:
+                            await crud.update_scan_status(
+                                db, scan, "stalled",
+                                phase=f"Stalled - no updates for {int(age_minutes)} minutes",
+                                validate_transition=False
+                            )
+                            stalled_count += 1
+                            logger.info(f"Marked scan {scan_id} as stalled (age: {int(age_minutes)} min)")
+                
+                if stalled_count > 0:
+                    await db.commit()
+                    logger.info(f"Stale detector: marked {stalled_count} scans as stalled")
+                
+                break  # Only need one db session
+                
+        except asyncio.CancelledError:
+            logger.info("Stale scan detector shutting down")
+            break
+        except Exception as e:
+            logger.error(f"Stale detector error: {e}")
+            # Continue running despite errors
+
+
+async def graceful_shutdown():
+    """
+    Gracefully stop all running scans and cleanup browsers on server shutdown.
+    Handles both web scans (BrowserController) and mobile scans (MobileProcessRegistry).
+    """
+    from core.scan_orchestrator import ScanOrchestrator
+    from core.browser import BrowserController
+    
+    print("  Stopping active scans...")
+    
+    # =====================================================
+    # 1. Stop active web scans
+    # =====================================================
+    active_scans = ScanOrchestrator.get_all_active()
+    
+    if active_scans:
+        print(f"  Found {len(active_scans)} active web scans to stop")
+        
+        # Request stop on all scans
+        stop_tasks = []
+        for scan_id, orchestrator in active_scans.items():
+            try:
+                stop_tasks.append(orchestrator.stop())
+            except Exception as e:
+                logger.warning(f"Error requesting stop for scan {scan_id}: {e}")
+        
+        # Wait up to 10 seconds for graceful stop
+        if stop_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*stop_tasks, return_exceptions=True),
+                    timeout=10.0
+                )
+                print("[OK] Active web scans stopped gracefully")
+            except asyncio.TimeoutError:
+                print("  [WARN] Timeout waiting for web scans to stop")
+    
+    # =====================================================
+    # 2. Stop active mobile scans
+    # =====================================================
+    try:
+        from core.mobile_process_registry import MobileProcessRegistry
+        
+        mobile_scan_ids = MobileProcessRegistry.get_active_scans()
+        if mobile_scan_ids:
+            print(f"  Found {len(mobile_scan_ids)} active mobile scans to stop")
+            
+            # Cleanup all mobile scans
+            cleaned_count = await MobileProcessRegistry.cleanup_all()
+            
+            if cleaned_count > 0:
+                print(f"[OK] Cleaned up {cleaned_count} mobile scans (emulators, Frida, MITM)")
+            else:
+                print("[OK] No mobile scans needed cleanup")
+        else:
+            print("[OK] No active mobile scans")
+    except ImportError:
+        logger.debug("MobileProcessRegistry not available - skipping mobile cleanup")
+    except Exception as e:
+        logger.warning(f"Mobile scan cleanup error: {e}")
+    
+    # =====================================================
+    # 3. Force cleanup any orphaned web browsers
+    # =====================================================
+    print("  Cleaning up browsers...")
+    try:
+        cleanup_result = await BrowserController.cleanup_orphaned_browsers_async(
+            max_age_minutes=0,  # Kill all Playwright browsers
+            force=True
+        )
+        if cleanup_result['killed'] > 0:
+            print(f"[OK] Killed {cleanup_result['killed']} orphaned browser processes")
+        else:
+            print("[OK] No orphaned browsers found")
+    except Exception as e:
+        logger.warning(f"Browser cleanup error: {e}")
+
+
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _stale_detector_task
     # Startup
     print("""
     +=============================================================+
@@ -114,6 +356,14 @@ async def lifespan(app: FastAPI):
             connected, error = await test_connection()
             if connected:
                 print("[OK] Database connection verified")
+                
+                # Recover any orphaned running scans from previous session
+                print("Recovering scan state...")
+                await recover_running_scans()
+                
+                # Start background stale scan detector
+                _stale_detector_task = asyncio.create_task(stale_scan_detector())
+                print("[OK] Stale scan detector started")
             else:
                 print(f"  Database connection test failed: {error}")
         else:
@@ -131,11 +381,24 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     print("\nShutting down Jarwis API server...")
+    
+    # Cancel stale detector
+    if _stale_detector_task:
+        _stale_detector_task.cancel()
+        try:
+            await _stale_detector_task
+        except asyncio.CancelledError:
+            pass
+        print("[OK] Stale scan detector stopped")
+    
+    # Graceful shutdown of active scans and browsers
+    await graceful_shutdown()
+    
     try:
         await close_db()
         print("[OK] Database connections closed")
     except Exception as e:
-        print(f"  Error closing database: {e}")
+        print(f"  Error closing database: {e}")
 
 
 app = FastAPI(
@@ -416,9 +679,22 @@ async def database_health_check():
 async def start_scan(
     data: ScanRequest, 
     background_tasks: BackgroundTasks,
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: User = Depends(get_current_active_user),  # SECURITY: Require authentication
+    db: AsyncSession = Depends(get_db)
 ):
-    """Start a new security scan"""
+    """Start a new security scan
+    
+    Security Requirements:
+    - User MUST be authenticated
+    - User MUST be authorized to scan the target domain:
+      - Corporate email users can scan their own domain (e.g., user@company.com can scan company.com)
+      - Personal email users MUST verify domain ownership via DNS TXT record
+      - Developer plan bypasses domain verification (for testing only)
+    """
+    from urllib.parse import urlparse
+    from shared.constants import is_personal_email
+    from services.domain_verification_service import DomainVerificationService
+    
     # Check scan type
     if data.scan_type not in ['web', 'mobile', 'cloud']:
         raise HTTPException(status_code=400, detail='Invalid scan type')
@@ -428,6 +704,81 @@ async def start_scan(
             status_code=400,
             detail=f"{data.scan_type.title()} scanning is coming soon! Only web scanning is available."
         )
+    
+    # ========== DOMAIN AUTHORIZATION CHECK ==========
+    # ALL scans require domain authorization (credential-based or not)
+    # Only exceptions: Developer plan (for internal testing)
+    
+    # Extract target domain from URL
+    try:
+        parsed_url = urlparse(data.target_url)
+        target_host = parsed_url.netloc.lower()
+        # Remove port if present
+        if ':' in target_host:
+            target_host = target_host.split(':')[0]
+        
+        if not target_host:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid target URL: could not extract domain"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid target URL: {str(e)}"
+        )
+    
+    # Developer plan bypasses domain verification (for internal testing only)
+    if current_user.plan != "developer":
+        domain_service = DomainVerificationService(db)
+        
+        # ALL users must be authorized - personal emails ALWAYS need verification
+        # Corporate emails can scan their own domain without verification
+        is_authorized, auth_reason = await domain_service.is_authorized_to_scan(
+            user_id=current_user.id,
+            user_email=current_user.email,
+            target_domain=target_host,
+            require_verification_for_personal=True  # Personal emails must verify
+        )
+        
+        if not is_authorized:
+            user_has_personal_email = is_personal_email(current_user.email)
+            email_domain = current_user.email.split('@')[1] if '@' in current_user.email else None
+            
+            logger.warning(
+                f"Domain authorization DENIED: user={current_user.email}, "
+                f"target={target_host}, reason={auth_reason}, personal_email={user_has_personal_email}"
+            )
+            
+            if user_has_personal_email:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "domain_verification_required",
+                        "message": "Users with personal email addresses must verify domain ownership before scanning any domain.",
+                        "target_domain": target_host,
+                        "user_email": current_user.email,
+                        "action": "Go to Settings → Verified Domains to add and verify this domain via DNS TXT record.",
+                        "verification_url": "/settings/domains"
+                    }
+                )
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "domain_not_authorized",
+                        "message": f"You can only scan domains matching your corporate email ({email_domain}) or domains you've verified.",
+                        "target_domain": target_host,
+                        "user_email_domain": email_domain,
+                        "action": "Either scan your corporate domain or verify this domain in Settings → Verified Domains.",
+                        "verification_url": "/settings/domains"
+                    }
+                )
+        
+        logger.info(f"Domain authorization GRANTED: user={current_user.email}, target={target_host}, reason={auth_reason}")
+    else:
+        logger.info(f"Developer plan bypass: user={current_user.email} scanning {target_host}")
+    # ================================================
     
     # Create scan config
     config = ScanConfig(
@@ -441,7 +792,7 @@ async def start_scan(
     # Initialize scan job
     scan_jobs[config.scan_id] = {
         'id': config.scan_id,
-        'user_id': current_user.id if current_user else None,  # Associate with user
+        'user_id': current_user.id,  # Always associate with authenticated user
         'status': 'queued',
         'progress': 0,
         'phase': 'Initializing',
@@ -1081,6 +1432,26 @@ async def get_last_scan():
     raise HTTPException(status_code=404, detail='No scans found')
 
 
+def _load_ai_key_from_yaml() -> str:
+    """Load AI API key from config.yaml as fallback if not in environment"""
+    import yaml
+    config_path = Path(__file__).parent.parent / 'config' / 'config.yaml'
+    local_config_path = Path(__file__).parent.parent / 'config' / 'config.local.yaml'
+    
+    # Try local config first, then main config
+    for path in [local_config_path, config_path]:
+        if path.exists():
+            try:
+                with open(path) as f:
+                    cfg = yaml.safe_load(f)
+                    key = cfg.get('ai', {}).get('api_key')
+                    if key:
+                        return key
+            except Exception:
+                continue
+    return ''
+
+
 async def run_scan_async(config: ScanConfig):
     """Run scan in background"""
     scan_id = config.scan_id
@@ -1152,7 +1523,11 @@ async def run_scan_async(config: ScanConfig):
             },
             'ai': {
                 'enabled': True,
-                # Uses centralized config from shared/ai_config.py
+                # Load AI config - try centralized config first, then YAML fallback
+                'provider': get_ai_config().provider or 'gemini',
+                'model': get_ai_config().model or 'gemini-2.5-flash',
+                'api_key': get_ai_config().api_key or _load_ai_key_from_yaml(),
+                'base_url': get_ai_config().base_url,
             },
             'attacks': {
                 'enabled': {
@@ -1170,9 +1545,9 @@ async def run_scan_async(config: ScanConfig):
                 'misconfig': {'enabled': True},
                 'sensitive_data': {'enabled': True}
             },
-            'report': {
+            'reporting': {
                 'output_dir': 'reports',
-                'formats': ['html', 'json']
+                'format': ['html', 'json']
             }
         }
         

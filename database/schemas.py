@@ -321,6 +321,18 @@ class FindingResponse(BaseModel):
     remediation: Optional[str] = None
     discovered_at: datetime
     
+    # Vulnerability metadata for reporting
+    attack_type: Optional[str] = None
+    impact: Optional[str] = None
+    disclosure_days: Optional[int] = None
+    cwe_id: Optional[str] = None
+    cvss_score: Optional[float] = None
+    compliance_refs: Optional[List[str]] = None
+    
+    # PoC request/response data
+    request_data: Optional[str] = None
+    response_data: Optional[str] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
 

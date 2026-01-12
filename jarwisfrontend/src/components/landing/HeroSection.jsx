@@ -4,6 +4,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, Zap, Lock, ArrowRight } from "lucide-react";
+import { PoweredByAI } from "../icons/custom/AIModelBadge";
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -121,6 +122,16 @@ const HeroSection = () => {
                 <Zap className="w-4 h-4 text-cyan-400" />
                 <span>10x Faster Scans</span>
               </div>
+            </motion.div>
+
+            {/* AI Model Branding */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7, duration: 0.5 }}
+              className="mt-6 flex justify-center lg:justify-start"
+            >
+              <PoweredByAI />
             </motion.div>
           </motion.div>
 

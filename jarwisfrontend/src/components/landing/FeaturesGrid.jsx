@@ -112,10 +112,20 @@ const FeaturesGrid = () => {
                 <div className={`
                   w-12 h-12 rounded-xl mb-4
                   bg-gradient-to-br ${feature.gradient}
+                  bg-opacity-10 border border-white/10
                   flex items-center justify-center
-                  shadow-lg group-hover:scale-110 transition-transform duration-300
-                `}>
-                  <feature.icon className="w-6 h-6 text-white" />
+                  group-hover:scale-110 transition-transform duration-300
+                `} style={{ background: `linear-gradient(135deg, ${feature.gradient.includes('cyan') ? 'rgba(6,182,212,0.15)' : feature.gradient.includes('purple') ? 'rgba(168,85,247,0.15)' : feature.gradient.includes('green') ? 'rgba(34,197,94,0.15)' : feature.gradient.includes('orange') ? 'rgba(249,115,22,0.15)' : feature.gradient.includes('blue') ? 'rgba(59,130,246,0.15)' : feature.gradient.includes('rose') ? 'rgba(244,63,94,0.15)' : feature.gradient.includes('yellow') ? 'rgba(234,179,8,0.15)' : 'rgba(20,184,166,0.15)'}, transparent)` }}>
+                  <feature.icon className={`w-6 h-6 ${
+                    feature.gradient.includes('cyan') ? 'text-cyan-400' : 
+                    feature.gradient.includes('purple') ? 'text-purple-400' : 
+                    feature.gradient.includes('green') ? 'text-emerald-400' : 
+                    feature.gradient.includes('orange') ? 'text-orange-400' : 
+                    feature.gradient.includes('blue') && feature.gradient.includes('violet') ? 'text-blue-400' :
+                    feature.gradient.includes('rose') ? 'text-rose-400' : 
+                    feature.gradient.includes('yellow') ? 'text-amber-400' : 
+                    'text-teal-400'
+                  }`} />
                 </div>
 
                 {/* Content */}

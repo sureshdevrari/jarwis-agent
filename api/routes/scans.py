@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from database.connection import get_db
 from database.models import User, ScanHistory
@@ -33,6 +34,8 @@ from database.subscription import (
     decrement_usage_counter,
     has_feature
 )
+# New centralized subscription manager
+from services.subscription_manager import SubscriptionManager
 from database import crud
 from database.security import InputValidator, SecurityStore
 from core.scope import ScopeManager
@@ -46,6 +49,13 @@ from api.websocket import (
     broadcast_scan_error,
     broadcast_finding
 )
+
+# Feature flag for unified orchestrator (enable gradually)
+# Options:
+#   "false" (default) - Legacy run_security_scan function
+#   "true" - Uses core/scan_orchestrator.py (Layer 4 approach)
+#   "service" - Uses services/scan_orchestrator_service.py (Layer 3 approach - RECOMMENDED)
+USE_UNIFIED_ORCHESTRATOR = os.getenv("USE_UNIFIED_ORCHESTRATOR", "false").lower()
 
 logger = logging.getLogger(__name__)
 
@@ -526,62 +536,52 @@ async def create_scan(
     # Developer plan bypasses ALL domain verification
     if current_user.plan == "developer":
         logger.info(f"Developer plan bypass: {current_user.email} skipping domain verification")
-    # Personal email users MUST verify domain for ANY scan type
-    elif user_has_personal_email:
+    # ALL USERS must be authorized to scan any domain
+    # Personal email users: MUST verify domain via DNS TXT
+    # Corporate email users: Can scan their own domain + verified domains
+    else:
         domain_service = DomainVerificationService(db)
         is_authorized, auth_reason = await domain_service.is_authorized_to_scan(
             user_id=current_user.id,
             user_email=current_user.email,
             target_domain=target_host,
-            require_verification_for_personal=True
+            require_verification_for_personal=True  # Personal emails always need verification
         )
         
         if not is_authorized:
+            email_domain = current_user.email.split('@')[1] if '@' in current_user.email else None
+            
             logger.warning(
-                f"Personal email domain authorization failed: user={current_user.email}, "
-                f"target={target_host}, reason={auth_reason}"
+                f"Domain authorization DENIED: user={current_user.email}, "
+                f"target={target_host}, reason={auth_reason}, personal_email={user_has_personal_email}"
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": "personal_email_requires_verification",
-                    "message": "Users with personal email addresses must verify domain ownership before scanning.",
-                    "target_domain": target_host,
-                    "user_email": current_user.email,
-                    "verification_url": f"/api/domains/verify/generate",
-                    "help": "Add a DNS TXT record to verify domain ownership. Go to Settings → Verified Domains."
-                }
-            )
+            
+            if user_has_personal_email:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "personal_email_requires_verification",
+                        "message": "Users with personal email addresses must verify domain ownership before scanning any domain.",
+                        "target_domain": target_host,
+                        "user_email": current_user.email,
+                        "verification_url": f"/api/domains/verify/generate",
+                        "help": "Add a DNS TXT record to verify domain ownership. Go to Settings → Verified Domains."
+                    }
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "domain_not_authorized",
+                        "message": f"You can only scan domains matching your corporate email ({email_domain}) or domains you've verified.",
+                        "target_domain": target_host,
+                        "user_email_domain": email_domain,
+                        "verification_url": f"/api/domains/verify/generate",
+                        "help": "Either scan your corporate domain or verify this domain in Settings → Verified Domains."
+                    }
+                )
         
-        logger.info(f"Personal email domain authorization granted: {current_user.email} -> {target_host} ({auth_reason})")
-    # Corporate email users only need verification for credential-based scans
-    elif has_credentials:
-        domain_service = DomainVerificationService(db)
-        is_authorized, auth_reason = await domain_service.is_authorized_to_scan(
-            user_id=current_user.id,
-            user_email=current_user.email,
-            target_domain=target_host,
-            require_verification_for_personal=False  # Corporate email, only check credentials
-        )
-        
-        if not is_authorized:
-            logger.warning(
-                f"Credential scan domain authorization failed: user={current_user.email}, "
-                f"target={target_host}, reason={auth_reason}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": "domain_verification_required",
-                    "message": "Credential-based scanning requires domain ownership verification.",
-                    "target_domain": target_host,
-                    "user_email_domain": current_user.email.split('@')[1] if '@' in current_user.email else None,
-                    "verification_url": f"/api/domains/verify/generate",
-                    "help": "Add a DNS TXT record to verify domain ownership, or use an email address from the target domain."
-                }
-            )
-        
-        logger.info(f"Domain authorization granted: {current_user.email} -> {target_host} ({auth_reason})")
+        logger.info(f"Domain authorization GRANTED: user={current_user.email}, target={target_host}, reason={auth_reason}")
     # ==========================================================
     
     # Validate scan type
@@ -652,8 +652,10 @@ async def create_scan(
         }
     )
     
-    # Increment usage counter after successful scan creation
-    await increment_usage_counter(db, current_user.id, "scans")
+    # Sync usage counter with actual ScanHistory count
+    # This ensures User.scans_this_month stays in sync with the source of truth
+    sub_manager = SubscriptionManager(db, current_user)
+    await sub_manager.deduct_scan(scan_id)
     
     # Store password separately for the background task (not in DB)
     scan_progress[scan_id] = {
@@ -665,9 +667,10 @@ async def create_scan(
         "logs": []
     }
     
-    # Start scan in background
+    # Start scan in background - use orchestrator if enabled
+    scan_runner = get_scan_runner_function()
     background_tasks.add_task(
-        run_security_scan,
+        scan_runner,
         scan_id=scan_id,
         target_url=scan_data.target_url,
         login_url=scan_data.login_url,
@@ -1083,7 +1086,7 @@ async def retry_scan(
     await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     
     # Create new scan with same config
-    new_scan_id = str(uuid.uuid4())[:8]
+    new_scan_id = str(uuid_lib.uuid4())[:8]
     
     new_scan = ScanHistory(
         user_id=current_user.id,
@@ -1099,8 +1102,9 @@ async def retry_scan(
     await db.commit()
     await db.refresh(new_scan)
     
-    # Increment usage counter
-    await increment_usage_counter(db, current_user.id, "scans")
+    # Sync usage counter with actual ScanHistory count
+    sub_manager = SubscriptionManager(db, current_user)
+    await sub_manager.deduct_scan(new_scan_id)
     
     # Initialize progress tracking
     scan_progress[new_scan_id] = {
@@ -1351,6 +1355,28 @@ async def stop_scan(
     if scan_id in scan_progress:
         scan_progress[scan_id]["stop"] = True
         scan_progress[scan_id]["refund_blocked"] = refund_blocked
+    
+    # Force cleanup: close browser and orchestrator
+    try:
+        # Try to close browser via registry
+        from core.browser import BrowserController
+        await BrowserController.force_close_by_scan_id(scan_id)
+        
+        # Try to stop via orchestrator
+        from core.scan_orchestrator import ScanOrchestrator
+        orchestrator = ScanOrchestrator.get_active_scan(scan_id)
+        if orchestrator:
+            await orchestrator.stop()
+            logger.info(f"Orchestrator stopped for scan {scan_id}")
+    except Exception as e:
+        logger.warning(f"Error during force cleanup for scan {scan_id}: {e}")
+    
+    # Broadcast stop status via WebSocket
+    try:
+        from api.websocket import broadcast_scan_status
+        await broadcast_scan_status(scan_id, "stopped", "Scan stopped by user")
+    except Exception as e:
+        logger.debug(f"WebSocket broadcast failed: {e}")
     
     if refund_blocked:
         return MessageResponse(
@@ -2088,10 +2114,16 @@ async def run_security_scan(
             except Exception as ws_err:
                 logger.debug(f"WebSocket error broadcast skipped: {ws_err}")
             
-            # Rollback the scan credit since the scan failed
+            # Refund the scan credit since the scan failed
+            # This syncs the User.scans_this_month counter with actual ScanHistory count
             try:
-                await decrement_usage_counter(db, user_id, "scans")
-                log("Scan credit refunded", "info", persist=True)
+                from database.models import User
+                result = await db.execute(select(User).where(User.id == user_id))
+                user = result.scalar_one_or_none()
+                if user:
+                    sub_manager = SubscriptionManager(db, user)
+                    await sub_manager.refund_scan(scan_id, reason="scan_failed")
+                    log("Scan credit refunded", "info", persist=True)
             except Exception as refund_error:
                 logger.warning(f"Failed to refund scan credit for scan {scan_id}: {str(refund_error)}")
 
@@ -2204,3 +2236,275 @@ async def _run_legacy_scan(db, scan, scan_id: str, runner_config: dict, update_p
     log("Scan completed successfully!")
     
     await runner.cleanup()
+
+
+# ==========================================
+# UNIFIED ORCHESTRATOR INTEGRATION
+# ==========================================
+
+async def run_scan_with_orchestrator(
+    scan_id: str,
+    target_url: str,
+    login_url: Optional[str],
+    username: Optional[str],
+    password: Optional[str],
+    scan_type: str,
+    user_id: UUID,
+    two_factor_config: Optional[dict] = None,
+    auth_config: Optional[dict] = None,
+    attacks_config: Optional[dict] = None
+):
+    """
+    Run a security scan using the unified ScanOrchestrator.
+    
+    This is the new implementation that uses the centralized orchestrator
+    for state management, progress tracking, and engine delegation.
+    
+    Enable by setting environment variable: USE_UNIFIED_ORCHESTRATOR=true
+    """
+    from database.connection import AsyncSessionLocal
+    from core.scan_orchestrator import ScanOrchestrator
+    from core.engine_protocol import EngineResult
+    from database import crud
+    
+    logger.info(f"[Orchestrator] Starting scan {scan_id} via unified orchestrator")
+    
+    async with AsyncSessionLocal() as db:
+        scan = await crud.get_scan_by_id(db, scan_id)
+        if not scan:
+            logger.error(f"[Orchestrator] Scan {scan_id} not found in database")
+            return
+        
+        # Default auth config if not provided
+        if auth_config is None:
+            auth_config = {
+                "auth_method": "username_password" if (username and password) else "none",
+                "social_providers": [],
+            }
+        
+        # Get scan profile settings
+        scan_profile = (scan.config or {}).get('scan_profile', 'full')
+        
+        # Configure crawl settings based on scan profile
+        crawl_settings = {
+            'full': {'max_pages': 100, 'max_depth': 4},
+            'quick': {'max_pages': 25, 'max_depth': 2},
+            'api': {'max_pages': 50, 'max_depth': 3},
+            'authenticated': {'max_pages': 150, 'max_depth': 5},
+        }.get(scan_profile, {'max_pages': 100, 'max_depth': 4})
+        
+        # Build config for the engine
+        runner_config = {
+            'target': {
+                'url': target_url,
+                'scope': (scan.config or {}).get('scope', '')
+            },
+            'auth': {
+                'enabled': auth_config.get('auth_method') not in ('none', None),
+                'method': auth_config.get('auth_method', 'none'),
+                'login_url': login_url or target_url,
+                'username': username or '',
+                'password': password or '',
+                'phone_number': auth_config.get('phone_number', ''),
+                'session_cookie': auth_config.get('session_cookie', ''),
+                'session_token': auth_config.get('session_token', ''),
+                'social_providers': auth_config.get('social_providers', []),
+                'selectors': (scan.config or {}).get('auth_selectors', {
+                    'username': '#email, input[name="email"], input[name="username"], input[type="email"]',
+                    'password': '#password, input[name="password"], input[type="password"]',
+                    'submit': 'button[type="submit"], input[type="submit"], #loginButton'
+                }),
+                'two_factor': two_factor_config
+            },
+            'browser': {
+                'headless': os.getenv('ENVIRONMENT', 'development') == 'production',
+                'slow_mo': 0 if os.getenv('ENVIRONMENT') == 'production' else 100
+            },
+            'crawl': crawl_settings,
+            'scan_profile': scan_profile,
+            'proxy': {
+                'enabled': (scan.config or {}).get('proxy_enabled', True),
+                'port': (scan.config or {}).get('proxy_port', 8888)
+            },
+            'scan_id': scan_id,
+            'target_url': target_url,
+            'rate_limit': (scan.config or {}).get('rate_limit', 10),
+            'timeout': (scan.config or {}).get('timeout', 30 if scan_profile == 'full' else 15),
+            'attacks': _build_attacks_config(attacks_config, scan_profile),
+            'report': {
+                'output_dir': str(Path(__file__).parent.parent.parent / 'data' / 'reports'),
+                'formats': (scan.config or {}).get('report_formats', ['html', 'json'])
+            }
+        }
+        
+        try:
+            # Create orchestrator
+            orchestrator = ScanOrchestrator(
+                scan_id=scan_id,
+                scan_type=scan_type,
+                config=runner_config,
+                user_id=user_id,
+                db=db,
+            )
+            
+            # Run the scan
+            result: EngineResult = await orchestrator.run()
+            
+            # Update database with results
+            if result.status == "completed":
+                severity_counts = {
+                    "critical": result.critical_count,
+                    "high": result.high_count,
+                    "medium": result.medium_count,
+                    "low": result.low_count,
+                    "info": result.info_count,
+                }
+                
+                await crud.update_scan_results(
+                    db, scan,
+                    findings_count=len(result.findings),
+                    severity_counts=severity_counts,
+                    report_paths=result.report_paths
+                )
+                
+                await crud.update_scan_status(db, scan, "completed", 100, "Completed")
+                
+                # Broadcast completion
+                try:
+                    await broadcast_scan_complete(
+                        scan_id=scan_id,
+                        findings_count=len(result.findings),
+                        duration_seconds=int(result.duration_seconds),
+                        summary={"severity_counts": severity_counts}
+                    )
+                except Exception:
+                    pass
+                
+                logger.info(f"[Orchestrator] Scan {scan_id} completed successfully with {len(result.findings)} findings")
+            else:
+                # Error case
+                await crud.update_scan_status(
+                    db, scan, "error",
+                    progress=scan.progress,
+                    phase="Error",
+                    error_message=result.error_message
+                )
+                
+                try:
+                    await broadcast_scan_error(
+                        scan_id=scan_id,
+                        error=result.error_message or "Unknown error",
+                        recoverable=False
+                    )
+                except Exception:
+                    pass
+                
+                # Refund scan credit using SubscriptionManager
+                try:
+                    from database.models import User
+                    result_user = await db.execute(select(User).where(User.id == user_id))
+                    user = result_user.scalar_one_or_none()
+                    if user:
+                        sub_manager = SubscriptionManager(db, user)
+                        await sub_manager.refund_scan(scan_id, reason="scan_error")
+                except Exception as e:
+                    logger.warning(f"Failed to refund scan credit: {e}")
+                
+        except Exception as e:
+            import traceback
+            logger.exception(f"[Orchestrator] Scan {scan_id} failed: {e}")
+            
+            user_friendly_error, error_id = sanitize_error_for_user(str(e), traceback.format_exc())
+            
+            await crud.update_scan_status(
+                db, scan, "error",
+                progress=scan.progress,
+                phase="Error",
+                error_message=user_friendly_error
+            )
+            
+            try:
+                await broadcast_scan_error(scan_id=scan_id, error=user_friendly_error, recoverable=False)
+            except Exception:
+                pass
+            
+            # Refund scan credit using SubscriptionManager
+            try:
+                from database.models import User
+                result_user = await db.execute(select(User).where(User.id == user_id))
+                user = result_user.scalar_one_or_none()
+                if user:
+                    sub_manager = SubscriptionManager(db, user)
+                    await sub_manager.refund_scan(scan_id, reason="scan_exception")
+            except Exception:
+                pass
+
+
+def get_scan_runner_function():
+    """
+    Get the appropriate scan runner function based on feature flag.
+    
+    Feature flag: USE_UNIFIED_ORCHESTRATOR
+    - "false" (default): Legacy run_security_scan
+    - "true": Uses core/scan_orchestrator.py (Layer 4)
+    - "service": Uses services/scan_orchestrator_service.py (Layer 3 - RECOMMENDED)
+    
+    The "service" option merges orchestration INTO the services layer for cleaner architecture.
+    """
+    if USE_UNIFIED_ORCHESTRATOR == "service":
+        logger.info("Using ScanOrchestratorService (Layer 3) for scans")
+        return run_scan_with_service
+    elif USE_UNIFIED_ORCHESTRATOR == "true":
+        logger.info("Using ScanOrchestrator (Layer 4) for scans")
+        return run_scan_with_orchestrator
+    else:
+        return run_security_scan
+
+
+async def run_scan_with_service(
+    scan_id: str,
+    target_url: str,
+    login_url: Optional[str],
+    username: Optional[str],
+    password: Optional[str],
+    scan_type: str,
+    user_id: UUID,
+    two_factor_config: Optional[dict] = None,
+    auth_config: Optional[dict] = None,
+    attacks_config: Optional[dict] = None
+):
+    """
+    Run a security scan using the ScanOrchestratorService (Layer 3).
+    
+    This is the RECOMMENDED approach that merges orchestration into the services layer,
+    providing a cleaner architecture with fewer hops:
+    
+    API Route → Service (with orchestration) → Runner
+    
+    Enable by setting: USE_UNIFIED_ORCHESTRATOR=service
+    """
+    from services.scan_orchestrator_service import scan_orchestrator_service
+    
+    logger.info(f"[Service] Starting scan {scan_id} via ScanOrchestratorService")
+    
+    try:
+        result = await scan_orchestrator_service.run_scan(
+            scan_id=scan_id,
+            target_url=target_url,
+            scan_type=scan_type,
+            user_id=user_id,
+            login_url=login_url,
+            username=username,
+            password=password,
+            two_factor_config=two_factor_config,
+            auth_config=auth_config,
+            attacks_config=attacks_config,
+        )
+        
+        if result.status == "completed":
+            logger.info(f"[Service] Scan {scan_id} completed with {result.findings_count} findings")
+        else:
+            logger.error(f"[Service] Scan {scan_id} ended with status: {result.status}")
+            
+    except Exception as e:
+        logger.exception(f"[Service] Scan {scan_id} failed: {e}")

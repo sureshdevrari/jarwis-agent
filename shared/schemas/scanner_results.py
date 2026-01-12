@@ -63,6 +63,19 @@ class BaseFinding(BaseModel):
     cvss_score: Optional[float] = Field(None, ge=0.0, le=10.0, description="CVSS score")
     references: List[str] = Field(default_factory=list, description="Reference URLs")
     
+    # Vulnerability metadata for reporting
+    attack_type: Optional[str] = Field(None, description="Attack type key (e.g., sqli, xss)")
+    impact: Optional[str] = Field(None, description="Business/technical impact of vulnerability")
+    disclosure_days: Optional[int] = Field(None, description="Days to responsible disclosure deadline")
+    compliance_refs: List[str] = Field(
+        default_factory=list, 
+        description="Compliance standards affected (e.g., PCI-DSS 6.5.1, HIPAA)"
+    )
+    
+    # PoC request/response data
+    request_data: Optional[str] = Field(None, description="Full HTTP request that triggered the vulnerability")
+    response_data: Optional[str] = Field(None, description="Response snippet proving exploitation")
+    
     # Metadata
     discovered_at: Optional[str] = Field(None, description="ISO timestamp")
     scanner_name: Optional[str] = Field(None, description="Scanner that found this")

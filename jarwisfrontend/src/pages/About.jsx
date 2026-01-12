@@ -3,6 +3,7 @@ import Footer from "../components/Footer";
 import AIFlowAnimation from "../components/AIFlowAnimation";
 import AnimatedTypingHeading from "../components/AnimatedTypingHeading";
 import { Globe, Smartphone, Wifi, Cloud, MessageSquare, Shield } from "lucide-react";
+import { ScrollProgressBar, RevealOnScroll, StaggerContainer, StaggerItem } from "../components/ui";
 
 const About = () => {
   // What we offer - comprehensive security services
@@ -74,6 +75,9 @@ const About = () => {
 
   return (
     <div>
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
+
       <div className="text-white relative overflow-hidden">
         {/* Background Pattern/Lines */}
         <div className="absolute inset-0 opacity-10">

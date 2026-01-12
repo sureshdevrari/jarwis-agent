@@ -40,6 +40,9 @@ class Endpoint:
 class BrowserController:
     """Controls headless browser for crawling and authentication"""
     
+    # Class-level registry of browser instances by scan_id for force cleanup
+    _instances: Dict[str, 'BrowserController'] = {}
+    
     def __init__(
         self,
         proxy_host: str = "",  # Empty by default - no proxy
@@ -136,19 +139,324 @@ class BrowserController:
         return await self._extract_forms()
 
     async def close(self):
-        """Gracefully close browser resources."""
+        """Gracefully close browser resources.
+        
+        Handles both Windows sync mode (using ThreadPoolExecutor) and
+        standard async mode. Ensures all resources are properly released:
+        - Browser context
+        - Browser instance
+        - Playwright instance
+        - MITM proxy (if active)
+        - Thread executor (Windows only)
+        """
         try:
-            if self.context:
-                await self.context.close()
-            if self.browser:
-                await self.browser.close()
-            if self.playwright:
-                await self.playwright.stop()
+            # Windows sync mode: run cleanup in executor
+            if self._is_windows and hasattr(self, '_executor') and self._executor:
+                def close_sync():
+                    """Sync cleanup for Windows Playwright objects"""
+                    try:
+                        if self.context:
+                            self.context.close()
+                        if self.browser:
+                            self.browser.close()
+                        if self.playwright:
+                            self.playwright.stop()
+                    except Exception as e:
+                        logger.debug(f"Sync browser close error (non-critical): {e}")
+                
+                try:
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(self._executor, close_sync)
+                except Exception as e:
+                    logger.debug(f"Executor cleanup error: {e}")
+                
+                # Shutdown the executor
+                try:
+                    self._executor.shutdown(wait=True, cancel_futures=True)
+                except TypeError:
+                    # Python < 3.9 doesn't have cancel_futures
+                    self._executor.shutdown(wait=True)
+                except Exception as e:
+                    logger.debug(f"Executor shutdown error: {e}")
+                    
+                logger.info("Browser closed (Windows sync mode)")
+            else:
+                # Standard async mode cleanup
+                if self.context:
+                    try:
+                        await self.context.close()
+                    except Exception as e:
+                        logger.debug(f"Context close error: {e}")
+                        
+                if self.browser:
+                    try:
+                        await self.browser.close()
+                    except Exception as e:
+                        logger.debug(f"Browser close error: {e}")
+                        
+                if self.playwright:
+                    try:
+                        await self.playwright.stop()
+                    except Exception as e:
+                        logger.debug(f"Playwright stop error: {e}")
+                        
+                logger.info("Browser closed (async mode)")
+            
+            # Stop MITM proxy if it was running
+            if self._mitm_proxy:
+                try:
+                    await self._mitm_proxy.stop()
+                except Exception as e:
+                    logger.debug(f"MITM proxy stop error: {e}")
+                self._mitm_proxy = None
+                
+        except Exception as e:
+            logger.warning(f"Browser close error (non-critical): {type(e).__name__}: {e}")
         finally:
+            # Unregister from instance registry
+            if self._scan_id and self._scan_id in BrowserController._instances:
+                BrowserController._instances.pop(self._scan_id, None)
+                logger.debug(f"Unregistered browser for scan {self._scan_id}")
+            
+            # Clear all references
             self.context = None
             self.browser = None
             self.playwright = None
+            self.page = None
+            self._executor = None
     
+    async def __aenter__(self):
+        """Async context manager entry - starts the browser.
+        
+        Usage:
+            async with BrowserController() as browser:
+                await browser.goto('https://example.com')
+                # Browser automatically closed on exit
+        """
+        await self.start()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - ensures browser cleanup.
+        
+        Always closes the browser, even if an exception occurred.
+        """
+        await self.close()
+        return False  # Don't suppress exceptions
+    
+    @staticmethod
+    def kill_orphaned_browsers(max_age_minutes: int = 30, force: bool = False) -> dict:
+        """Kill orphaned Playwright Chrome processes as a safety net.
+        
+        This is a process-level cleanup for browsers that weren't properly closed.
+        Useful for long-running servers to prevent resource leaks.
+        
+        Args:
+            max_age_minutes: Only kill processes older than this (default 30 min).
+                            Set to 0 to kill all Playwright Chrome processes.
+            force: If True, kill all Playwright Chrome regardless of age.
+            
+        Returns:
+            dict with 'killed' count and 'details' list
+        """
+        import subprocess
+        from datetime import datetime, timedelta
+        
+        result = {'killed': 0, 'skipped': 0, 'details': [], 'errors': []}
+        
+        if sys.platform == 'win32':
+            try:
+                # Use WMIC to get Chrome processes with command line info
+                cmd = 'wmic process where "name=\'chrome.exe\'" get ProcessId,CreationDate,CommandLine /format:csv'
+                output = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    shell=True,
+                    timeout=30
+                )
+                
+                if output.returncode != 0:
+                    result['errors'].append(f"WMIC failed: {output.stderr}")
+                    return result
+                
+                lines = output.stdout.strip().split('\n')
+                cutoff_time = datetime.now() - timedelta(minutes=max_age_minutes)
+                
+                for line in lines[1:]:  # Skip header
+                    if not line.strip():
+                        continue
+                    
+                    parts = line.strip().split(',')
+                    if len(parts) < 4:
+                        continue
+                    
+                    # CSV format: Node,CommandLine,CreationDate,ProcessId
+                    command_line = parts[1] if len(parts) > 1 else ''
+                    creation_date_str = parts[2] if len(parts) > 2 else ''
+                    pid_str = parts[3] if len(parts) > 3 else ''
+                    
+                    # Check if this is a Playwright-launched Chrome
+                    is_playwright = (
+                        '--disable-blink-features=AutomationControlled' in command_line or
+                        '--headless' in command_line and '--remote-debugging' in command_line
+                    )
+                    
+                    if not is_playwright:
+                        continue
+                    
+                    try:
+                        pid = int(pid_str.strip())
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    # Parse creation date (format: YYYYMMDDHHMMSS.ffffff+offset)
+                    should_kill = force or max_age_minutes == 0
+                    
+                    if not should_kill and creation_date_str:
+                        try:
+                            # Parse WMIC date format
+                            date_part = creation_date_str.split('.')[0]
+                            if len(date_part) >= 14:
+                                creation_time = datetime.strptime(date_part[:14], '%Y%m%d%H%M%S')
+                                should_kill = creation_time < cutoff_time
+                        except (ValueError, IndexError):
+                            # If we can't parse date and force is False, skip
+                            pass
+                    
+                    if should_kill:
+                        try:
+                            subprocess.run(
+                                f'taskkill /F /PID {pid}',
+                                capture_output=True,
+                                shell=True,
+                                timeout=10
+                            )
+                            result['killed'] += 1
+                            result['details'].append({
+                                'pid': pid,
+                                'action': 'killed',
+                                'age_check': 'older than limit' if not force else 'forced'
+                            })
+                            logger.info(f"Killed orphaned Chrome process: PID {pid}")
+                        except Exception as e:
+                            result['errors'].append(f"Failed to kill PID {pid}: {e}")
+                    else:
+                        result['skipped'] += 1
+                        
+            except subprocess.TimeoutExpired:
+                result['errors'].append("Process enumeration timed out")
+            except Exception as e:
+                result['errors'].append(f"Windows cleanup error: {e}")
+                
+        else:
+            # Linux/macOS implementation
+            try:
+                # Find Chrome processes with Playwright markers
+                cmd = "ps aux | grep -E 'chrome.*--disable-blink-features|chromium.*--disable-blink-features' | grep -v grep"
+                output = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    shell=True,
+                    timeout=30
+                )
+                
+                lines = output.stdout.strip().split('\n')
+                
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+                    
+                    try:
+                        pid = int(parts[1])
+                        
+                        # For Unix, we can check process age via /proc
+                        should_kill = force or max_age_minutes == 0
+                        
+                        if not should_kill:
+                            try:
+                                import os
+                                stat_info = os.stat(f'/proc/{pid}')
+                                proc_start = datetime.fromtimestamp(stat_info.st_ctime)
+                                cutoff = datetime.now() - timedelta(minutes=max_age_minutes)
+                                should_kill = proc_start < cutoff
+                            except (OSError, FileNotFoundError):
+                                # Process might have already exited
+                                continue
+                        
+                        if should_kill:
+                            subprocess.run(
+                                f'kill -9 {pid}',
+                                capture_output=True,
+                                shell=True,
+                                timeout=10
+                            )
+                            result['killed'] += 1
+                            result['details'].append({'pid': pid, 'action': 'killed'})
+                            logger.info(f"Killed orphaned Chrome process: PID {pid}")
+                        else:
+                            result['skipped'] += 1
+                            
+                    except (ValueError, subprocess.TimeoutExpired) as e:
+                        result['errors'].append(f"Error processing line: {e}")
+                        
+            except subprocess.TimeoutExpired:
+                result['errors'].append("Process enumeration timed out")
+            except Exception as e:
+                result['errors'].append(f"Unix cleanup error: {e}")
+        
+        if result['killed'] > 0:
+            logger.info(f"Orphaned browser cleanup: killed {result['killed']}, skipped {result['skipped']}")
+        
+        return result
+    
+    @staticmethod
+    async def cleanup_orphaned_browsers_async(max_age_minutes: int = 30, force: bool = False) -> dict:
+        """Async wrapper for kill_orphaned_browsers.
+        
+        Runs the cleanup in a thread executor to avoid blocking the event loop.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: BrowserController.kill_orphaned_browsers(max_age_minutes, force)
+        )
+
+    @classmethod
+    async def force_close_by_scan_id(cls, scan_id: str) -> bool:
+        """Force close the browser instance associated with a scan.
+        
+        Args:
+            scan_id: The scan ID whose browser should be closed
+            
+        Returns:
+            True if browser was found and closed, False otherwise
+        """
+        instance = cls._instances.get(scan_id)
+        if instance:
+            try:
+                logger.info(f"Force-closing browser for scan {scan_id}")
+                await instance.close()
+                return True
+            except Exception as e:
+                logger.warning(f"Error force-closing browser for scan {scan_id}: {e}")
+                # Try to remove from registry anyway
+                cls._instances.pop(scan_id, None)
+                return False
+        else:
+            logger.debug(f"No browser instance found for scan {scan_id}")
+            return False
+    
+    @classmethod
+    def get_active_browsers(cls) -> Dict[str, 'BrowserController']:
+        """Get all active browser instances (for debugging/monitoring)"""
+        return cls._instances.copy()
+
     async def _page_title(self):
         """Get page title - works on both Windows and non-Windows"""
         if self._is_windows:
@@ -1727,8 +2035,18 @@ class BrowserController:
                 - email: email address (for email type)
                 - phone: phone number (for sms type)
         """
+        # Unregister from old scan_id if changing
+        if self._scan_id and self._scan_id in BrowserController._instances:
+            BrowserController._instances.pop(self._scan_id, None)
+        
         self._scan_id = scan_id
         self._2fa_config = two_factor_config or {}
+        
+        # Register this instance for force-cleanup capability
+        if scan_id:
+            BrowserController._instances[scan_id] = self
+            logger.debug(f"Registered browser for scan {scan_id}")
+        
         if self._2fa_config.get('enabled'):
             logger.info(f"2FA enabled for scan {scan_id}: type={self._2fa_config.get('type')}")
 
@@ -2569,30 +2887,12 @@ class BrowserController:
             ''')
     
     async def stop(self):
-        """Stop the browser and MITM proxy"""
-        # Windows: Skip cleanup to avoid greenlet threading issues
-        # Browser process will be cleaned up by OS
-        if sys.platform == 'win32' and hasattr(self, '_executor'):
-            if hasattr(self, '_executor'):
-                self._executor.shutdown(wait=False)
-            logger.info("Browser stopped (Windows - process cleanup skipped)")
-            return
+        """Stop the browser and MITM proxy.
         
-        try:
-            # Original async implementation for non-Windows
-            if self.browser:
-                await self.browser.close()
-            if self.playwright:
-                await self.playwright.stop()
-            
-            # Stop MITM proxy if it was running
-            if self._mitm_proxy:
-                await self._mitm_proxy.stop()
-                self._mitm_proxy = None
-            
-            logger.info("Browser stopped")
-        except Exception as e:
-            logger.warning(f"Browser stop error (non-critical): {type(e).__name__}")
+        This method delegates to close() for consistent cleanup behavior
+        across both Windows and non-Windows platforms.
+        """
+        await self.close()
     
     def is_mitm_enabled(self) -> bool:
         """Check if MITM proxy is active"""

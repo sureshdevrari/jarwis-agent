@@ -3,6 +3,8 @@ echo ============================================
 echo   STOPPING JARWIS AI TRAINING DAEMON
 echo ============================================
 echo.
+echo Progress will be saved and can be resumed later.
+echo.
 
 cd /d "%~dp0"
 
@@ -12,6 +14,9 @@ if exist ".venv\Scripts\activate.bat" (
 )
 
 REM Stop the daemon
-python jarwis_ai\training\daemon.py stop
+python -m jarwis_ai.training.daemon stop
 
+echo.
+echo Training stopped. Run START_AI_TRAINING.bat to resume from checkpoint.
+echo.
 pause

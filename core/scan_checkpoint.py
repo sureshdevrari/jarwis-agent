@@ -447,3 +447,226 @@ class ScanCheckpoint:
             "created_at": self._state.created_at,
             "updated_at": self._state.updated_at
         }
+
+
+class RequestLevelCheckpoint:
+    """
+    Request-level checkpointing for resumable attack execution.
+    
+    Tracks which individual requests have been processed by each scanner,
+    allowing resume from the exact point of failure.
+    
+    This works in conjunction with RequestStoreDB to:
+    - Mark requests as pending/in_progress/completed/failed
+    - Track which scanner processed which request
+    - Support resume from any point within a phase
+    
+    Usage:
+        checkpoint = RequestLevelCheckpoint(scan_id)
+        await checkpoint.initialize()
+        
+        # Before processing a request
+        await checkpoint.mark_in_progress(scanner_name, request_id)
+        
+        # After processing
+        await checkpoint.mark_completed(scanner_name, request_id)
+        
+        # Get unprocessed requests for a scanner
+        pending = await checkpoint.get_pending_requests(scanner_name, post_login=False)
+    """
+    
+    def __init__(self, scan_id: str, storage_dir: str = "temp/scans"):
+        self.scan_id = scan_id
+        self.storage_dir = Path(storage_dir) / scan_id
+        self.progress_file = self.storage_dir / "request_progress.json"
+        
+        # In-memory cache for performance
+        self._progress: Dict[str, Dict[str, str]] = {}  # scanner_name -> {request_id: status}
+        self._lock = asyncio.Lock()
+        
+        # Dirty flag for lazy saving
+        self._dirty = False
+        self._last_save = datetime.now()
+        self._save_interval_seconds = 5  # Save at most every 5 seconds
+        
+        logger.info(f"RequestLevelCheckpoint initialized for scan {scan_id}")
+    
+    async def initialize(self):
+        """Initialize and load existing progress"""
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        
+        if self.progress_file.exists():
+            try:
+                with open(self.progress_file, 'r') as f:
+                    self._progress = json.load(f)
+                logger.info(f"Loaded request progress: {sum(len(v) for v in self._progress.values())} entries")
+            except Exception as e:
+                logger.warning(f"Failed to load request progress: {e}")
+                self._progress = {}
+    
+    async def _save_if_needed(self, force: bool = False):
+        """Save progress to disk if dirty and interval has passed"""
+        if not self._dirty and not force:
+            return
+        
+        now = datetime.now()
+        if not force and (now - self._last_save).total_seconds() < self._save_interval_seconds:
+            return
+        
+        try:
+            # Atomic write
+            temp_file = self.progress_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as f:
+                json.dump(self._progress, f, indent=2)
+            temp_file.replace(self.progress_file)
+            
+            self._dirty = False
+            self._last_save = now
+            
+        except Exception as e:
+            logger.error(f"Failed to save request progress: {e}")
+    
+    async def mark_in_progress(self, scanner_name: str, request_id: str):
+        """Mark a request as being processed by a scanner"""
+        async with self._lock:
+            if scanner_name not in self._progress:
+                self._progress[scanner_name] = {}
+            
+            self._progress[scanner_name][request_id] = "in_progress"
+            self._dirty = True
+            await self._save_if_needed()
+    
+    async def mark_completed(self, scanner_name: str, request_id: str):
+        """Mark a request as successfully processed"""
+        async with self._lock:
+            if scanner_name not in self._progress:
+                self._progress[scanner_name] = {}
+            
+            self._progress[scanner_name][request_id] = "completed"
+            self._dirty = True
+            await self._save_if_needed()
+    
+    async def mark_failed(self, scanner_name: str, request_id: str, error: str = ""):
+        """Mark a request as failed"""
+        async with self._lock:
+            if scanner_name not in self._progress:
+                self._progress[scanner_name] = {}
+            
+            # Store error info
+            self._progress[scanner_name][request_id] = f"failed:{error[:100]}"
+            self._dirty = True
+            await self._save_if_needed()
+    
+    async def mark_skipped(self, scanner_name: str, request_id: str, reason: str = ""):
+        """Mark a request as skipped (e.g., not applicable to scanner)"""
+        async with self._lock:
+            if scanner_name not in self._progress:
+                self._progress[scanner_name] = {}
+            
+            self._progress[scanner_name][request_id] = f"skipped:{reason[:50]}"
+            self._dirty = True
+            await self._save_if_needed()
+    
+    def get_status(self, scanner_name: str, request_id: str) -> str:
+        """Get processing status for a request"""
+        if scanner_name not in self._progress:
+            return "pending"
+        
+        status = self._progress[scanner_name].get(request_id, "pending")
+        
+        # Extract base status (before colon for failed/skipped)
+        if ":" in status:
+            return status.split(":")[0]
+        
+        return status
+    
+    def is_processed(self, scanner_name: str, request_id: str) -> bool:
+        """Check if request was already processed by scanner"""
+        status = self.get_status(scanner_name, request_id)
+        return status in ["completed", "failed", "skipped"]
+    
+    def is_pending(self, scanner_name: str, request_id: str) -> bool:
+        """Check if request is pending processing"""
+        return self.get_status(scanner_name, request_id) == "pending"
+    
+    async def get_scanner_progress(self, scanner_name: str) -> Dict[str, int]:
+        """Get progress summary for a scanner"""
+        if scanner_name not in self._progress:
+            return {"pending": 0, "in_progress": 0, "completed": 0, "failed": 0, "skipped": 0}
+        
+        counts = {"pending": 0, "in_progress": 0, "completed": 0, "failed": 0, "skipped": 0}
+        
+        for status in self._progress[scanner_name].values():
+            base_status = status.split(":")[0] if ":" in status else status
+            if base_status in counts:
+                counts[base_status] += 1
+        
+        return counts
+    
+    async def get_failed_requests(self, scanner_name: str) -> List[Tuple[str, str]]:
+        """Get list of failed requests with error messages"""
+        if scanner_name not in self._progress:
+            return []
+        
+        failed = []
+        for request_id, status in self._progress[scanner_name].items():
+            if status.startswith("failed:"):
+                error = status[7:]  # Remove "failed:" prefix
+                failed.append((request_id, error))
+        
+        return failed
+    
+    async def retry_failed(self, scanner_name: str) -> int:
+        """Reset failed requests to pending for retry"""
+        async with self._lock:
+            if scanner_name not in self._progress:
+                return 0
+            
+            count = 0
+            for request_id, status in list(self._progress[scanner_name].items()):
+                if status.startswith("failed:"):
+                    del self._progress[scanner_name][request_id]
+                    count += 1
+            
+            self._dirty = True
+            await self._save_if_needed(force=True)
+            
+            logger.info(f"Reset {count} failed requests for scanner {scanner_name}")
+            return count
+    
+    async def reset_scanner(self, scanner_name: str):
+        """Reset all progress for a scanner"""
+        async with self._lock:
+            if scanner_name in self._progress:
+                del self._progress[scanner_name]
+                self._dirty = True
+                await self._save_if_needed(force=True)
+                logger.info(f"Reset progress for scanner {scanner_name}")
+    
+    async def reset_all(self):
+        """Reset all progress"""
+        async with self._lock:
+            self._progress = {}
+            self._dirty = True
+            await self._save_if_needed(force=True)
+            logger.info("Reset all request progress")
+    
+    async def flush(self):
+        """Force save any pending changes"""
+        await self._save_if_needed(force=True)
+    
+    async def get_summary(self) -> Dict[str, Any]:
+        """Get overall progress summary"""
+        summary = {
+            "total_scanners": len(self._progress),
+            "scanners": {}
+        }
+        
+        for scanner_name in self._progress:
+            summary["scanners"][scanner_name] = await self.get_scanner_progress(scanner_name)
+        
+        return summary
+
+
+# Import asyncio at top of file for the new async class
+import asyncio

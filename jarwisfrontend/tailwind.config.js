@@ -86,6 +86,20 @@ module.exports = {
           'slide-in-down': 'slideInDown 0.3s ease-out',
           'scale-in': 'scaleIn 0.2s ease-out',
           'bounce-subtle': 'bounceSubtle 0.6s ease-out',
+          // New Palo Alto-style animations
+          'reveal-up': 'revealUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          'reveal-down': 'revealDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          'reveal-left': 'revealLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          'reveal-right': 'revealRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          'reveal-scale': 'revealScale 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          'blur-in': 'blurIn 0.6s ease-out forwards',
+          'float-slow': 'float 8s ease-in-out infinite',
+          'float-delayed': 'float 6s ease-in-out 2s infinite',
+          'spin-slow': 'spin 20s linear infinite',
+          'gradient-shift': 'gradientShift 8s ease infinite',
+          'pulse-glow': 'pulseGlow 3s ease-in-out infinite',
+          'marquee': 'marquee 30s linear infinite',
+          'marquee-reverse': 'marquee 30s linear infinite reverse',
         },
         keyframes: {
           glow: {
@@ -140,6 +154,49 @@ module.exports = {
             '0%, 100%': { transform: 'translateY(0)' },
             '50%': { transform: 'translateY(-5px)' },
           },
+          // New Palo Alto-style keyframes
+          revealUp: {
+            '0%': { opacity: '0', transform: 'translateY(60px)' },
+            '100%': { opacity: '1', transform: 'translateY(0)' },
+          },
+          revealDown: {
+            '0%': { opacity: '0', transform: 'translateY(-60px)' },
+            '100%': { opacity: '1', transform: 'translateY(0)' },
+          },
+          revealLeft: {
+            '0%': { opacity: '0', transform: 'translateX(-60px)' },
+            '100%': { opacity: '1', transform: 'translateX(0)' },
+          },
+          revealRight: {
+            '0%': { opacity: '0', transform: 'translateX(60px)' },
+            '100%': { opacity: '1', transform: 'translateX(0)' },
+          },
+          revealScale: {
+            '0%': { opacity: '0', transform: 'scale(0.9)' },
+            '100%': { opacity: '1', transform: 'scale(1)' },
+          },
+          blurIn: {
+            '0%': { opacity: '0', filter: 'blur(10px)' },
+            '100%': { opacity: '1', filter: 'blur(0)' },
+          },
+          gradientShift: {
+            '0%, 100%': { backgroundPosition: '0% 50%' },
+            '50%': { backgroundPosition: '100% 50%' },
+          },
+          pulseGlow: {
+            '0%, 100%': { 
+              boxShadow: '0 0 20px rgba(6, 182, 212, 0.3), 0 0 40px rgba(6, 182, 212, 0.1)',
+              borderColor: 'rgba(6, 182, 212, 0.3)'
+            },
+            '50%': { 
+              boxShadow: '0 0 30px rgba(6, 182, 212, 0.5), 0 0 60px rgba(6, 182, 212, 0.2)',
+              borderColor: 'rgba(6, 182, 212, 0.6)'
+            },
+          },
+          marquee: {
+            '0%': { transform: 'translateX(0%)' },
+            '100%': { transform: 'translateX(-50%)' },
+          },
         },
         colors: {
           cyber: {
@@ -182,6 +239,17 @@ module.exports = {
           'neon-cyan': '0 0 5px #06b6d4, 0 0 20px #06b6d4, 0 0 40px #06b6d4',
           'neon-violet': '0 0 5px #8b5cf6, 0 0 20px #8b5cf6, 0 0 40px #8b5cf6',
           'neon-rose': '0 0 5px #f43f5e, 0 0 20px #f43f5e, 0 0 40px #f43f5e',
+          // Premium glow effects for cards
+          'glow-cyan': '0 0 20px rgba(6, 182, 212, 0.25), 0 0 40px rgba(6, 182, 212, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-violet': '0 0 20px rgba(139, 92, 246, 0.25), 0 0 40px rgba(139, 92, 246, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-blue': '0 0 20px rgba(59, 130, 246, 0.25), 0 0 40px rgba(59, 130, 246, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-emerald': '0 0 20px rgba(16, 185, 129, 0.25), 0 0 40px rgba(16, 185, 129, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-amber': '0 0 20px rgba(245, 158, 11, 0.25), 0 0 40px rgba(245, 158, 11, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-red': '0 0 20px rgba(239, 68, 68, 0.25), 0 0 40px rgba(239, 68, 68, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3)',
+          'glow-gradient': '0 0 30px rgba(6, 182, 212, 0.2), 0 10px 40px rgba(139, 92, 246, 0.15), 0 4px 20px rgba(0, 0, 0, 0.25)',
+          // Elevated card shadows
+          'card-elevated': '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 10px 20px -5px rgba(0, 0, 0, 0.4)',
+          'card-hover': '0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 20px 40px -10px rgba(0, 0, 0, 0.3)',
         },
       },
     },

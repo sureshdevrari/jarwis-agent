@@ -346,3 +346,73 @@ async def get_user_with_subscription_check(
             )
     
     return current_user
+
+
+# =============================================================================
+# NEW CENTRALIZED SUBSCRIPTION DEPENDENCIES
+# =============================================================================
+# These use the new SubscriptionManager for proper scan tracking
+
+def require_scan_quota():
+    """
+    Dependency factory for checking scan quota before starting a scan.
+    Uses SubscriptionManager for accurate ScanHistory-based counting.
+    
+    Usage:
+        @router.post("/scan")
+        async def start_scan(
+            current_user: User = Depends(require_scan_quota())
+        ):
+            ...
+    """
+    async def check_quota(
+        current_user: User = Depends(get_current_active_user),
+        db: AsyncSession = Depends(get_db)
+    ) -> User:
+        from services.subscription_manager import SubscriptionManager
+        manager = SubscriptionManager(db, current_user)
+        await manager.enforce_scan_quota()
+        return current_user
+    
+    return check_quota
+
+
+def require_feature_v2(feature_id: str, feature_name: str = None):
+    """
+    Enhanced feature check using centralized PlanManager.
+    
+    Usage:
+        @router.post("/mobile/scan")
+        async def mobile_scan(
+            current_user: User = Depends(require_feature_v2("mobile_pentest", "Mobile Pentesting"))
+        ):
+            ...
+    """
+    async def check_feature(
+        current_user: User = Depends(get_current_active_user),
+        db: AsyncSession = Depends(get_db)
+    ) -> User:
+        from services.subscription_manager import SubscriptionManager
+        manager = SubscriptionManager(db, current_user)
+        manager.enforce_feature(feature_id, feature_name)
+        return current_user
+    
+    return check_feature
+
+
+async def get_subscription_manager(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a SubscriptionManager instance for the current user.
+    
+    Usage:
+        @router.get("/usage")
+        async def get_usage(
+            sub_manager = Depends(get_subscription_manager)
+        ):
+            return await sub_manager.get_usage_stats()
+    """
+    from services.subscription_manager import SubscriptionManager
+    return SubscriptionManager(db, current_user)

@@ -1,10 +1,15 @@
 import Footer from "../components/Footer";
+import { ScrollProgressBar, RevealOnScroll } from "../components/ui";
 
 const Privacy = () => {
   return (
     <div className="min-h-screen relative py-8 px-4 sm:px-6 lg:px-8">
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
+
       <div className="max-w-4xl mx-auto">
-        <div className="space-y-8">
+        <RevealOnScroll animation="fadeUp">
+          <div className="space-y-8">
           {/* Header */}
           <div className="border-b border-gray-400 pb-6">
             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
@@ -283,6 +288,7 @@ const Privacy = () => {
           {/* Footer */}
           <footer className="pt-6 text-center"></footer>
         </div>
+        </RevealOnScroll>
       </div>
       <Footer />
     </div>

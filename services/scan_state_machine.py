@@ -26,6 +26,7 @@ class ScanStatus(str, Enum):
     ERROR = "error"
     STOPPED = "stopped"
     CANCELLED = "cancelled"
+    STALLED = "stalled"  # Scan appears stuck (no updates for extended period)
 
 
 # Valid state transitions - defines what transitions are allowed from each state
@@ -40,6 +41,7 @@ VALID_TRANSITIONS = {
         ScanStatus.COMPLETED,
         ScanStatus.ERROR,
         ScanStatus.STOPPED,
+        ScanStatus.STALLED,  # Auto-transition when scan appears stuck
         ScanStatus.WAITING_FOR_MANUAL_AUTH,
         ScanStatus.WAITING_FOR_OTP,
     ],
@@ -66,6 +68,10 @@ VALID_TRANSITIONS = {
         ScanStatus.QUEUED,  # Can resume
     ],
     ScanStatus.CANCELLED: [],  # Terminal state
+    ScanStatus.STALLED: [
+        ScanStatus.QUEUED,  # Can retry stalled scans
+        ScanStatus.ERROR,   # Can mark as failed
+    ],
 }
 
 
@@ -210,6 +216,7 @@ class ScanStateMachine:
         return normalized in [
             ScanStatus.ERROR.value,
             ScanStatus.STOPPED.value,
+            ScanStatus.STALLED.value,  # Stalled scans can also be retried
         ]
     
     @staticmethod

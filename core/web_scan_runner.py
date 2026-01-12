@@ -1054,7 +1054,7 @@ class WebScanRunner:
         }
     
     async def _cleanup(self):
-        """Cleanup resources"""
+        """Cleanup resources including browser and any orphaned processes."""
         
         try:
             if self.browser:
@@ -1063,8 +1063,18 @@ class WebScanRunner:
             if self.mitm_proxy:
                 await self.mitm_proxy.stop()
             
-            # Optionally cleanup request store
-            # self.request_store.cleanup()
+            # Safety net: kill any orphaned Playwright Chrome processes older than 30 min
+            # This catches processes from failed previous scans
+            try:
+                from core.browser import BrowserController
+                cleanup_result = await BrowserController.cleanup_orphaned_browsers_async(
+                    max_age_minutes=30, 
+                    force=False
+                )
+                if cleanup_result['killed'] > 0:
+                    logger.info(f"Cleaned up {cleanup_result['killed']} orphaned browser processes")
+            except Exception as e:
+                logger.debug(f"Orphaned browser cleanup skipped: {e}")
             
             logger.info("Cleanup complete")
             

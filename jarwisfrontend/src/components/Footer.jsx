@@ -116,6 +116,55 @@ const Footer = () => {
             </ul>
           </div>
 
+          {/* Solutions */}
+          <div>
+            <h4 className="text-white font-bold mb-4 md:mb-6 text-base md:text-lg">
+              Solutions
+            </h4>
+            <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm md:text-base">
+              <li>
+                <button
+                  onClick={() => handleNavigation("/solutions/web-security")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Web Security
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavigation("/solutions/mobile-security")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Mobile Security
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavigation("/solutions/network-security")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Network Security
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavigation("/solutions/cloud-security")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Cloud Security
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleNavigation("/solutions/sast-security")}
+                  className="hover:text-white transition-colors text-left"
+                >
+                  Code Security
+                </button>
+              </li>
+            </ul>
+          </div>
+
           <div>
             <h4 className="text-white font-bold mb-4 md:mb-6 text-base md:text-lg">
               Company

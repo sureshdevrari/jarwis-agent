@@ -2,6 +2,18 @@
 Jarwis AGI - Source Code Security Scanner (SAST)
 Static Application Security Testing
 
+NEW STRUCTURE (Recommended):
+    from attacks.sast.providers import GitHubScanner, GitLabScanner
+    from attacks.sast.analyzers import SecretScanner, DependencyScanner
+    
+LEGACY IMPORT (Deprecated but still works):
+    from attacks.sast import GitHubScanner, SecretScanner
+
+Function-based organization:
+- providers/   - SCM provider integrations (GitHub, GitLab, Bitbucket, etc.)
+- analyzers/   - Analysis engines (secrets, dependencies, code analysis)
+- language_analyzers/ - Language-specific analyzers (Python, JS, Java, etc.)
+
 Comprehensive source code analysis for security vulnerabilities:
 - Secret Detection (API keys, passwords, tokens)
 - Dependency Scanning (SCA - vulnerable packages)
@@ -13,6 +25,9 @@ Supports:
 - GitHub (OAuth App & Personal Access Token)
 - GitLab (OAuth & PAT)
 - Bitbucket (OAuth & App Password)
+- Azure DevOps
+- AWS CodeCommit
+- Gitea
 - Manual repository URL with token
 
 Languages Supported:
@@ -30,19 +45,36 @@ Inspired by: Snyk, Checkmarx, SonarQube, Semgrep
 from typing import List, Any, Optional, Dict
 import logging
 
-from .github_scanner import GitHubScanner
-from .gitlab_scanner import GitLabScanner
-from .secret_scanner import SecretScanner
-from .dependency_scanner import DependencyScanner
-from .code_analyzer import CodeAnalyzer
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# BACKWARD-COMPATIBLE IMPORTS FROM NEW FUNCTION LOCATIONS
+# =============================================================================
+
+# Providers (SCM Integrations)
+from .providers.github_scanner import GitHubScanner
+from .providers.gitlab_scanner import GitLabScanner
+from .providers.bitbucket_scanner import BitbucketScanner
+from .providers.azure_devops_scanner import AzureDevOpsScanner
+from .providers.aws_codecommit_scanner import AWSCodeCommitScanner
+from .providers.gitea_scanner import GiteaScanner
+from .providers.generic_scanner import GenericGitScanner
+
+# Alias for backward compat
+GenericScanner = GenericGitScanner
+
+# Analyzers (Security Analysis Engines)
+from .analyzers.secret_scanner import SecretScanner
+from .analyzers.dependency_scanner import DependencyScanner
+from .analyzers.code_analyzer import CodeAnalyzer
+
+# Language Analyzers
 from .language_analyzers import (
     PythonAnalyzer,
     JavaScriptAnalyzer,
     JavaAnalyzer,
     GoAnalyzer,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class SASTAttacks:
@@ -61,7 +93,7 @@ class SASTAttacks:
         dependency_findings = await sast.scan_dependencies()
     """
     
-    PROVIDERS = ['github', 'gitlab', 'bitbucket', 'manual']
+    PROVIDERS = ['github', 'gitlab', 'bitbucket', 'azure_devops', 'codecommit', 'gitea', 'manual']
     SCAN_TYPES = ['full', 'secrets', 'dependencies', 'code', 'iac']
     
     def __init__(self, config: dict, context):
@@ -78,143 +110,122 @@ class SASTAttacks:
                 - scan_dependencies: Enable SCA (default: True)
                 - scan_code: Enable code vulnerability analysis (default: True)
                 - exclude_paths: Paths to exclude from scanning
-            context: SASTScanContext with cloned repository path
+            context: SASTScanContext with repository details
         """
         self.config = config
         self.context = context
-        self.provider = self._detect_provider()
+        self.scanners = []
         
-        # Initialize scanners
-        self.scanners = self._init_scanners()
+        sast_config = config.get('sast', {})
+        
+        # Secret Scanner (always enabled by default)
+        if sast_config.get('scan_secrets', True):
+            self.scanners.append(SecretScanner(config, context))
+        
+        # Dependency Scanner (SCA)
+        if sast_config.get('scan_dependencies', True):
+            self.scanners.append(DependencyScanner(config, context))
+        
+        # Code Analyzer
+        if sast_config.get('scan_code', True):
+            self.scanners.append(CodeAnalyzer(config, context))
+        
+        # Add provider-specific scanner
+        provider = self._detect_provider(config.get('repository_url', ''))
+        self.provider_scanner = self._get_provider_scanner(provider, config, context)
     
-    def _detect_provider(self) -> str:
-        """Detect SCM provider from repository URL"""
-        repo_url = self.config.get('repository_url', '').lower()
-        
+    def _detect_provider(self, repo_url: str) -> str:
+        """Detect SCM provider from repository URL."""
         if 'github.com' in repo_url:
             return 'github'
         elif 'gitlab.com' in repo_url or 'gitlab' in repo_url:
             return 'gitlab'
         elif 'bitbucket.org' in repo_url:
             return 'bitbucket'
+        elif 'dev.azure.com' in repo_url or 'visualstudio.com' in repo_url:
+            return 'azure_devops'
+        elif 'codecommit' in repo_url:
+            return 'codecommit'
+        elif 'gitea' in repo_url:
+            return 'gitea'
         else:
-            return 'manual'
+            return 'generic'
     
-    def _init_scanners(self) -> List[Any]:
-        """Initialize SAST scanners based on configuration"""
-        scanners = []
-        
-        # SCM Provider scanner (for cloning/API access)
-        if self.provider == 'github':
-            scanners.append(GitHubScanner(self.config, self.context))
-        elif self.provider == 'gitlab':
-            scanners.append(GitLabScanner(self.config, self.context))
-        
-        # Secret detection (if enabled)
-        if self.config.get('scan_secrets', True):
-            scanners.append(SecretScanner(self.config, self.context))
-        
-        # Dependency scanning / SCA (if enabled)
-        if self.config.get('scan_dependencies', True):
-            scanners.append(DependencyScanner(self.config, self.context))
-        
-        # Code vulnerability analysis (if enabled)
-        if self.config.get('scan_code', True):
-            scanners.append(CodeAnalyzer(self.config, self.context))
-        
-        return scanners
+    def _get_provider_scanner(self, provider: str, config: dict, context):
+        """Get the appropriate provider scanner."""
+        scanners = {
+            'github': GitHubScanner,
+            'gitlab': GitLabScanner,
+            'bitbucket': BitbucketScanner,
+            'azure_devops': AzureDevOpsScanner,
+            'codecommit': AWSCodeCommitScanner,
+            'gitea': GiteaScanner,
+            'generic': GenericScanner,
+        }
+        scanner_class = scanners.get(provider, GenericScanner)
+        return scanner_class(config, context)
     
-    async def run(self) -> List[Dict[str, Any]]:
-        """
-        Run all enabled SAST scanners.
+    async def run(self) -> List[Any]:
+        """Run all SAST scanners."""
+        findings = []
         
-        Returns:
-            List of vulnerability findings with OWASP/CWE mapping
-        """
-        all_findings = []
+        # First, clone/access the repository via provider
+        if self.provider_scanner:
+            try:
+                await self.provider_scanner.prepare()
+            except Exception as e:
+                logger.error(f"Provider scanner preparation failed: {e}")
         
+        # Then run all analysis scanners
         for scanner in self.scanners:
             try:
-                logger.info(f"Running SAST scanner: {scanner.__class__.__name__}")
-                findings = await scanner.scan()
-                all_findings.extend(findings)
-                logger.info(f"  Found {len(findings)} issues")
+                result = await scanner.run()
+                if result:
+                    findings.extend(result if isinstance(result, list) else [result])
             except Exception as e:
                 logger.error(f"Scanner {scanner.__class__.__name__} failed: {e}")
         
-        # Deduplicate and sort by severity
-        all_findings = self._deduplicate_findings(all_findings)
-        all_findings = self._sort_by_severity(all_findings)
-        
-        return all_findings
+        return findings
     
-    async def scan_secrets(self) -> List[Dict[str, Any]]:
-        """Run only secret detection scanner"""
+    async def scan_secrets(self) -> List[Any]:
+        """Run only secret detection."""
         scanner = SecretScanner(self.config, self.context)
-        return await scanner.scan()
+        return await scanner.run()
     
-    async def scan_dependencies(self) -> List[Dict[str, Any]]:
-        """Run only dependency vulnerability scanner (SCA)"""
+    async def scan_dependencies(self) -> List[Any]:
+        """Run only dependency scanning (SCA)."""
         scanner = DependencyScanner(self.config, self.context)
-        return await scanner.scan()
+        return await scanner.run()
     
-    async def scan_code(self) -> List[Dict[str, Any]]:
-        """Run only code vulnerability analysis"""
+    async def scan_code(self) -> List[Any]:
+        """Run only code vulnerability analysis."""
         scanner = CodeAnalyzer(self.config, self.context)
-        return await scanner.scan()
-    
-    def _deduplicate_findings(self, findings: List[Dict]) -> List[Dict]:
-        """Remove duplicate findings based on file, line, and rule"""
-        seen = set()
-        unique = []
-        
-        for finding in findings:
-            key = (
-                finding.get('file', ''),
-                finding.get('line', 0),
-                finding.get('rule_id', ''),
-            )
-            if key not in seen:
-                seen.add(key)
-                unique.append(finding)
-        
-        return unique
-    
-    def _sort_by_severity(self, findings: List[Dict]) -> List[Dict]:
-        """Sort findings by severity (critical > high > medium > low > info)"""
-        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'info': 4}
-        return sorted(
-            findings,
-            key=lambda f: severity_order.get(f.get('severity', 'info').lower(), 5)
-        )
-    
-    @staticmethod
-    def get_supported_languages() -> List[str]:
-        """Return list of supported programming languages"""
-        return [
-            'python', 'javascript', 'typescript', 'java', 'go',
-            'ruby', 'php', 'csharp', 'kotlin', 'swift', 'rust'
-        ]
-    
-    @staticmethod
-    def get_scan_capabilities() -> Dict[str, str]:
-        """Return description of scan capabilities"""
-        return {
-            'secrets': 'Detect hardcoded secrets, API keys, passwords, tokens',
-            'dependencies': 'Find vulnerable packages (SCA) with CVE mapping',
-            'code': 'Analyze code for injection, XSS, and other vulnerabilities',
-            'iac': 'Scan Infrastructure as Code (Terraform, CloudFormation, K8s)',
-        }
+        return await scanner.run()
 
 
-# Export main class and scanners
+# =============================================================================
+# EXPORTS
+# =============================================================================
+
 __all__ = [
+    # Main Classes
     'SASTAttacks',
+    
+    # Providers
     'GitHubScanner',
     'GitLabScanner',
+    'BitbucketScanner',
+    'AzureDevOpsScanner',
+    'AWSCodeCommitScanner',
+    'GiteaScanner',
+    'GenericScanner',
+    
+    # Analyzers
     'SecretScanner',
     'DependencyScanner',
     'CodeAnalyzer',
+    
+    # Language Analyzers
     'PythonAnalyzer',
     'JavaScriptAnalyzer',
     'JavaAnalyzer',

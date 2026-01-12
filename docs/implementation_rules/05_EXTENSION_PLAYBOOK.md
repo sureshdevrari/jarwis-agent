@@ -4,8 +4,11 @@
 
 ### Step 1: Create Scanner File
 
+Place new scanners in the appropriate OWASP category folder:
+
 ```python
-# attacks/web/pre_login/my_new_scanner.py
+# attacks/web/a03_injection/my_new_scanner.py  (for injection-based attacks)
+# attacks/web/a01_broken_access/my_new_scanner.py  (for access control attacks)
 from dataclasses import dataclass
 from typing import List
 
@@ -38,18 +41,34 @@ class MyNewScanner:
 
 ### Step 2: Register Scanner
 
-Edit `attacks/web/pre_login/__init__.py`:
+The unified registry auto-discovers scanners. Just add to the folder's `__init__.py`:
 
 ```python
+# attacks/web/a03_injection/__init__.py
 from .my_new_scanner import MyNewScanner
 
-class PreLoginAttacks:
-    def __init__(self, config, context):
-        self.scanners = [
-            # ... existing scanners
-            MyNewScanner(config, context),
-        ]
+# Scanner will be auto-discovered by attacks/registry.py
 ```
+
+Or run the update script to regenerate all exports:
+```bash
+python scripts/update_init_files.py
+```
+
+### OWASP Category Reference
+
+| Category | Folder | Scanner Types |
+|----------|--------|---------------|
+| A01 | `a01_broken_access/` | IDOR, Path Traversal, Access Control |
+| A02 | `a02_crypto/` | TLS, Cookie Security, Encryption |
+| A03 | `a03_injection/` | XSS, SQLi, SSTI, XXE, LDAP, Command |
+| A04 | `a04_insecure_design/` | Business Logic, Rate Limiting |
+| A05 | `a05_misconfig/` | Headers, CORS, Info Disclosure |
+| A06 | `a06_vulnerable_components/` | Outdated Libraries, CVEs |
+| A07 | `a07_auth_failures/` | CSRF, Session, Auth Bypass |
+| A08 | `a08_integrity/` | Deserialization, CI/CD |
+| A09 | `a09_logging/` | Logging, Monitoring |
+| A10 | `a10_ssrf/` | SSRF, Request Forgery |
 
 ## Adding a New API Endpoint
 

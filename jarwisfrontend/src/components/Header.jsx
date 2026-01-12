@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Globe, Smartphone, Server, Cloud, Code2 } from "lucide-react";
 
 // import { useAuth } from "../context/AuthContext";
 import { useAuth } from "../context/AuthContext";
@@ -146,6 +147,116 @@ const Header = () => {
                   </>
                 )}
               </Link>
+
+              {/* Solutions Dropdown */}
+              <div className="relative group">
+                <button
+                  className={`relative text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
+                    isActiveLink("/solutions")
+                      ? "text-white"
+                      : "text-cyan-300 hover:text-white"
+                  }`}
+                >
+                  Solutions
+                  <svg
+                    className="w-4 h-4 transition-transform group-hover:rotate-180"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  {isActiveLink("/solutions") && (
+                    <>
+                      <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full"></div>
+                      <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-cyan-400 rounded-full animate-pulse"></div>
+                    </>
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                <div className="absolute top-full left-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className="bg-gray-900/95 backdrop-blur-xl border border-gray-700 rounded-xl shadow-2xl overflow-hidden min-w-[280px]">
+                    <div className="p-2">
+                      <Link
+                        to="/solutions/web-security"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-cyan-500/10 transition-colors group/item"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                          <Globe className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white group-hover/item:text-cyan-300 transition-colors">Web Security</div>
+                          <div className="text-xs text-gray-500">OWASP Top 10, API Security</div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        to="/solutions/mobile-security"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-purple-500/10 transition-colors group/item"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+                          <Smartphone className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white group-hover/item:text-purple-300 transition-colors">Mobile Security</div>
+                          <div className="text-xs text-gray-500">APK/IPA Analysis, MASTG</div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        to="/solutions/network-security"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-green-500/10 transition-colors group/item"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                          <Server className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white group-hover/item:text-green-300 transition-colors">Network Security</div>
+                          <div className="text-xs text-gray-500">Port Scanning, CVE Detection</div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        to="/solutions/cloud-security"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-orange-500/10 transition-colors group/item"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                          <Cloud className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white group-hover/item:text-orange-300 transition-colors">Cloud Security</div>
+                          <div className="text-xs text-gray-500">CNAPP, AWS/Azure/GCP</div>
+                        </div>
+                      </Link>
+
+                      <Link
+                        to="/solutions/sast-security"
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-500/10 transition-colors group/item"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center">
+                          <Code2 className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white group-hover/item:text-red-300 transition-colors">Code Security</div>
+                          <div className="text-xs text-gray-500">SAST, Secret Scanning, SCA</div>
+                        </div>
+                      </Link>
+                    </div>
+
+                    {/* Bottom Section */}
+                    <div className="border-t border-gray-700 p-3 bg-gray-800/50">
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                        </span>
+                        Powered by JARWIS AI Engine
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <Link
                 to="/about"
@@ -346,6 +457,53 @@ const Header = () => {
                   />
                 </svg>
               </Link>
+
+              {/* Solutions Section - Mobile */}
+              <div className="py-2">
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Solutions
+                </div>
+                <Link
+                  to="/solutions/web-security"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                >
+                  <span className="text-lg">🌐</span>
+                  <span className="text-sm text-gray-300">Web Security</span>
+                </Link>
+                <Link
+                  to="/solutions/mobile-security"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                >
+                  <span className="text-lg">📱</span>
+                  <span className="text-sm text-gray-300">Mobile Security</span>
+                </Link>
+                <Link
+                  to="/solutions/network-security"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                >
+                  <span className="text-lg">🖧</span>
+                  <span className="text-sm text-gray-300">Network Security</span>
+                </Link>
+                <Link
+                  to="/solutions/cloud-security"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                >
+                  <span className="text-lg">☁️</span>
+                  <span className="text-sm text-gray-300">Cloud Security</span>
+                </Link>
+                <Link
+                  to="/solutions/sast-security"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                >
+                  <span className="text-lg">📝</span>
+                  <span className="text-sm text-gray-300">Code Security</span>
+                </Link>
+              </div>
 
               <Link
                 to="/about"

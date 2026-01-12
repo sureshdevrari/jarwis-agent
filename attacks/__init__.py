@@ -7,7 +7,36 @@ Supported Scan Types:
 - mobile: Mobile app security testing (OWASP Mobile Top 10)
 - cloud: Cloud infrastructure security (AWS, Azure, GCP)
 - network: Network security testing (ports, services, vulns)
-- api: API security testing
+- sast: Source code security testing (secrets, dependencies, code)
+- api: API security testing (subset of web)
+
+NEW STRUCTURE (Jan 2026):
+    attacks/
+    ├── registry.py           # UNIFIED scanner registry (use this!)
+    ├── web/
+    │   ├── a01_broken_access/  # OWASP A01
+    │   ├── a02_crypto/         # OWASP A02
+    │   ├── a03_injection/      # OWASP A03
+    │   └── ...                 # OWASP A04-A10
+    ├── mobile/
+    │   ├── static/             # Static analysis
+    │   ├── dynamic/            # Runtime analysis
+    │   ├── platform/           # Android/iOS specific
+    │   └── api/                # Mobile API security
+    ├── cloud/
+    │   ├── aws/                # AWS scanners
+    │   ├── azure/              # Azure scanners
+    │   ├── gcp/                # GCP scanners
+    │   └── cnapp/              # CIEM, Runtime, Drift
+    ├── sast/
+    │   ├── providers/          # GitHub, GitLab, etc.
+    │   └── analyzers/          # Secrets, dependencies
+    └── network/                # Already organized
+
+RECOMMENDED IMPORTS:
+    from attacks.registry import ScannerRegistry
+    from attacks.web.a03_injection import InjectionScanner
+    from attacks.cloud.aws import AWSSecurityScanner
 """
 
 from typing import List, Any, Optional
@@ -21,13 +50,18 @@ class ScanType(Enum):
     MOBILE = "mobile"
     CLOUD = "cloud"
     NETWORK = "network"
+    SAST = "sast"
     API = "api"
 
 
-# Backward compatibility imports - now from web/ subfolder
-from .web import PreLoginAttacks, PostLoginAttacks
-from .mobile import MobileSecurityScanner
-from .cloud import CloudSecurityScanner
+# Unified Scanner Registry (recommended)
+from .registry import ScannerRegistry, ScannerInfo, OWASPCategory, ScanType as RegistryScanType
+
+# Backward compatibility imports
+from .web import PreLoginAttacks, PostLoginAttacks, WebAttacks
+from .mobile import MobileSecurityScanner, MobileAttacks
+from .cloud import CloudSecurityScanner, CloudAttacks
+from .sast import SASTAttacks
 
 
 class AttackDispatcher:

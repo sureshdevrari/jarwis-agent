@@ -78,8 +78,8 @@ Jarwis uses a 6-phase execution model for web security testing:
 
 ### Phase 2: Pre-Login Scan
 - Attack modules test unauthenticated surfaces
-- Scanners in `attacks/web/pre_login/`
-- 45+ scanner modules
+- Scanners organized by OWASP Top 10 in `attacks/web/a01-a10/` folders
+- 48+ scanner modules (backward-compatible via `attacks/web/pre_login/`)
 - `UnifiedExecutor` builds context from `RequestStore`
 - Scanners receive `context.endpoints` list to test
 - Attack selection based on `scan_profile` via `_build_attacks_config()`
@@ -97,7 +97,7 @@ Jarwis uses a 6-phase execution model for web security testing:
 ### Phase 4: Post-Login Scan
 - Authenticated testing
 - IDOR, CSRF, privilege escalation
-- Scanners in `attacks/web/post_login/`
+- Scanners in OWASP folders (e.g., `attacks/web/a01_broken_access/`, `attacks/web/a07_auth_failures/`)
 
 ### Phase 5: AI Planning
 - LLM recommends targeted tests

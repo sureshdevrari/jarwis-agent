@@ -4,6 +4,15 @@ OWASP Mobile Top 10 Coverage for Android & iOS
 
 Central Mobile Attack Module - Aggregates ALL mobile security scanners
 
+NEW STRUCTURE (Recommended):
+    from attacks.mobile.static import StaticAnalyzer
+    from attacks.mobile.dynamic import RuntimeAnalyzer, DynamicAppCrawler
+    from attacks.mobile.platform.android import AndroidAttackScanner
+    from attacks.mobile.platform.ios import IOSAttackScanner
+    
+LEGACY IMPORT (Deprecated but still works):
+    from attacks.mobile import StaticAnalyzer, RuntimeAnalyzer
+
 OWASP Mobile Top 10 2024:
 - M1: Improper Credential Usage
 - M2: Inadequate Supply Chain Security
@@ -16,44 +25,82 @@ OWASP Mobile Top 10 2024:
 - M9: Insecure Data Storage
 - M10: Insufficient Cryptography
 
-Modules:
-- Static Analysis Engine (APK/IPA analysis)
-- Runtime Instrumentation (Frida-based)
-- API Discovery Engine
-- App Crawler (like web crawler for mobile apps)
-- Dynamic App Crawler (Emulator + Frida-based)
-- App Unpacker & Secrets Extractor
-- Android-Specific Attacks
-- iOS-Specific Attacks
-- Mobile MITM Proxy
-- LLM Security Analyzer
-- Authentication Detector
-- OTP Handler (Secure, Privacy-First)
-- OWASP Mobile Top 10 Scanners
-- Frida SSL Pinning Bypass (Android & iOS)
-- iOS Simulator Manager
-- Mobile Pen Test Orchestrator
-- Burp-Style Traffic Interceptor
-- Mobile XSS Scanner (WebView/Hybrid Apps) - Added 5 Jan 2026
-- Mobile POST Method Scanner - Added 5 Jan 2026
+Phase-based organization:
+- static/     - Static analysis (APK/IPA decompilation, secrets extraction)
+- dynamic/    - Runtime analysis (Frida, app crawling)
+- platform/   - Platform-specific (android/, ios/)
+- api/        - API security (traffic interception, MITM)
+- orchestration/ - Scan orchestration
+- utils/      - Shared utilities (auth detection, OTP handling)
 """
 
 from typing import List, Any
 import logging
 
-from .static_analyzer import StaticAnalyzer
-from .runtime_analyzer import RuntimeAnalyzer
-from .api_discovery import APIDiscoveryEngine
-from .app_crawler import MobileAppCrawler, create_app_crawler, CrawledEndpoint, CrawlResult
-from .dynamic_crawler import DynamicAppCrawler, DiscoveredAPI, DynamicCrawlResult, crawl_app_dynamically
-from .mobile_scanner import MobileSecurityScanner
-from .unpacker import AppUnpacker, get_unpacker
-from .android_attacks import AndroidAttackScanner
-from .ios_attacks import IOSAttackScanner
-from .mobile_mitm import MobileMITMProxy, create_mobile_proxy
-from .llm_analyzer import MobileLLMAnalyzer, create_llm_analyzer
-from .auth_detector import MobileAuthDetector, AuthType, create_auth_detector
-from .otp_handler import (
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# BACKWARD-COMPATIBLE IMPORTS FROM NEW PHASE LOCATIONS
+# =============================================================================
+
+# Static Analysis
+from .static.static_analyzer import StaticAnalyzer
+from .static.unpacker import AppUnpacker, get_unpacker
+
+# Dynamic Analysis
+from .dynamic.runtime_analyzer import RuntimeAnalyzer
+from .dynamic.app_crawler import MobileAppCrawler, create_app_crawler, CrawledEndpoint, CrawlResult
+from .dynamic.dynamic_crawler import DynamicAppCrawler, DiscoveredAPI, DynamicCrawlResult, crawl_app_dynamically
+from .dynamic.frida_ssl_bypass import FridaSSLBypass, SSLBypassResult, InterceptedSSLRequest
+from .dynamic.frida_request_bridge import FridaRequestBridge, FridaHttpMessage  # NEW
+
+# Platform-Specific
+from .platform.android.android_attacks import AndroidAttackScanner
+from .platform.android.emulator_manager import (
+    EmulatorManager,
+    EmulatorConfig,
+    EmulatorStatus,
+    create_emulator_manager,
+    setup_emulator
+)
+from .platform.ios.ios_attacks import IOSAttackScanner
+from .platform.ios.ios_simulator_manager import (
+    IOSSimulatorManager,
+    SimulatorConfig,
+    SimulatorDevice,
+    SimulatorStatus
+)
+
+# API Security
+from .api.api_discovery import APIDiscoveryEngine
+from .api.mobile_mitm import MobileMITMProxy, create_mobile_proxy
+from .api.burp_interceptor import BurpStyleInterceptor, InterceptedTraffic, FridaTrafficIntegration
+
+# API Attack Scanners (NEW - MITM-first)
+from .api.mobile_sqli_scanner import MobileSQLiScanner
+from .api.mobile_idor_scanner import MobileIDORScanner
+from .api.mobile_xss_scanner import MobileXSSScanner as MobileAPIXSSScanner
+
+# Base Mobile Scanner (NEW)
+from .base_mobile_scanner import BaseMobileScanner, MobileFinding
+
+# Orchestration
+from .orchestration.mobile_orchestrator import (
+    MobilePenTestOrchestrator,
+    MobileScanConfig,
+    MobileScanContext,
+    MobileEndpoint,
+    MobileVulnerability
+)
+from .orchestration.mobile_scanner import MobileSecurityScanner
+from .orchestration.mobile_post_scanner import MobilePostMethodScanner
+
+# Alias for backward compat
+MobilePostScanner = MobilePostMethodScanner
+
+# Utils
+from .utils.auth_detector import MobileAuthDetector, AuthType, create_auth_detector
+from .utils.otp_handler import (
     SecureOTPHandler, 
     SocialAuthHandler, 
     UsernamePasswordHandler,
@@ -63,219 +110,144 @@ from .otp_handler import (
     OTPStatus,
     AuthSessionStatus
 )
-from .emulator_manager import (
-    EmulatorManager,
-    EmulatorConfig,
-    EmulatorStatus,
-    create_emulator_manager,
-    setup_emulator
-)
+from .utils.llm_analyzer import MobileLLMAnalyzer, create_llm_analyzer
+from .utils.deeplink_scanner import DeepLinkHijackingScanner
 
-# New modules for full mobile pentesting
-from .frida_ssl_bypass import (
-    FridaSSLBypass,
-    SSLBypassResult,
-    InterceptedSSLRequest
-)
-from .ios_simulator_manager import (
-    IOSSimulatorManager,
-    SimulatorConfig,
-    SimulatorDevice,
-    SimulatorStatus
-)
-from .mobile_orchestrator import (
-    MobilePenTestOrchestrator,
-    MobileScanConfig,
-    MobileScanContext,
-    MobileEndpoint,
-    MobileVulnerability
-)
-from .burp_interceptor import (
-    BurpStyleInterceptor,
-    InterceptedTraffic,
-    FridaTrafficIntegration
-)
-
-# New Scanners Added 5 Jan 2026
-from .mobile_xss_scanner import MobileXSSScanner, MobileXSSTester
-from .mobile_post_scanner import MobilePostMethodScanner, MobileFormDataGenerator
-
-logger = logging.getLogger(__name__)
+# Alias for backward compat
+DeeplinkScanner = DeepLinkHijackingScanner
+from .utils.mobile_xss_scanner import MobileXSSScanner, MobileXSSTester
+from .utils.mobile_security_scanner import MobileSecurityScanner as MobileWebSecurityScanner
 
 
 class MobileAttacks:
     """
     Aggregates ALL mobile security scanners.
     
-    Orchestrates mobile app security testing including:
-    - Static analysis (APK/IPA decompilation, secrets detection)
-    - Dynamic analysis (runtime instrumentation, traffic interception)
-    - API security testing (discovered endpoints)
-    - Platform-specific attacks (Android, iOS)
-    
-    Usage:
-        mobile = MobileAttacks(config, context)
-        findings = await mobile.run()
+    Coordinates static analysis, dynamic testing, and API security
+    for mobile applications.
     """
     
     def __init__(self, config: dict, context):
-        """
-        Initialize mobile attack module.
-        
-        Args:
-            config: Scan configuration with app_path, platform, etc.
-            context: MobileScanContext with discovered endpoints, etc.
-        """
         self.config = config
         self.context = context
-        self.platform = config.get('platform', 'android').lower()
-        self.app_path = config.get('app_path', '')
+        self.scanners = []
         
-        # Initialize scanners based on config
-        self.scanners = self._init_scanners()
-    
-    def _init_scanners(self) -> List[Any]:
-        """Initialize all mobile scanners based on configuration"""
-        scanners = []
-        mobile_config = self.config.get('mobile', {})
+        # Initialize based on config
+        mobile_config = config.get('mobile', {})
         
-        # Static Analysis (always enabled)
+        # Static Analysis
         if mobile_config.get('static_analysis', {}).get('enabled', True):
-            scanners.append(StaticAnalyzer(self.config))
+            self.scanners.append(StaticAnalyzer(config, context))
         
-        # Dynamic Analysis (if emulator available)
+        # Dynamic Analysis
         if mobile_config.get('dynamic_analysis', {}).get('enabled', True):
-            try:
-                scanners.append(DynamicAppCrawler(self.config))
-            except Exception as e:
-                logger.warning(f"Dynamic analysis unavailable: {e}")
+            self.scanners.append(RuntimeAnalyzer(config, context))
         
         # API Discovery
         if mobile_config.get('api_discovery', {}).get('enabled', True):
-            scanners.append(APIDiscoveryEngine(self.config))
+            self.scanners.append(APIDiscoveryEngine(config, context))
         
-        # Platform-specific scanners
-        if self.platform == 'android':
-            scanners.append(AndroidAttackScanner(self.config))
-        elif self.platform == 'ios':
-            scanners.append(IOSAttackScanner(self.config))
+        # Platform-specific
+        platform = mobile_config.get('platform', 'android')
+        if platform == 'android':
+            self.scanners.append(AndroidAttackScanner(config, context))
+        elif platform == 'ios':
+            self.scanners.append(IOSAttackScanner(config, context))
         
-        # XSS Scanner for hybrid/WebView apps
-        if mobile_config.get('xss_scanning', {}).get('enabled', True):
-            try:
-                scanners.append(MobileXSSScanner(self.config))
-            except Exception as e:
-                logger.warning(f"Mobile XSS scanner unavailable: {e}")
-        
-        # POST Method Scanner
-        if mobile_config.get('post_scanning', {}).get('enabled', True):
-            try:
-                scanners.append(MobilePostMethodScanner(self.config))
-            except Exception as e:
-                logger.warning(f"Mobile POST scanner unavailable: {e}")
-        
-        return scanners
+        # Mobile Security Scanner (OWASP Mobile Top 10)
+        if mobile_config.get('owasp_mobile', {}).get('enabled', True):
+            self.scanners.append(MobileSecurityScanner(config, context))
     
     async def run(self) -> List[Any]:
-        """
-        Run all mobile security scanners.
-        
-        Returns:
-            List of all mobile security findings
-        """
-        results = []
-        
-        logger.info(f"Starting mobile security scan ({self.platform})...")
-        logger.info(f"Loaded {len(self.scanners)} mobile scanners")
-        
+        """Run all mobile scanners."""
+        findings = []
         for scanner in self.scanners:
-            scanner_name = scanner.__class__.__name__
-            logger.info(f"Running {scanner_name}...")
-            
             try:
-                if hasattr(scanner, 'scan'):
-                    scanner_results = await scanner.scan()
-                elif hasattr(scanner, 'analyze'):
-                    scanner_results = await scanner.analyze()
-                elif hasattr(scanner, 'run'):
-                    scanner_results = await scanner.run()
-                else:
-                    logger.warning(f"{scanner_name} has no scan/analyze/run method")
-                    continue
-                
-                if scanner_results:
-                    results.extend(scanner_results)
-                    logger.info(f"{scanner_name}: {len(scanner_results)} findings")
-                    
+                result = await scanner.run()
+                if result:
+                    findings.extend(result if isinstance(result, list) else [result])
             except Exception as e:
-                logger.error(f"{scanner_name} failed: {e}")
-                continue
-        
-        logger.info(f"Mobile scan complete: {len(results)} total findings")
-        return results
-    
-    async def run_static_analysis(self) -> List[Any]:
-        """Run only static analysis"""
-        analyzer = StaticAnalyzer(self.config, self.context)
-        return await analyzer.analyze()
-    
-    async def run_dynamic_analysis(self) -> List[Any]:
-        """Run only dynamic analysis (requires emulator)"""
-        crawler = DynamicAppCrawler(self.config, self.context)
-        return await crawler.crawl()
-    
-    def get_scanner_count(self) -> int:
-        """Get count of available scanners"""
-        return len(self.scanners)
-    
-    def get_available_attacks(self) -> List[str]:
-        """Get list of available attack categories"""
-        return [
-            "Static Analysis (Secrets, Hardcoded Keys)",
-            "Binary Protection Analysis",
-            "SSL/TLS Configuration",
-            "Certificate Pinning Bypass",
-            "Root/Jailbreak Detection Bypass",
-            "Insecure Data Storage",
-            "API Security Testing",
-            "WebView XSS Attacks",
-            "Deep Link Vulnerabilities",
-            "Intent Hijacking (Android)",
-            "IPC Vulnerabilities",
-            "Cryptographic Implementation Flaws",
-            "Authentication Bypass",
-            "Session Management Issues",
-        ]
+                logger.error(f"Scanner {scanner.__class__.__name__} failed: {e}")
+        return findings
 
+
+# Backward compatibility class
+class CloudSecurityScanner:
+    """Backward compatibility - import from attacks.cloud instead."""
+    pass
+
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
 
 __all__ = [
-    # Main aggregator
+    # Main Classes
     'MobileAttacks',
-    
-    # Core Scanners
-    'StaticAnalyzer',
-    'RuntimeAnalyzer', 
-    'APIDiscoveryEngine',
     'MobileSecurityScanner',
+    
+    # Static Analysis
+    'StaticAnalyzer',
     'AppUnpacker',
     'get_unpacker',
-    'AndroidAttackScanner',
-    'IOSAttackScanner',
-    'MobileMITMProxy',
-    'create_mobile_proxy',
-    'MobileLLMAnalyzer',
-    'create_llm_analyzer',
-    # App Crawler (like web crawler)
+    
+    # Dynamic Analysis
+    'RuntimeAnalyzer',
     'MobileAppCrawler',
     'create_app_crawler',
     'CrawledEndpoint',
     'CrawlResult',
-    # Dynamic App Crawler (Emulator + Frida)
     'DynamicAppCrawler',
     'DiscoveredAPI',
     'DynamicCrawlResult',
     'crawl_app_dynamically',
-    # Authentication detection & handling
+    'FridaSSLBypass',
+    'SSLBypassResult',
+    'InterceptedSSLRequest',
+    'FridaRequestBridge',  # NEW
+    'FridaHttpMessage',    # NEW
+    
+    # Platform - Android
+    'AndroidAttackScanner',
+    'EmulatorManager',
+    'EmulatorConfig',
+    'EmulatorStatus',
+    'create_emulator_manager',
+    'setup_emulator',
+    
+    # Platform - iOS
+    'IOSAttackScanner',
+    'IOSSimulatorManager',
+    'SimulatorConfig',
+    'SimulatorDevice',
+    'SimulatorStatus',
+    
+    # API Security
+    'APIDiscoveryEngine',
+    'MobileMITMProxy',
+    'create_mobile_proxy',
+    'BurpStyleInterceptor',
+    'InterceptedTraffic',
+    'FridaTrafficIntegration',
+    
+    # API Attack Scanners (NEW - MITM-first)
+    'MobileSQLiScanner',
+    'MobileIDORScanner',
+    'MobileAPIXSSScanner',
+    
+    # Base Mobile Scanner (NEW)
+    'BaseMobileScanner',
+    'MobileFinding',
+    
+    # Orchestration
+    'MobilePenTestOrchestrator',
+    'MobileScanConfig',
+    'MobileScanContext',
+    'MobileEndpoint',
+    'MobileVulnerability',
+    'MobilePostScanner',
+    
+    # Utils
     'MobileAuthDetector',
     'AuthType',
     'create_auth_detector',
@@ -287,35 +259,10 @@ __all__ = [
     'create_password_handler',
     'OTPStatus',
     'AuthSessionStatus',
-    # Emulator Manager
-    'EmulatorManager',
-    'EmulatorConfig',
-    'EmulatorStatus',
-    'create_emulator_manager',
-    'setup_emulator',
-    # Frida SSL Pinning Bypass
-    'FridaSSLBypass',
-    'SSLBypassResult',
-    'InterceptedSSLRequest',
-    # iOS Simulator Manager
-    'IOSSimulatorManager',
-    'SimulatorConfig',
-    'SimulatorDevice',
-    'SimulatorStatus',
-    # Mobile Pen Test Orchestrator (Full workflow like web testing)
-    'MobilePenTestOrchestrator',
-    'MobileScanConfig',
-    'MobileScanContext',
-    'MobileEndpoint',
-    'MobileVulnerability',
-    # Burp-Style Traffic Interceptor
-    'BurpStyleInterceptor',
-    'InterceptedTraffic',
-    'FridaTrafficIntegration',
-    # New Scanners Added 5 Jan 2026
+    'MobileLLMAnalyzer',
+    'create_llm_analyzer',
+    'DeeplinkScanner',
     'MobileXSSScanner',
     'MobileXSSTester',
-    'MobilePostMethodScanner',
-    'MobileFormDataGenerator',
+    'MobileWebSecurityScanner',
 ]
-

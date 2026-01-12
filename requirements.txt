@@ -114,3 +114,19 @@ razorpay>=1.4.0
 # Email (for password reset, optional)
 # aiosmtplib>=3.0.0
 # email-validator>=2.1.0
+
+# ============================================
+# ENTERPRISE TRUST & COMPLIANCE (Optional)
+# ============================================
+# Uncomment the dependencies you need based on your secrets provider
+
+# Encryption (required for Trust Agent)
+cryptography>=42.0.0
+
+# HashiCorp Vault integration (optional)
+# hvac>=2.1.0
+
+# AWS Secrets Manager / KMS (uses boto3 already included above)
+
+# Azure Key Vault (optional)
+# azure-keyvault-secrets>=4.7.0

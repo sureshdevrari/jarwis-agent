@@ -1,6 +1,10 @@
 """
 Subscription Enforcement Module
 Handles plan limits, feature access, and usage tracking.
+
+NOTE: Plan definitions are now centralized in shared/plans.py
+This module imports from there for backward compatibility.
+For new code, prefer using services/subscription_manager.py
 """
 
 from datetime import datetime, timedelta
@@ -14,6 +18,16 @@ from sqlalchemy import select, func, and_, or_
 
 from database.models import User, ScanHistory
 from database.connection import get_db
+
+# Import centralized plan configuration
+from shared.plans import (
+    PlanManager, 
+    PlanId,
+    get_plan_config as _get_plan_config,
+    get_plan_limit as _get_plan_limit,
+    has_feature as _has_feature,
+    UNLIMITED
+)
 
 
 class PlanType(str, Enum):
@@ -39,6 +53,15 @@ class SubscriptionAction(str, Enum):
     GENERATE_API_KEY = "generate_api_key"
 
 
+# =============================================================================
+# PLAN CONFIGURATION - Now imported from shared/plans.py
+# =============================================================================
+# The PLAN_CONFIG below is kept for backward compatibility with existing code.
+# For new code, use PlanManager from shared/plans.py or SubscriptionManager
+# from services/subscription_manager.py
+# =============================================================================
+
+# Legacy PLAN_CONFIG - kept for backward compatibility
 # Plan configuration with limits and features
 PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
     "free": {
@@ -146,20 +169,44 @@ PLAN_CONFIG: Dict[str, Dict[str, Any]] = {
 
 
 def get_plan_config(plan: str) -> Dict[str, Any]:
-    """Get configuration for a specific plan"""
-    return PLAN_CONFIG.get(plan, PLAN_CONFIG["free"])
+    """
+    Get configuration for a specific plan.
+    
+    NOTE: Now uses centralized PlanManager from shared/plans.py
+    Falls back to legacy PLAN_CONFIG for backward compatibility.
+    """
+    # Try centralized config first
+    try:
+        return _get_plan_config(plan)
+    except Exception:
+        # Fallback to legacy PLAN_CONFIG
+        return PLAN_CONFIG.get(plan, PLAN_CONFIG["free"])
 
 
 def get_plan_limit(plan: str, limit_key: str) -> int:
-    """Get a specific limit value for a plan"""
-    config = get_plan_config(plan)
-    return config.get("limits", {}).get(limit_key, 0)
+    """
+    Get a specific limit value for a plan.
+    
+    NOTE: Now uses centralized PlanManager from shared/plans.py
+    """
+    try:
+        return _get_plan_limit(plan, limit_key)
+    except Exception:
+        config = PLAN_CONFIG.get(plan, PLAN_CONFIG["free"])
+        return config.get("limits", {}).get(limit_key, 0)
 
 
 def has_feature(plan: str, feature_key: str) -> bool:
-    """Check if a plan has a specific feature"""
-    config = get_plan_config(plan)
-    return config.get("features", {}).get(feature_key, False)
+    """
+    Check if a plan has a specific feature.
+    
+    NOTE: Now uses centralized PlanManager from shared/plans.py
+    """
+    try:
+        return _has_feature(plan, feature_key)
+    except Exception:
+        config = PLAN_CONFIG.get(plan, PLAN_CONFIG["free"])
+        return config.get("features", {}).get(feature_key, False)
 
 
 async def get_user_scan_count_this_month(

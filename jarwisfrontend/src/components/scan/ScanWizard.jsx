@@ -6,6 +6,22 @@ import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { useAuth } from "../../context/AuthContext";
 import { scanAPI, domainAPI, domainVerificationAPI } from "../../services/api";
+import {
+  Check,
+  CheckCircle,
+  Lock,
+  Shield,
+  Zap,
+  Smartphone,
+  MessageSquare,
+  Rocket,
+  AlertTriangle,
+  Lightbulb,
+  Plug,
+  Key,
+  Link,
+  Cookie
+} from "lucide-react";
 
 // Step configurations for each scan type
 const SCAN_TYPE_STEPS = {
@@ -346,7 +362,7 @@ const WebTargetStep = ({ formData, setFormData, isDarkMode, verifiedDomains }) =
         {/* Show normalized URL hint when protocol is missing */}
         {formData.target_url && urlNeedsProtocol(formData.target_url) && domainStatus !== "invalid" && (
           <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isDarkMode ? "bg-cyan-900/30 border border-cyan-700/50" : "bg-cyan-50 border border-cyan-200"}`}>
-            <span className="text-cyan-500">🔒</span>
+            <Lock className="w-4 h-4 text-cyan-500" />
             <p className={`text-sm ${isDarkMode ? "text-cyan-400" : "text-cyan-700"}`}>
               <strong>Will scan as:</strong>{" "}
               <code className={`px-2 py-0.5 rounded ${isDarkMode ? "bg-gray-800 text-cyan-300" : "bg-white text-cyan-600"}`}>
@@ -401,10 +417,10 @@ const WebTargetStep = ({ formData, setFormData, isDarkMode, verifiedDomains }) =
 // Web scan configuration step
 const WebConfigStep = ({ formData, setFormData, isDarkMode }) => {
   const scanProfiles = [
-    { id: "full", name: "Full OWASP Top 10", description: "Comprehensive security assessment", duration: "30-60 min", icon: "🛡️" },
-    { id: "quick", name: "Quick Scan", description: "Fast vulnerability check", duration: "5-10 min", icon: "⚡" },
-    { id: "api", name: "API Security", description: "REST/GraphQL endpoint testing", duration: "15-30 min", icon: "🔌" },
-    { id: "authenticated", name: "Authenticated Scan", description: "Deep scan with login", duration: "45-90 min", icon: "🔐" },
+    { id: "full", name: "Full OWASP Top 10", description: "Comprehensive security assessment", duration: "30-60 min", icon: Shield },
+    { id: "quick", name: "Quick Scan", description: "Fast vulnerability check", duration: "5-10 min", icon: Zap },
+    { id: "api", name: "API Security", description: "REST/GraphQL endpoint testing", duration: "15-30 min", icon: Plug },
+    { id: "authenticated", name: "Authenticated Scan", description: "Deep scan with login", duration: "45-90 min", icon: Lock },
   ];
 
   return (
@@ -432,7 +448,9 @@ const WebConfigStep = ({ formData, setFormData, isDarkMode }) => {
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-start gap-3">
-                <span className="text-2xl">{profile.icon}</span>
+                <span className="text-cyan-400">
+                  {typeof profile.icon === 'string' ? profile.icon : <profile.icon className="w-6 h-6" />}
+                </span>
                 <div className="flex-1">
                   <p className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                     {profile.name}
@@ -496,10 +514,10 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
   
   // Auth method options
   const authMethods = [
-    { id: 'username_password', name: 'Username & Password', icon: '🔑', description: 'Standard form login' },
-    { id: 'phone_otp', name: 'Phone OTP', icon: '📱', description: 'SMS verification code' },
-    { id: 'social_login', name: 'Social Login', icon: '🔗', description: 'Google, Facebook, etc.' },
-    { id: 'manual_session', name: 'Manual Session', icon: '🍪', description: 'Provide cookies/tokens' },
+    { id: 'username_password', name: 'Username & Password', icon: Key, description: 'Standard form login' },
+    { id: 'phone_otp', name: 'Phone OTP', icon: Smartphone, description: 'SMS verification code' },
+    { id: 'social_login', name: 'Social Login', icon: Link, description: 'Google, Facebook, etc.' },
+    { id: 'manual_session', name: 'Manual Session', icon: Cookie, description: 'Provide cookies/tokens' },
   ];
   
   // Social providers
@@ -600,7 +618,9 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-xl">{method.icon}</span>
+                      <span className="text-cyan-400">
+                        {typeof method.icon === 'string' ? method.icon : <method.icon className="w-5 h-5" />}
+                      </span>
                       <div>
                         <p className={`font-medium text-sm ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                           {method.name}
@@ -631,7 +651,7 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
                   </div>
                 ) : verificationStatus?.authorized ? (
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">✅</span>
+                    <CheckCircle className="w-6 h-6 text-green-400" />
                     <div>
                       <p className={`font-medium ${isDarkMode ? "text-green-400" : "text-green-700"}`}>
                         Domain Authorized
@@ -648,7 +668,7 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">⚠️</span>
+                      <AlertTriangle className="w-6 h-6 text-amber-400" />
                       <div>
                         <p className={`font-medium ${isDarkMode ? "text-amber-400" : "text-amber-700"}`}>
                           Domain Verification Required
@@ -833,8 +853,8 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
             {selectedAuthMethod === 'manual_session' && (
               <div className="space-y-4">
                 <div className={`p-3 rounded-lg ${isDarkMode ? "bg-blue-900/20 border border-blue-700" : "bg-blue-50 border border-blue-200"}`}>
-                  <p className={`text-sm ${isDarkMode ? "text-blue-400" : "text-blue-700"}`}>
-                    💡 <strong>Tip:</strong> Log in to your target site in a browser, then copy the session cookie or auth token from developer tools.
+                  <p className={`text-sm flex items-start gap-2 ${isDarkMode ? "text-blue-400" : "text-blue-700"}`}>
+                    <Lightbulb className="w-4 h-4 flex-shrink-0 mt-0.5" /> <span><strong>Tip:</strong> Log in to your target site in a browser, then copy the session cookie or auth token from developer tools.</span>
                   </p>
                 </div>
                 <div>
@@ -918,7 +938,7 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           { id: 'email', name: 'Email OTP', icon: '📧' },
-                          { id: 'sms', name: 'SMS OTP', icon: '💬' },
+                          { id: 'sms', name: 'SMS OTP', icon: MessageSquare },
                           { id: 'authenticator', name: 'Authenticator', icon: '🔐' },
                         ].map((type) => (
                           <button
@@ -991,7 +1011,7 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
             </div>
             
             <p className={`text-sm flex items-center gap-2 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-              <span className="text-cyan-500">🔒</span>
+              <Lock className="w-4 h-4 text-cyan-500" />
               Credentials are encrypted and never stored permanently
             </p>
           </motion.div>
@@ -1037,7 +1057,7 @@ const ReviewStep = ({ formData, scanType, isDarkMode, onStartScan, isSubmitting 
       
       <div className={`p-4 rounded-xl ${isDarkMode ? "bg-cyan-500/10 border border-cyan-500/30" : "bg-cyan-50 border border-cyan-200"}`}>
         <div className="flex items-start gap-3">
-          <span className="text-2xl">🚀</span>
+          <Rocket className="w-6 h-6 text-cyan-400" />
           <div>
             <p className={`font-medium ${isDarkMode ? "text-cyan-400" : "text-cyan-700"}`}>
               Ready to Start
@@ -1072,7 +1092,7 @@ const ReviewStep = ({ formData, scanType, isDarkMode, onStartScan, isSubmitting 
           </>
         ) : (
           <>
-            <span>🚀</span>
+            <Rocket className="w-5 h-5" />
             Start Security Scan
           </>
         )}
@@ -1313,7 +1333,7 @@ export default function ScanWizard({ scanType = "web" }) {
             className={`mb-6 p-4 rounded-xl ${isDarkMode ? "bg-red-500/20 border border-red-500/30 text-red-400" : "bg-red-50 border border-red-200 text-red-700"}`}
           >
             <div className="flex items-center gap-2">
-              <span>⚠️</span>
+              <AlertTriangle className="w-5 h-5" />
               <p>{error}</p>
             </div>
           </motion.div>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration with SSL Pinning
+    This is the recommended way to implement certificate pinning in Android 7.0+
+-->
+<network-security-config>
+    <!-- Default configuration for all domains -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- SSL Pinning for production API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.jarwis.ai</domain>
+        <domain includeSubdomains="true">secure.jarwis.ai</domain>
+        
+        <pin-set expiration="2027-01-01">
+            <!-- Primary certificate pin (SHA-256) -->
+            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
+            <!-- Backup pin for rotation -->
+            <pin digest="SHA-256">BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=</pin>
+            <!-- Root CA backup pin -->
+            <pin digest="SHA-256">CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=</pin>
+        </pin-set>
+
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Debug override - REMOVE IN PRODUCTION -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

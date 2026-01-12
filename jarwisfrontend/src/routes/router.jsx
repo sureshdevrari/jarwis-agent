@@ -17,6 +17,15 @@ import TermsofService from "../pages/TermsofService";
 import RefundReturnPolicy from "../pages/RefundReturnPolicy";
 import RequestTrialAccess from "../pages/RequestTrialAccess";
 
+// Solution Pages
+import { 
+  WebSecurity, 
+  MobileSecurity, 
+  NetworkSecurity, 
+  CloudSecurity, 
+  SASTSecurity 
+} from "../pages/solutions";
+
 // Auth Status Pages
 import PendingApproval from "../pages/auth/PendingApproval";
 import AccessDenied from "../pages/auth/AccessDenied";
@@ -164,6 +173,27 @@ const router = createBrowserRouter([
       {
         path: "request-trial",
         element: <RequestTrialAccess />,
+      },
+      // Solution Pages
+      {
+        path: "solutions/web-security",
+        element: <WebSecurity />,
+      },
+      {
+        path: "solutions/mobile-security",
+        element: <MobileSecurity />,
+      },
+      {
+        path: "solutions/network-security",
+        element: <NetworkSecurity />,
+      },
+      {
+        path: "solutions/cloud-security",
+        element: <CloudSecurity />,
+      },
+      {
+        path: "solutions/sast-security",
+        element: <SASTSecurity />,
       },
       // Payment Routes
       {

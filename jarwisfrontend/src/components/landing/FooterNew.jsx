@@ -12,6 +12,13 @@ const FooterNew = () => {
   };
 
   const footerLinks = {
+    solutions: [
+      { name: "Web Security", path: "/solutions/web-security" },
+      { name: "Mobile Security", path: "/solutions/mobile-security" },
+      { name: "Network Security", path: "/solutions/network-security" },
+      { name: "Cloud Security", path: "/solutions/cloud-security" },
+      { name: "Code Security", path: "/solutions/sast-security" },
+    ],
     platform: [
       { name: "Quick Scan", path: "/dashboard" },
       { name: "Features", path: "/about" },
@@ -74,9 +81,9 @@ const FooterNew = () => {
   return (
     <footer className="relative z-20 backdrop-blur-xl border-t border-gray-600 mt-4 bg-gray-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8">
           {/* Brand column */}
-          <div className="col-span-1 md:col-span-2">
+          <div className="col-span-2">
             <button onClick={() => handleNavigation("/")} className="flex items-center gap-2 mb-4">
               <img src="/logo/jarwis-logo-transparent.svg" alt="Jarwis" className="w-11 h-11" />
               <span className="md:text-3xl text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent">
@@ -114,6 +121,23 @@ const FooterNew = () => {
                 </a>
               ))}
             </div>
+          </div>
+
+          {/* Solutions links */}
+          <div>
+            <h4 className="text-white font-bold mb-4 md:mb-6 text-base md:text-lg">Solutions</h4>
+            <ul className="space-y-2 md:space-y-3 text-gray-400 text-sm md:text-base">
+              {footerLinks.solutions.map((link) => (
+                <li key={link.name}>
+                  <button
+                    onClick={() => handleNavigation(link.path)}
+                    className="hover:text-white transition-colors text-left"
+                  >
+                    {link.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Platform links */}

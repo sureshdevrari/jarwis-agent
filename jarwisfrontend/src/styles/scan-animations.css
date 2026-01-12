@@ -1,0 +1,809 @@
+/* 
+ * JARWIS Scan Animations
+ * Multi-layer scanning visualization for solution pages
+ * Built by BKD Labs
+ */
+
+/* ============================================= */
+/* MULTI-LAYER SCAN ANIMATION                    */
+/* ============================================= */
+
+.scan-layers-container {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+/* Base scanning circle */
+.scan-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  opacity: 0;
+}
+
+.scan-layer-1 {
+  border-color: rgba(6, 182, 212, 0.8);
+  animation: scanPulse 3s ease-out infinite;
+  animation-delay: 0s;
+}
+
+.scan-layer-2 {
+  border-color: rgba(59, 130, 246, 0.6);
+  animation: scanPulse 3s ease-out infinite;
+  animation-delay: 0.5s;
+}
+
+.scan-layer-3 {
+  border-color: rgba(139, 92, 246, 0.5);
+  animation: scanPulse 3s ease-out infinite;
+  animation-delay: 1s;
+}
+
+.scan-layer-4 {
+  border-color: rgba(236, 72, 153, 0.4);
+  animation: scanPulse 3s ease-out infinite;
+  animation-delay: 1.5s;
+}
+
+.scan-layer-5 {
+  border-color: rgba(34, 197, 94, 0.3);
+  animation: scanPulse 3s ease-out infinite;
+  animation-delay: 2s;
+}
+
+@keyframes scanPulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* ============================================= */
+/* ROTATING SCANNER LINE                         */
+/* ============================================= */
+
+.scanner-line-container {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.scanner-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(6, 182, 212, 0.3) 20%,
+    rgba(6, 182, 212, 1) 100%
+  );
+  transform-origin: left center;
+  animation: scanRotate 4s linear infinite;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.8);
+}
+
+@keyframes scanRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================= */
+/* CORE CENTER GLOW                              */
+/* ============================================= */
+
+.scan-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, 
+    rgba(6, 182, 212, 0.4) 0%, 
+    rgba(6, 182, 212, 0.1) 50%,
+    transparent 70%
+  );
+  animation: coreGlow 2s ease-in-out infinite alternate;
+}
+
+.scan-core::before {
+  content: '';
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.6);
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.8);
+  animation: corePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes coreGlow {
+  from {
+    box-shadow: 0 0 40px rgba(6, 182, 212, 0.4);
+  }
+  to {
+    box-shadow: 0 0 80px rgba(6, 182, 212, 0.6);
+  }
+}
+
+@keyframes corePulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* ============================================= */
+/* DATA FLOW PARTICLES                           */
+/* ============================================= */
+
+.data-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.data-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(6, 182, 212, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.8);
+}
+
+.data-particle:nth-child(1) { animation: particleOrbit 6s linear infinite; }
+.data-particle:nth-child(2) { animation: particleOrbit 6s linear infinite 1s; }
+.data-particle:nth-child(3) { animation: particleOrbit 6s linear infinite 2s; }
+.data-particle:nth-child(4) { animation: particleOrbit 6s linear infinite 3s; }
+.data-particle:nth-child(5) { animation: particleOrbit 6s linear infinite 4s; }
+.data-particle:nth-child(6) { animation: particleOrbit 6s linear infinite 5s; }
+
+@keyframes particleOrbit {
+  0% {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(0deg) translateX(120px);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(360deg) translateX(120px);
+    opacity: 0;
+  }
+}
+
+/* ============================================= */
+/* AI NEURAL NETWORK ANIMATION                   */
+/* ============================================= */
+
+.ai-neural-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+.neural-node {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.6);
+  animation: nodeGlow 2s ease-in-out infinite alternate;
+}
+
+.neural-node::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  animation: nodeRing 2s ease-out infinite;
+}
+
+@keyframes nodeGlow {
+  from {
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  }
+  to {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
+  }
+}
+
+@keyframes nodeRing {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+.neural-connection {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    rgba(6, 182, 212, 0) 0%, 
+    rgba(6, 182, 212, 0.6) 50%, 
+    rgba(6, 182, 212, 0) 100%
+  );
+  transform-origin: left center;
+  animation: connectionPulse 3s ease-in-out infinite;
+}
+
+@keyframes connectionPulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ============================================= */
+/* SCAN TYPE SPECIFIC COLORS                     */
+/* ============================================= */
+
+/* Web Security - Cyan/Blue */
+.scan-web .scan-layer-1 { border-color: rgba(6, 182, 212, 0.8); }
+.scan-web .scan-layer-2 { border-color: rgba(59, 130, 246, 0.6); }
+.scan-web .scan-core { background: radial-gradient(circle, rgba(6, 182, 212, 0.4) 0%, transparent 70%); }
+.scan-web .scanner-line { background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 1)); }
+
+/* Mobile Security - Purple/Pink */
+.scan-mobile .scan-layer-1 { border-color: rgba(139, 92, 246, 0.8); }
+.scan-mobile .scan-layer-2 { border-color: rgba(236, 72, 153, 0.6); }
+.scan-mobile .scan-core { background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%); }
+.scan-mobile .scan-core::before { background: rgba(139, 92, 246, 0.6); box-shadow: 0 0 30px rgba(139, 92, 246, 0.8); }
+.scan-mobile .scanner-line { background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 1)); box-shadow: 0 0 20px rgba(139, 92, 246, 0.8); }
+.scan-mobile .data-particle { background: rgba(139, 92, 246, 0.8); box-shadow: 0 0 10px rgba(139, 92, 246, 0.8); }
+
+/* Network Security - Green/Emerald */
+.scan-network .scan-layer-1 { border-color: rgba(34, 197, 94, 0.8); }
+.scan-network .scan-layer-2 { border-color: rgba(16, 185, 129, 0.6); }
+.scan-network .scan-core { background: radial-gradient(circle, rgba(34, 197, 94, 0.4) 0%, transparent 70%); }
+.scan-network .scan-core::before { background: rgba(34, 197, 94, 0.6); box-shadow: 0 0 30px rgba(34, 197, 94, 0.8); }
+.scan-network .scanner-line { background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 1)); box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); }
+.scan-network .data-particle { background: rgba(34, 197, 94, 0.8); box-shadow: 0 0 10px rgba(34, 197, 94, 0.8); }
+
+/* Cloud Security - Orange/Amber */
+.scan-cloud .scan-layer-1 { border-color: rgba(249, 115, 22, 0.8); }
+.scan-cloud .scan-layer-2 { border-color: rgba(245, 158, 11, 0.6); }
+.scan-cloud .scan-core { background: radial-gradient(circle, rgba(249, 115, 22, 0.4) 0%, transparent 70%); }
+.scan-cloud .scan-core::before { background: rgba(249, 115, 22, 0.6); box-shadow: 0 0 30px rgba(249, 115, 22, 0.8); }
+.scan-cloud .scanner-line { background: linear-gradient(90deg, transparent, rgba(249, 115, 22, 1)); box-shadow: 0 0 20px rgba(249, 115, 22, 0.8); }
+.scan-cloud .data-particle { background: rgba(249, 115, 22, 0.8); box-shadow: 0 0 10px rgba(249, 115, 22, 0.8); }
+
+/* SAST Security - Red/Rose */
+.scan-sast .scan-layer-1 { border-color: rgba(239, 68, 68, 0.8); }
+.scan-sast .scan-layer-2 { border-color: rgba(244, 63, 94, 0.6); }
+.scan-sast .scan-core { background: radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, transparent 70%); }
+.scan-sast .scan-core::before { background: rgba(239, 68, 68, 0.6); box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+.scan-sast .scanner-line { background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 1)); box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+.scan-sast .data-particle { background: rgba(239, 68, 68, 0.8); box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); }
+
+/* ============================================= */
+/* VULNERABILITY DETECTION ANIMATION             */
+/* ============================================= */
+
+.vuln-detector {
+  position: relative;
+  padding: 1rem;
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.vuln-detector::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(6, 182, 212, 0.1) 50%, 
+    transparent 100%
+  );
+  animation: vulnScan 3s ease-in-out infinite;
+}
+
+@keyframes vulnScan {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}
+
+.vuln-found {
+  animation: vulnPop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+@keyframes vulnPop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ============================================= */
+/* LAYER VISUALIZATION BARS                      */
+/* ============================================= */
+
+.scan-progress-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.layer-bar {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.layer-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 4px;
+  animation: layerFill 2s ease-out forwards;
+}
+
+.layer-bar-fill.layer-1 {
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+  animation-delay: 0s;
+}
+
+.layer-bar-fill.layer-2 {
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+  animation-delay: 0.3s;
+}
+
+.layer-bar-fill.layer-3 {
+  background: linear-gradient(90deg, #22c55e, #10b981);
+  animation-delay: 0.6s;
+}
+
+.layer-bar-fill.layer-4 {
+  background: linear-gradient(90deg, #f97316, #f59e0b);
+  animation-delay: 0.9s;
+}
+
+.layer-bar-fill.layer-5 {
+  background: linear-gradient(90deg, #ef4444, #f43f5e);
+  animation-delay: 1.2s;
+}
+
+@keyframes layerFill {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: var(--layer-width, 100%);
+  }
+}
+
+/* ============================================= */
+/* FLOATING BADGES                               */
+/* ============================================= */
+
+.floating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  color: #06b6d4;
+  animation: floatBadge 3s ease-in-out infinite;
+}
+
+.floating-badge:nth-child(even) {
+  animation-delay: 1.5s;
+}
+
+@keyframes floatBadge {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* ============================================= */
+/* GRID BACKGROUND PATTERN                       */
+/* ============================================= */
+
+.grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.grid-pattern::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, var(--bg-primary, #0a0a0b) 70%);
+}
+
+/* ============================================= */
+/* REDUCED MOTION SUPPORT                        */
+/* ============================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-layer,
+  .scanner-line,
+  .scan-core,
+  .scan-core::before,
+  .data-particle,
+  .neural-node,
+  .neural-node::after,
+  .neural-connection,
+  .vuln-detector::before,
+  .layer-bar-fill,
+  .floating-badge {
+    animation: none !important;
+  }
+  
+  .scan-layer {
+    opacity: 0.3;
+  }
+  
+  .layer-bar-fill {
+    width: var(--layer-width, 100%) !important;
+  }
+}
+
+/* ============================================= */
+/* HERO SECTION GRADIENT ORBS                    */
+/* ============================================= */
+
+.solution-hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.solution-hero-orb.orb-1 {
+  width: 500px;
+  height: 500px;
+  top: -200px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.4), transparent 70%);
+  animation: orbFloat 8s ease-in-out infinite;
+}
+
+.solution-hero-orb.orb-2 {
+  width: 400px;
+  height: 400px;
+  bottom: -150px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.3), transparent 70%);
+  animation: orbFloat 10s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(20px, -20px);
+  }
+  50% {
+    transform: translate(-10px, 20px);
+  }
+  75% {
+    transform: translate(15px, 10px);
+  }
+}
+
+/* ============================================= */
+/* FEATURE CARD HOVER EFFECTS                    */
+/* ============================================= */
+
+.solution-feature-card {
+  position: relative;
+  padding: 1.5rem;
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.solution-feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, 
+    rgba(6, 182, 212, 0.1) 0%, 
+    transparent 50%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.solution-feature-card:hover {
+  border-color: rgba(6, 182, 212, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 40px rgba(6, 182, 212, 0.1);
+}
+
+.solution-feature-card:hover::before {
+  opacity: 1;
+}
+
+/* ============================================= */
+/* CODE BLOCK SCANNING EFFECT                    */
+/* ============================================= */
+
+.code-scan-block {
+  position: relative;
+  background: rgba(10, 10, 11, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.code-scan-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%,
+    rgba(6, 182, 212, 0.8) 50%,
+    transparent 100%
+  );
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+  animation: codeScan 4s linear infinite;
+}
+
+@keyframes codeScan {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.code-highlight-vuln {
+  background: rgba(239, 68, 68, 0.2);
+  border-left: 3px solid #ef4444;
+  animation: vulnHighlight 2s ease-in-out infinite;
+}
+
+@keyframes vulnHighlight {
+  0%, 100% {
+    background: rgba(239, 68, 68, 0.1);
+  }
+  50% {
+    background: rgba(239, 68, 68, 0.25);
+  }
+}
+
+/* ============================================= */
+/* REDUCED MOTION SUPPORT                        */
+/* Respects user's accessibility preferences     */
+/* ============================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all animations */
+  .scan-layer,
+  .scan-layer-1,
+  .scan-layer-2,
+  .scan-layer-3,
+  .scan-layer-4,
+  .scan-layer-5,
+  .scanner-line,
+  .scan-core,
+  .scan-core::before,
+  .data-particle,
+  .finding-ping,
+  .layer-bar-fill,
+  .code-scan-line,
+  .code-highlight-vuln {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  /* Keep elements visible without animation */
+  .scan-layer {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  
+  .scan-core::before {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  
+  .layer-bar-fill {
+    width: var(--layer-width, 50%) !important;
+    opacity: 1 !important;
+  }
+  
+  /* Static scanner position */
+  .scanner-line {
+    transform: rotate(45deg);
+  }
+  
+  /* Data particles - show statically */
+  .data-particle {
+    opacity: 0.5;
+  }
+  
+  /* Finding ping - static indicator */
+  .finding-ping {
+    opacity: 0.8;
+  }
+  
+  /* Code scan line - hidden */
+  .code-scan-line {
+    display: none;
+  }
+  
+  /* Disable hover transitions too */
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================= */
+/* ALTERNATIVE: Gentler animations for reduce    */
+/* motion users who prefer subtle movement       */
+/* ============================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Optional: very slow, subtle pulse instead of no animation */
+  .scan-core {
+    animation: gentlePulse 8s ease-in-out infinite;
+  }
+  
+  @keyframes gentlePulse {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+}
+
+/* ============================================= */
+/* GRADIENT ANIMATION                            */
+/* For animated background gradients             */
+/* ============================================= */
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient-x {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}
+
+/* ============================================= */
+/* UTILITY ANIMATIONS                            */
+/* For interactive components                    */
+/* ============================================= */
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer,
+  .animate-bounce-subtle {
+    animation: none;
+  }
+}

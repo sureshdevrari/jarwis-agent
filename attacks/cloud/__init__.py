@@ -4,6 +4,24 @@ Central Cloud Attack Module - Aggregates ALL cloud security scanners
 
 Multi-cloud security assessment for AWS, Azure, GCP, and Kubernetes
 
+NEW STRUCTURE (Recommended):
+    from attacks.cloud.aws import AWSSecurityScanner
+    from attacks.cloud.azure import AzureSecurityScanner
+    from attacks.cloud.gcp import GCPSecurityScanner
+    from attacks.cloud.kubernetes import KubernetesSecurityScanner
+    from attacks.cloud.cnapp import CIEMScanner, RuntimeScanner
+    
+LEGACY IMPORT (Deprecated but still works):
+    from attacks.cloud import AWSSecurityScanner, AzureSecurityScanner
+
+Provider-based organization:
+- aws/        - AWS-specific scanners
+- azure/      - Azure-specific scanners
+- gcp/        - GCP-specific scanners
+- kubernetes/ - Kubernetes and container security
+- cnapp/      - CNAPP features (CIEM, Runtime, SBOM, Drift, Data Security)
+- shared/     - Base classes and shared utilities
+
 Comprehensive cloud security scanning including:
 - CSPM (Cloud Security Posture Management)
 - CIEM (Cloud Identity & Entitlement Management)
@@ -22,26 +40,56 @@ Inspired by: Wiz, Palo Alto Prisma Cloud, Aqua Security, Sysdig
 from typing import List, Any, Optional
 import logging
 
-from .cloud_scanner import CloudSecurityScanner
-from .aws_scanner import AWSSecurityScanner, AWSScanner
-from .azure_scanner import AzureSecurityScanner, AzureScanner
-from .gcp_scanner import GCPSecurityScanner, GCPScanner
-from .iac_scanner import IaCScanner
-from .container_scanner import ContainerScanner
-from .runtime_scanner import RuntimeScanner
-from .ciem_scanner import CIEMScanner
-from .kubernetes_scanner import KubernetesSecurityScanner
-from .drift_scanner import DriftDetectionScanner
-from .data_security_scanner import SensitiveDataScanner
-from .compliance_mapper import ComplianceMapper
-from .sbom_generator import SBOMGenerator
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# BACKWARD-COMPATIBLE IMPORTS FROM NEW PROVIDER LOCATIONS
+# =============================================================================
+
+# Shared/Base
+from .shared.base import CloudScanner
+
+# Alias for backward compat
+CloudScannerBase = CloudScanner
+from .shared.cloud_scanner import CloudSecurityScanner, CloudFinding, CloudScanResult
+from .shared.iac_scanner import IaCScanner
+from .shared.compliance_mapper import ComplianceMapper
+from .shared.config import DEFAULT_CLOUD_CONFIG
+from .shared.schemas import CloudResource, CloudScanContext
+from .shared.exceptions import CloudScanError
+
+# Aliases
+CloudConfig = DEFAULT_CLOUD_CONFIG
+CloudScannerError = CloudScanError
+
+# AWS
+from .aws.aws_scanner import AWSSecurityScanner, AWSScanner
+
+# Azure
+from .azure.azure_scanner import AzureSecurityScanner
+
+# Alias for backward compat
+AzureScanner = AzureSecurityScanner
+
+# GCP
+from .gcp.gcp_scanner import GCPSecurityScanner, GCPScanner
+
+# Kubernetes
+from .kubernetes.kubernetes_scanner import KubernetesSecurityScanner
+from .kubernetes.container_scanner import ContainerScanner
+
+# CNAPP Features
+from .cnapp.ciem_scanner import CIEMScanner
+from .cnapp.runtime_scanner import RuntimeScanner
+from .cnapp.drift_scanner import DriftDetectionScanner
+from .cnapp.data_security_scanner import SensitiveDataScanner
+from .cnapp.sbom_generator import SBOMGenerator
+
 
 # Aliases for backward compatibility
 IaCSecurityScanner = IaCScanner
 ContainerSecurityScanner = ContainerScanner
 RuntimeThreatScanner = RuntimeScanner
-
-logger = logging.getLogger(__name__)
 
 
 class CloudAttacks:
@@ -98,163 +146,106 @@ class CloudAttacks:
                 scanners.append(GCPSecurityScanner(self.config, self.context))
         
         # Kubernetes scanner (if enabled)
-        if cloud_config.get('kubernetes', {}).get('enabled', False) or self.provider == 'kubernetes':
+        if cloud_config.get('kubernetes', {}).get('enabled', False):
             scanners.append(KubernetesSecurityScanner(self.config, self.context))
         
-        # Container Security (always scan if containers detected)
-        if cloud_config.get('container_scanning', {}).get('enabled', True):
+        # Container scanner (if enabled)
+        if cloud_config.get('containers', {}).get('enabled', True):
             scanners.append(ContainerScanner(self.config, self.context))
         
-        # IaC Security (if terraform/cloudformation files present)
-        if cloud_config.get('iac_scanning', {}).get('enabled', True):
+        # IaC scanner (if enabled)
+        if cloud_config.get('iac', {}).get('enabled', True):
             scanners.append(IaCScanner(self.config, self.context))
         
-        # CIEM (Identity & Entitlement Management)
+        # CNAPP features
         if cloud_config.get('ciem', {}).get('enabled', True):
             scanners.append(CIEMScanner(self.config, self.context))
         
-        # Runtime Threat Detection
-        if cloud_config.get('runtime_scanning', {}).get('enabled', False):
+        if cloud_config.get('runtime', {}).get('enabled', True):
             scanners.append(RuntimeScanner(self.config, self.context))
         
-        # Drift Detection
-        if cloud_config.get('drift_detection', {}).get('enabled', False):
+        if cloud_config.get('drift', {}).get('enabled', True):
             scanners.append(DriftDetectionScanner(self.config, self.context))
         
-        # Sensitive Data Discovery
         if cloud_config.get('data_security', {}).get('enabled', True):
             scanners.append(SensitiveDataScanner(self.config, self.context))
         
         return scanners
     
     async def run(self) -> List[Any]:
-        """
-        Run all configured cloud security scanners.
-        
-        Returns:
-            List of all cloud security findings
-        """
-        results = []
-        
-        logger.info(f"Starting cloud security scan (provider: {self.provider})...")
-        logger.info(f"Loaded {len(self.scanners)} cloud scanners")
-        
+        """Run all configured cloud scanners."""
+        findings = []
         for scanner in self.scanners:
-            scanner_name = scanner.__class__.__name__
-            logger.info(f"Running {scanner_name}...")
-            
             try:
-                if hasattr(scanner, 'scan'):
-                    scanner_results = await scanner.scan()
-                elif hasattr(scanner, 'run'):
-                    scanner_results = await scanner.run()
-                elif hasattr(scanner, 'analyze'):
-                    scanner_results = await scanner.analyze()
-                else:
-                    logger.warning(f"{scanner_name} has no scan/run/analyze method")
-                    continue
-                
-                if scanner_results:
-                    results.extend(scanner_results)
-                    logger.info(f"{scanner_name}: {len(scanner_results)} findings")
-                    
+                result = await scanner.run()
+                if result:
+                    findings.extend(result if isinstance(result, list) else [result])
             except Exception as e:
-                logger.error(f"{scanner_name} failed: {e}")
-                continue
-        
-        # Map findings to compliance frameworks
-        if self.config.get('cloud', {}).get('compliance_mapping', True):
-            mapper = ComplianceMapper(self.config)
-            results = mapper.map_findings(results)
-        
-        logger.info(f"Cloud scan complete: {len(results)} total findings")
-        return results
+                logger.error(f"Scanner {scanner.__class__.__name__} failed: {e}")
+        return findings
     
     async def run_aws(self) -> List[Any]:
-        """Run only AWS security scanning"""
+        """Run AWS-specific scanners only."""
         scanner = AWSSecurityScanner(self.config, self.context)
-        return await scanner.scan()
+        return await scanner.run()
     
     async def run_azure(self) -> List[Any]:
-        """Run only Azure security scanning"""
+        """Run Azure-specific scanners only."""
         scanner = AzureSecurityScanner(self.config, self.context)
-        return await scanner.scan()
+        return await scanner.run()
     
     async def run_gcp(self) -> List[Any]:
-        """Run only GCP security scanning"""
+        """Run GCP-specific scanners only."""
         scanner = GCPSecurityScanner(self.config, self.context)
-        return await scanner.scan()
+        return await scanner.run()
     
     async def run_kubernetes(self) -> List[Any]:
-        """Run only Kubernetes security scanning"""
+        """Run Kubernetes-specific scanners only."""
         scanner = KubernetesSecurityScanner(self.config, self.context)
-        return await scanner.scan()
-    
-    def get_scanner_count(self) -> int:
-        """Get count of available scanners"""
-        return len(self.scanners)
-    
-    def get_available_attacks(self) -> List[str]:
-        """Get list of available attack categories"""
-        return [
-            "IAM Policy Analysis",
-            "S3/Blob Public Access",
-            "Security Group Analysis",
-            "Encryption at Rest",
-            "Encryption in Transit",
-            "Network Exposure",
-            "Privileged Container Detection",
-            "Secrets in Environment Variables",
-            "Kubernetes RBAC Audit",
-            "Pod Security Policies",
-            "IaC Misconfigurations",
-            "Drift Detection",
-            "Compliance Mapping (CIS, PCI, HIPAA, SOC2)",
-            "Attack Path Analysis",
-        ]
-    
-    def generate_sbom(self) -> dict:
-        """Generate Software Bill of Materials"""
-        generator = SBOMGenerator(self.config)
-        return generator.generate()
+        return await scanner.run()
 
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
 
 __all__ = [
-    # Main aggregator
+    # Main Classes
     'CloudAttacks',
-    
-    # Core CSPM Scanners
     'CloudSecurityScanner',
+    
+    # Shared
+    'CloudScannerBase',
+    'IaCScanner',
+    'IaCSecurityScanner',
+    'ComplianceMapper',
+    'CloudConfig',
+    'CloudFinding',
+    'CloudResource',
+    'CloudScannerError',
+    
+    # AWS
     'AWSSecurityScanner',
-    'AzureSecurityScanner',
-    'GCPSecurityScanner',
     'AWSScanner',
+    
+    # Azure
+    'AzureSecurityScanner',
     'AzureScanner',
+    
+    # GCP
+    'GCPSecurityScanner',
     'GCPScanner',
     
-    # Layer 2: IaC Security
-    'IaCScanner',
-    'IaCSecurityScanner',  # Alias
-    
-    # Layer 3: Container Security
-    'ContainerScanner',
-    'ContainerSecurityScanner',  # Alias
-    
-    # Layer 4: Runtime Security
-    'RuntimeScanner',
-    'RuntimeThreatScanner',  # Alias
-    
-    # Wiz-style Features
-    'CIEMScanner',
-    'SensitiveDataScanner',
-    
-    # Aqua-style Features
+    # Kubernetes
     'KubernetesSecurityScanner',
-    'SBOMGenerator',
+    'ContainerScanner',
+    'ContainerSecurityScanner',
     
-    # Sysdig-style Features
+    # CNAPP
+    'CIEMScanner',
+    'RuntimeScanner',
+    'RuntimeThreatScanner',
     'DriftDetectionScanner',
-    
-    # Palo Alto-style Features
-    'ComplianceMapper',
+    'SensitiveDataScanner',
+    'SBOMGenerator',
 ]

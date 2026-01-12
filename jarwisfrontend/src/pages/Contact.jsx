@@ -2,10 +2,14 @@ import { Link } from "react-router-dom";
 import ContactForm from "../components/ContactForm";
 import ContactCards from "../components/ContactCards";
 import Footer from "../components/Footer";
+import { ScrollProgressBar, RevealOnScroll } from "../components/ui";
 
 const Contact = () => {
   return (
     <div className="min-h-screen">
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
+
       <div className="text-white relative overflow-hidden">
         {/* Background Pattern/Lines */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
@@ -102,10 +106,14 @@ const Contact = () => {
       </div>
 
       {/* contact form */}
-      <ContactForm />
+      <RevealOnScroll animation="fadeUp">
+        <ContactForm />
+      </RevealOnScroll>
 
       {/* Socoal link and email */}
-      <ContactCards />
+      <RevealOnScroll animation="fadeUp" delay={0.1}>
+        <ContactCards />
+      </RevealOnScroll>
 
       {/* Footer */}
       <Footer />
