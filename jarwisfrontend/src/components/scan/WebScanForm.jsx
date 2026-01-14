@@ -1,7 +1,7 @@
 // WebScanForm - Dedicated web scan configuration form
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Rocket, Lock } from "lucide-react";
+import { Rocket, Lock, Shield, Smartphone, Mail, Key } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { scanAPI, domainVerificationAPI } from "../../services/api";
@@ -19,6 +19,8 @@ const WebScanForm = () => {
     apiToken: "",
     scope: "Web + API (recommended)",
     notes: "",
+    twoFactorEnabled: false,
+    twoFactorType: "sms", // sms, email, authenticator
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -176,6 +178,10 @@ const WebScanForm = () => {
           password: webForm.password || null,
           api_token: webForm.apiToken || null,
         },
+        two_factor: {
+          enabled: webForm.twoFactorEnabled && (webForm.username || webForm.password),
+          type: webForm.twoFactorType,
+        },
         attacks: {
           owasp: {
             a01_broken_access: true,
@@ -282,6 +288,81 @@ const WebScanForm = () => {
           onChange={handleInputChange}
           className={inputClass}
         />
+
+        {/* 2FA Toggle - Only show when credentials are provided */}
+        {(webForm.username || webForm.password) && (
+          <div className={`mt-4 p-4 rounded-xl border ${isDarkMode ? "bg-slate-800/50 border-slate-700" : "bg-gray-50 border-gray-200"}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className={`w-5 h-5 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
+                <div>
+                  <label className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                    Target site uses 2FA
+                  </label>
+                  <p className={`text-xs mt-0.5 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Enable if the target requires OTP/verification code after login
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWebForm(prev => ({ ...prev, twoFactorEnabled: !prev.twoFactorEnabled }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  webForm.twoFactorEnabled
+                    ? "bg-blue-600"
+                    : isDarkMode ? "bg-slate-600" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    webForm.twoFactorEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 2FA Type Selection - Show when 2FA is enabled */}
+            {webForm.twoFactorEnabled && (
+              <div className="mt-4 pt-4 border-t border-dashed ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}">
+                <label className={`text-sm font-medium mb-2 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  How will you receive the OTP?
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { id: 'sms', label: 'SMS', icon: Smartphone, desc: 'Text message' },
+                    { id: 'email', label: 'Email', icon: Mail, desc: 'Email code' },
+                    { id: 'authenticator', label: 'App', icon: Key, desc: 'Authenticator' },
+                  ].map(option => {
+                    const IconComponent = option.icon;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setWebForm(prev => ({ ...prev, twoFactorType: option.id }))}
+                        className={`p-3 rounded-lg border text-center transition-all ${
+                          webForm.twoFactorType === option.id
+                            ? isDarkMode
+                              ? "bg-blue-600/20 border-blue-500 text-blue-400"
+                              : "bg-blue-50 border-blue-500 text-blue-700"
+                            : isDarkMode
+                              ? "bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500"
+                              : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        <IconComponent className="w-5 h-5 mx-auto mb-1" />
+                        <div className="text-sm font-medium">{option.label}</div>
+                        <div className={`text-xs ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>{option.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className={`text-xs mt-3 ${isDarkMode ? "text-amber-400/80" : "text-amber-600"}`}>
+                  ⏱️ When prompted, you'll have 3 minutes to enter the OTP code during the scan
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

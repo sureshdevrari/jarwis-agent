@@ -769,6 +769,30 @@ export const scanAPI = {
 // ============== Mobile Scan API ==============
 
 export const mobileScanAPI = {
+  // Upload mobile app first (step 1 of two-step flow)
+  // Returns file_id and app info for use in startScan
+  uploadApp: async (file, platform = 'android', onProgress = null) => {
+    const formData = new FormData();
+    formData.append('app_file', file);
+    formData.append('platform', platform);
+    
+    const config = {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 min timeout for large files
+    };
+    
+    // Add progress tracking if callback provided
+    if (onProgress) {
+      config.onUploadProgress = (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted, progressEvent.loaded, progressEvent.total);
+      };
+    }
+    
+    const response = await api.post('/api/scan/mobile/upload', formData, config);
+    return response.data;
+  },
+
   // Start mobile scan with file upload
   // Note: Accepts (file, config) to match NewScan.jsx call pattern
   startScan: async (file, config) => {
@@ -786,6 +810,25 @@ export const mobileScanAPI = {
     const response = await api.post('/api/scan/mobile/start', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000, // 2 min timeout for file upload
+    });
+    return response.data;
+  },
+
+  // Start mobile scan using file_id from previous upload (step 2 of two-step flow)
+  startScanWithFileId: async (fileId, config) => {
+    const formData = new FormData();
+    formData.append('file_id', fileId);
+    
+    // Append config fields
+    Object.entries(config).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        formData.append(key, typeof value === 'boolean' ? value.toString() : value);
+      }
+    });
+    
+    const response = await api.post('/api/scan/mobile/start', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000, // Quick since file already uploaded
     });
     return response.data;
   },

@@ -222,6 +222,14 @@ class MobileScanContext:
     
     # Base URLs discovered
     base_urls: Set[str] = field(default_factory=set)
+    
+    # SSL Pinning Detection (populated by _phase_ssl_bypass)
+    ssl_pinning_detected: bool = False
+    ssl_pinning_types: List[str] = field(default_factory=list)
+    
+    # Authentication/2FA status (for dashboard integration)
+    auth_status: str = "not_started"  # not_started, waiting_for_otp, waiting_for_manual_auth, authenticated, failed
+    otp_request_id: str = ""  # ID for OTP request if waiting
 
 
 @dataclass
@@ -258,6 +266,10 @@ class MobileScanConfig:
     username: str = ""
     password: str = ""
     phone: str = ""
+    
+    # 2FA / OTP
+    two_factor_enabled: bool = False
+    two_factor_type: str = "sms"  # sms, email, authenticator
     
     # Attack modules
     attacks_enabled: bool = True
@@ -493,6 +505,9 @@ class MobilePenTestOrchestrator:
         self._log('phase', '[*]    Phase 1: Device Setup')
         self._update_progress("setup", 5, "Setting up device...")
         
+        # Ensure Android SDK environment variables are set
+        self._ensure_android_env()
+        
         try:
             if self.context.platform == "android":
                 return await self._setup_android()
@@ -504,18 +519,101 @@ class MobilePenTestOrchestrator:
                 
         except Exception as e:
             self._log('error', f'Setup failed: {e}')
+            logger.exception(f"Device setup exception: {e}")
             return False
+    
+    def _ensure_android_env(self):
+        """Ensure Android SDK environment variables are properly set"""
+        import os
+        
+        # Common SDK locations on Windows
+        sdk_paths = [
+            os.environ.get("ANDROID_SDK_ROOT"),
+            os.environ.get("ANDROID_HOME"),
+            "C:/Android/Sdk",
+            "C:/Android/sdk",
+            os.path.expanduser("~/.jarwis/android-sdk"),
+            os.path.expanduser("~/AppData/Local/Android/Sdk"),
+        ]
+        
+        # Find valid SDK path
+        sdk_root = None
+        for path in sdk_paths:
+            if path and os.path.exists(path):
+                sdk_root = path
+                break
+        
+        if sdk_root:
+            os.environ["ANDROID_SDK_ROOT"] = sdk_root
+            os.environ["ANDROID_HOME"] = sdk_root
+            self._log('info', f'Android SDK: {sdk_root}')
+            
+            # Add platform-tools to PATH if not already there
+            platform_tools = os.path.join(sdk_root, "platform-tools")
+            emulator_path = os.path.join(sdk_root, "emulator")
+            
+            current_path = os.environ.get("PATH", "")
+            paths_to_add = []
+            
+            if platform_tools not in current_path:
+                paths_to_add.append(platform_tools)
+            if emulator_path not in current_path:
+                paths_to_add.append(emulator_path)
+            
+            if paths_to_add:
+                os.environ["PATH"] = os.pathsep.join(paths_to_add) + os.pathsep + current_path
+            
+            # Set AVD home if not set
+            if not os.environ.get("ANDROID_AVD_HOME"):
+                avd_paths = [
+                    "C:/Android/avd",
+                    os.path.expanduser("~/.android/avd"),
+                    os.path.expanduser("~/.jarwis/avd"),
+                ]
+                for avd_path in avd_paths:
+                    if os.path.exists(avd_path):
+                        os.environ["ANDROID_AVD_HOME"] = avd_path
+                        break
+        else:
+            self._log('warning', 'Android SDK not found in standard locations')
     
     async def _setup_android(self) -> bool:
         """Setup Android emulator or device with enhanced detection"""
         from attacks.mobile.platform.android.emulator_manager import EmulatorManager, EmulatorConfig
         from attacks.mobile.platform.android.adb_device_manager import ADBDeviceManager, DeviceType
+        import subprocess
+        import os
         
         self.emulator = EmulatorManager()
         status = self.emulator.get_status()
         
+        # Log SDK status for debugging
+        self._log('info', f'SDK Root: {status.get("sdk_root", "Not set")}')
+        self._log('info', f'Platform Tools: {"OK" if status.get("platform_tools_installed") else "Missing"}')
+        self._log('info', f'Emulator: {"Installed" if status.get("emulator_installed") else "Not installed"}')
+        
+        # Verify ADB is accessible
+        adb_available = False
+        try:
+            result = subprocess.run(['adb', 'version'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                adb_available = True
+                self._log('info', 'ADB: Available')
+            else:
+                self._log('warning', f'ADB command failed: {result.stderr}')
+        except FileNotFoundError:
+            self._log('error', 'ADB not found in PATH. Please install Android SDK platform-tools.')
+        except Exception as e:
+            self._log('warning', f'ADB check error: {e}')
+        
+        if not adb_available:
+            self._log('error', 'Cannot proceed without ADB. Run SETUP_ANDROID_EMULATOR.bat first.')
+            return False
+        
         # Use enhanced ADB device manager for better device detection
-        self.device_manager = ADBDeviceManager(prefer_real_device=True)
+        from attacks.mobile.platform.android.adb_device_manager import ADBConfig
+        adb_config = ADBConfig(prefer_real_device=True)
+        self.device_manager = ADBDeviceManager(config=adb_config)
         
         # Check for connected device first (real device preferred)
         if self.config.device_id:
@@ -540,8 +638,11 @@ class MobilePenTestOrchestrator:
                     self._log('info', f'  Root: {selected.root_status.value}, Frida: {"Yes" if selected.frida_server_running else "No"}')
                     
                     # Prepare device for testing if needed
-                    security_summary = await self.device_manager.get_device_security_summary(selected.device_id)
-                    self._log('info', f'  Security: Verified Boot={security_summary.get("verified_boot_state", "N/A")}')
+                    try:
+                        security_summary = await self.device_manager.get_device_security_summary(selected.device_id)
+                        self._log('info', f'  Security: Verified Boot={security_summary.get("verified_boot_state", "N/A")}')
+                    except Exception as sec_err:
+                        self._log('warning', f'Could not get security summary: {sec_err}')
                     
                     return True
         except Exception as e:
@@ -549,34 +650,73 @@ class MobilePenTestOrchestrator:
         
         # Fallback: Check ADB for devices directly
         try:
-            import subprocess
             result = subprocess.run(['adb', 'devices'], capture_output=True, text=True, timeout=5)
-            devices = [l.split('\t')[0] for l in result.stdout.split('\n')[1:] if '\tdevice' in l]
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            devices = []
+            unauthorized = []
+            
+            for line in lines:
+                if '\tdevice' in line:
+                    devices.append(line.split('\t')[0])
+                elif '\tunauthorized' in line:
+                    unauthorized.append(line.split('\t')[0])
+            
+            if unauthorized:
+                self._log('warning', f'Unauthorized devices detected: {unauthorized}. Accept USB debugging prompt on device.')
             
             if devices:
                 self._log('info', f'Using connected device: {devices[0]}')
                 self.config.device_id = devices[0]
                 return True
-        except:
-            pass
+        except Exception as e:
+            self._log('warning', f'ADB device check failed: {e}')
         
-        # Use emulator
+        # No device connected - try to start emulator
+        self._log('info', 'No connected devices found. Attempting to start emulator...')
+        
         if self.config.use_emulator:
-            if not status['running']:
-                self._log('info', 'Starting Android emulator...')
-                
-                config = EmulatorConfig(headless=self.config.headless)
-                
-                if not status['emulator_installed']:
-                    self._log('info', 'Emulator not found. Please run setup_emulator.py first')
-                    return False
-                
-                await self.emulator.start_emulator(headless=self.config.headless)
+            if not status.get('emulator_installed'):
+                self._log('error', 'Android emulator not installed. Run SETUP_ANDROID_EMULATOR.bat first.')
+                return False
             
-            self._log('success', f'Emulator ready: {status.get("device_id", "emulator")}')
-            return True
+            # Check if AVD exists
+            try:
+                emulator_exe = os.path.join(status.get('sdk_root', ''), 'emulator', 'emulator.exe')
+                if os.path.exists(emulator_exe):
+                    result = subprocess.run([emulator_exe, '-list-avds'], capture_output=True, text=True, timeout=10)
+                    avds = [a.strip() for a in result.stdout.strip().split('\n') if a.strip()]
+                    if not avds:
+                        self._log('error', 'No AVDs found. Run SETUP_ANDROID_EMULATOR.bat to create one.')
+                        return False
+                    self._log('info', f'Available AVDs: {avds}')
+            except Exception as e:
+                self._log('warning', f'Could not list AVDs: {e}')
+            
+            if not status.get('running'):
+                self._log('info', 'Starting Android emulator (this may take 1-2 minutes)...')
+                self._update_progress("setup", 8, "Starting emulator...")
+                
+                try:
+                    started = await self.emulator.start_emulator(headless=self.config.headless, wait=True)
+                    
+                    if started:
+                        # Refresh status after starting
+                        status = self.emulator.get_status()
+                        self.config.device_id = status.get('device_id', '')
+                        self._log('success', f'Emulator started: {self.config.device_id}')
+                        return True
+                    else:
+                        self._log('error', 'Failed to start emulator. Check if virtualization is enabled.')
+                        return False
+                except Exception as e:
+                    self._log('error', f'Emulator start error: {e}')
+                    return False
+            else:
+                self.config.device_id = status.get('device_id', '')
+                self._log('success', f'Emulator already running: {self.config.device_id}')
+                return True
         
-        self._log('warning', 'No device available')
+        self._log('error', 'No device available and emulator not enabled. Enable use_emulator or connect a device.')
         return False
     
     async def _setup_ios(self) -> bool:
@@ -632,64 +772,115 @@ class MobilePenTestOrchestrator:
         return False
     
     async def _phase_ssl_bypass(self) -> bool:
-        """Phase 2: Bypass SSL pinning using Frida + Initialize MITM infrastructure"""
-        self._log('phase', '[*]    Phase 2: SSL Pinning Bypass & MITM Setup')
-        self._update_progress("ssl_bypass", 15, "Bypassing SSL pinning...")
+        """Phase 2: Detect SSL Pinning & Bypass if needed + Initialize MITM infrastructure"""
+        self._log('phase', '[*]    Phase 2: SSL Pinning Detection & Bypass')
+        self._update_progress("ssl_bypass", 15, "Detecting SSL pinning...")
         
+        # Step 1: Detect if SSL pinning is present BEFORE attempting bypass
+        ssl_pinning_detected = False
         try:
-            from attacks.mobile.dynamic.frida_ssl_bypass import FridaSSLBypass
+            from attacks.mobile.dynamic.ssl_pinning_detector import SSLPinningDetector
             
-            self.frida_bypass = FridaSSLBypass()
-            self.frida_bypass.set_log_callback(self._log)
-            self.frida_bypass.set_request_callback(self._on_traffic_intercepted)
+            detector = SSLPinningDetector(
+                platform=self.context.platform,
+                proxy_port=self.config.mitm_port
+            )
+            detector.set_log_callback(self._log)
             
-            # Connect to device
-            await self.frida_bypass.connect_device(self.config.device_id)
-            
-            # Get package name
+            # Get package name first
             if not self.context.package_name:
                 self.context.package_name = await self._get_package_name()
             
-            if not self.context.package_name:
-                self._log('warning', 'Could not determine package name, SSL bypass will attach after app launch')
-                return True
-            
-            # Initialize MITM infrastructure BEFORE attaching Frida
-            await self._initialize_mitm_infrastructure()
-            
-            # Register Frida bridge as message handler
-            if self.frida_bridge and hasattr(self.frida_bypass, 'set_message_callback'):
-                self.frida_bypass.set_message_callback(self.frida_bridge.on_frida_message)
-                self._log('info', 'Frida request bridge connected')
-            
-            # Attach and bypass
-            result = await self.frida_bypass.attach_and_bypass(
-                self.context.package_name,
-                platform=self.context.platform,
-                spawn=True
+            # Run SSL pinning detection
+            detection_result = await detector.detect(
+                app_path=self.config.app_path,
+                package_name=self.context.package_name,
+                device_id=self.config.device_id
             )
             
-            if result.success:
-                self._log('success', f'[!]   SSL bypass active: {len(result.libraries_bypassed)} libraries bypassed')
+            ssl_pinning_detected = detection_result.has_pinning
+            
+            if detection_result.has_pinning:
+                self._log('warning', f'[!]   SSL Pinning DETECTED (confidence: {detection_result.confidence_score:.0%})')
+                pinning_types = [pt.value for pt in detection_result.pinning_types]
+                self._log('info', f'      Pinning types: {", ".join(pinning_types)}')
                 
-                # Start Frida bridge message processing
-                if self.frida_bridge:
-                    asyncio.create_task(self.frida_bridge.start_listening())
-                    
-                return True
+                if detection_result.pinned_domains:
+                    self._log('info', f'      Pinned domains: {", ".join(detection_result.pinned_domains[:3])}...')
+                
+                self._log('info', f'      Recommendation: {detection_result.bypass_recommendation.split(chr(10))[0]}')
+                
+                # Store detection result in context for reporting
+                self.context.ssl_pinning_detected = True
+                self.context.ssl_pinning_types = pinning_types
             else:
-                self._log('warning', f'SSL bypass partial: {result.error}')
-                return True  # Continue even if partial
+                self._log('success', '[!]   No SSL Pinning detected - MITM proxy will work without Frida')
+                self.context.ssl_pinning_detected = False
                 
-        except ImportError:
-            self._log('warning', 'Frida not available. SSL bypass disabled.')
-            # Still try to initialize MITM infrastructure for traffic capture
-            await self._initialize_mitm_infrastructure()
-            return True
+        except ImportError as e:
+            self._log('warning', f'SSL pinning detector not available: {e}')
+            # Default to assuming pinning exists for safety
+            ssl_pinning_detected = True
         except Exception as e:
-            self._log('warning', f'SSL bypass failed: {e}')
-            await self._initialize_mitm_infrastructure()
-            return True  # Continue scan
+            self._log('warning', f'SSL pinning detection failed: {e}. Assuming pinning present.')
+            ssl_pinning_detected = True
+        
+        # Step 2: Initialize MITM infrastructure (always needed)
+        self._update_progress("ssl_bypass", 17, "Initializing MITM infrastructure...")
+        await self._initialize_mitm_infrastructure()
+        
+        # Step 3: Only run Frida bypass if pinning was detected (or detection failed)
+        if ssl_pinning_detected and self.config.frida_bypass_enabled:
+            self._update_progress("ssl_bypass", 20, "Bypassing SSL pinning with Frida...")
+            
+            try:
+                from attacks.mobile.dynamic.frida_ssl_bypass import FridaSSLBypass
+                
+                self.frida_bypass = FridaSSLBypass()
+                self.frida_bypass.set_log_callback(self._log)
+                self.frida_bypass.set_request_callback(self._on_traffic_intercepted)
+                
+                # Connect to device
+                await self.frida_bypass.connect_device(self.config.device_id)
+                
+                if not self.context.package_name:
+                    self._log('warning', 'Could not determine package name, SSL bypass will attach after app launch')
+                    return True
+                
+                # Register Frida bridge as message handler
+                if self.frida_bridge and hasattr(self.frida_bypass, 'set_message_callback'):
+                    self.frida_bypass.set_message_callback(self.frida_bridge.on_frida_message)
+                    self._log('info', 'Frida request bridge connected')
+                
+                # Attach and bypass
+                result = await self.frida_bypass.attach_and_bypass(
+                    self.context.package_name,
+                    platform=self.context.platform,
+                    spawn=True
+                )
+                
+                if result.success:
+                    self._log('success', f'[!]   SSL bypass active: {len(result.libraries_bypassed)} libraries bypassed')
+                    
+                    # Start Frida bridge message processing
+                    if self.frida_bridge:
+                        asyncio.create_task(self.frida_bridge.start_listening())
+                        
+                    return True
+                else:
+                    self._log('warning', f'SSL bypass partial: {result.error}')
+                    return True  # Continue even if partial
+                    
+            except ImportError:
+                self._log('warning', 'Frida not available. SSL bypass disabled.')
+                return True
+            except Exception as e:
+                self._log('warning', f'SSL bypass failed: {e}')
+                return True  # Continue scan
+        else:
+            if not ssl_pinning_detected:
+                self._log('info', 'Skipping Frida bypass - no SSL pinning detected')
+            return True
     
     async def _phase_app_launch(self) -> bool:
         """Phase 3: Install and launch the app"""
@@ -1188,7 +1379,7 @@ class MobilePenTestOrchestrator:
             await self._run_legacy_api_attacks(authenticated)
     
     async def _run_legacy_api_attacks(self, authenticated: bool = False):
-        """Legacy: Run web-style attacks (fallback)"""
+        """Legacy: Run web-style attacks (fallback) + NEW sub-category scanners"""
         from attacks.web.pre_login import PreLoginAttacks
         
         # Convert mobile endpoints to web-style endpoints for attack modules
@@ -1242,22 +1433,74 @@ class MobilePenTestOrchestrator:
                 ))
         except Exception as e:
             self._log('warning', f'Legacy API attacks failed: {e}')
+        
+        # NEW: Run sub-category scanners (XSS reflected/stored/dom, SQLi variants, SSRF)
+        await self._run_subcategory_attacks(web_endpoints, attack_config, authenticated)
+    
+    async def _run_subcategory_attacks(self, endpoints: list, config: dict, authenticated: bool):
+        """Run NEW sub-category scanners for enhanced detection"""
+        try:
+            from attacks.scanner_adapter import SubCategoryScannerAdapter
+            
+            # Create a minimal context object for the scanners
+            class MobileAPIContext:
+                def __init__(self, target_url, endpoints):
+                    self.target_url = target_url
+                    self.crawl_results = [{'url': ep['url'], 'method': ep.get('method', 'GET')} for ep in endpoints]
+            
+            target = config.get('target', {}).get('url', '')
+            context = MobileAPIContext(target, endpoints)
+            
+            adapter = SubCategoryScannerAdapter(config, context)
+            findings = await adapter.run_all()
+            
+            for f in findings:
+                self.context.vulnerabilities.append(MobileVulnerability(
+                    id=f.id,
+                    category=f.category,
+                    severity=f.severity,
+                    title=f.title,
+                    description=f.description,
+                    affected_endpoint=f.url,
+                    method=f.method,
+                    parameter=f.parameter,
+                    evidence=f.evidence,
+                    poc=f.poc,
+                    cwe_id=f.cwe_id,
+                    scanner_module=f"SubCategory-{f.sub_type}"
+                ))
+            
+            if findings:
+                self._log('success', f'Sub-category scanners: {len(findings)} findings')
+                
+        except ImportError as e:
+            self._log('debug', f'Sub-category scanners not available: {e}')
+        except Exception as e:
+            self._log('warning', f'Sub-category attacks failed: {e}')
     
     
     async def _phase_authentication(self) -> bool:
-        """Phase 6: Authenticate to the app"""
+        """Phase 6: Authenticate to the app with Dashboard 2FA/OTP integration"""
         self._log('phase', '[*]    Phase 6: Authentication')
         self._update_progress("authentication", 60, "Authenticating...")
         
         if not self.config.auth_enabled:
+            self.context.auth_status = "not_required"
             return True
         
         try:
-            from attacks.mobile.utils.otp_handler import UsernamePasswordHandler, SecureOTPHandler
+            from attacks.mobile.utils.otp_handler import (
+                UsernamePasswordHandler, 
+                SecureOTPHandler,
+                OTPStatus,
+                AuthSessionStatus
+            )
             
             auth_type = self.config.auth_type
             
             if auth_type in ["email_password", "username_password"]:
+                # Standard password authentication
+                self.context.auth_status = "authenticating"
                 handler = UsernamePasswordHandler()
                 
                 session = await handler.login(
@@ -1268,24 +1511,273 @@ class MobilePenTestOrchestrator:
                 if session and session.status.value == 'authenticated':
                     self.context.authenticated = True
                     self.context.auth_tokens['session'] = session.token
-                    self._log('success', '[!]   Authentication successful')
+                    self.context.auth_status = "authenticated"
+                    self._log('success', '[!]   Password authentication successful')
+                    
+                    # Check if 2FA/OTP is also required
+                    if self.config.two_factor_enabled:
+                        self._log('info', f'2FA enabled ({self.config.two_factor_type}), waiting for OTP...')
+                        return await self._handle_otp_auth()
+                    
                     return True
                 else:
+                    self.context.auth_status = "failed"
                     self._log('error', 'Authentication failed')
                     return False
                     
             elif auth_type == "phone_otp":
-                # OTP flow requires user interaction
-                self._log('info', 'OTP authentication requires manual input')
-                return True
+                # OTP flow - requires dashboard interaction
+                return await self._handle_otp_auth()
+                
+            elif auth_type in ["google", "facebook", "apple"]:
+                # Social login - requires manual auth via dashboard
+                return await self._handle_social_auth(auth_type)
+            
+            elif auth_type == "manual":
+                # User will authenticate manually via dashboard
+                return await self._handle_manual_auth()
                 
             else:
                 self._log('warning', f'Unknown auth type: {auth_type}')
                 return False
                 
+        except ImportError as e:
+            self._log('error', f'Auth handler not available: {e}')
+            return False
         except Exception as e:
             self._log('error', f'Authentication failed: {e}')
+            self.context.auth_status = "failed"
             return False
+    
+    async def _handle_otp_auth(self) -> bool:
+        """Handle OTP-based authentication with dashboard polling"""
+        from attacks.mobile.utils.otp_handler import SecureOTPHandler, OTPStatus
+        import uuid
+        
+        otp_type = self.config.two_factor_type if self.config.two_factor_enabled else "sms"
+        otp_type_labels = {"sms": "SMS", "email": "Email", "authenticator": "Authenticator App"}
+        otp_label = otp_type_labels.get(otp_type, "OTP")
+        
+        self._log('info', f'OTP authentication ({otp_label}) - waiting for user input from dashboard...')
+        
+        # Generate OTP request ID
+        otp_request_id = f"otp_{uuid.uuid4().hex[:16]}"
+        self.context.otp_request_id = otp_request_id
+        
+        # Update status to notify dashboard
+        self.context.auth_status = "waiting_for_otp"
+        self._update_progress("authentication", 62, f"Waiting for {otp_label} code from dashboard...")
+        
+        # Notify via callback that OTP is needed
+        if self._log_callback:
+            message = f"Please enter the OTP code from your {otp_label}"
+            if otp_type == "sms":
+                message = f"Please enter the OTP sent to {self.config.phone or 'your phone'}"
+            elif otp_type == "email":
+                message = f"Please enter the OTP sent to your email"
+            elif otp_type == "authenticator":
+                message = "Please enter the code from your authenticator app"
+                
+            self._log('auth_required', json.dumps({
+                "type": "otp",
+                "otp_type": otp_type,
+                "request_id": otp_request_id,
+                "phone": self.config.phone or "",
+                "message": message,
+                "timeout": 180  # 3 minutes as promised in UI
+            }))
+        
+        # Initialize OTP handler
+        otp_handler = SecureOTPHandler(self.config.__dict__)
+        
+        # Poll for OTP from dashboard (via scan status endpoint)
+        max_wait = 180  # 3 minutes timeout (as promised in UI)
+        poll_interval = 2  # seconds
+        elapsed = 0
+        
+        while elapsed < max_wait and self._running:
+            # Check if OTP was provided via API
+            otp_value = await self._check_for_otp_input(otp_request_id)
+            
+            if otp_value:
+                self._log('info', 'OTP received, verifying...')
+                self.context.auth_status = "verifying_otp"
+                
+                # Verify OTP with customer's backend
+                verify_url = self.config.__dict__.get('otp_verify_url', '')
+                if not verify_url:
+                    # Try to discover verify endpoint from captured traffic
+                    verify_url = self._find_otp_verify_endpoint()
+                
+                if verify_url:
+                    session = await otp_handler.verify_otp(
+                        request_id=otp_request_id,
+                        otp_value=otp_value,  # Used once then discarded
+                        phone_number=self.config.phone,
+                        verify_api_url=verify_url
+                    )
+                    
+                    if session.status.value == 'authenticated':
+                        self.context.authenticated = True
+                        self.context.auth_tokens['session'] = session.access_token
+                        self.context.auth_status = "authenticated"
+                        self._log('success', '[!]   OTP authentication successful')
+                        await otp_handler.close()
+                        return True
+                    else:
+                        self._log('warning', 'OTP verification failed')
+                        # Allow retry
+                        self.context.auth_status = "waiting_for_otp"
+                        elapsed = 0  # Reset timer for retry
+                else:
+                    self._log('warning', 'OTP verify endpoint not configured')
+            
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            
+            # Update progress
+            remaining = max_wait - elapsed
+            self._update_progress("authentication", 62, f"Waiting for OTP ({remaining}s remaining)...")
+        
+        # Timeout
+        self._log('warning', 'OTP authentication timed out')
+        self.context.auth_status = "timeout"
+        await otp_handler.close()
+        return False
+    
+    async def _handle_social_auth(self, provider: str) -> bool:
+        """Handle social login (Google/Facebook/Apple) via dashboard"""
+        import uuid
+        
+        self._log('info', f'{provider.title()} login - waiting for manual authentication...')
+        
+        # Generate auth request ID
+        auth_request_id = f"social_{uuid.uuid4().hex[:16]}"
+        self.context.otp_request_id = auth_request_id
+        
+        # Update status to notify dashboard
+        self.context.auth_status = "waiting_for_manual_auth"
+        self._update_progress("authentication", 62, f"Waiting for {provider} login from dashboard...")
+        
+        # Notify via callback that manual auth is needed
+        if self._log_callback:
+            self._log('auth_required', json.dumps({
+                "type": "social",
+                "provider": provider,
+                "request_id": auth_request_id,
+                "message": f"Please complete {provider.title()} login on the device/emulator",
+                "timeout": 180
+            }))
+        
+        # Poll for auth completion
+        max_wait = 180  # 3 minutes for social login
+        poll_interval = 3
+        elapsed = 0
+        
+        while elapsed < max_wait and self._running:
+            # Check if auth was completed (tokens captured by Frida)
+            if self.context.auth_tokens.get('bearer') or self.context.auth_tokens.get('session'):
+                self.context.authenticated = True
+                self.context.auth_status = "authenticated"
+                self._log('success', f'[!]   {provider.title()} authentication successful')
+                return True
+            
+            # Also check for dashboard confirmation
+            auth_confirmed = await self._check_for_auth_confirmation(auth_request_id)
+            if auth_confirmed:
+                self.context.authenticated = True
+                self.context.auth_status = "authenticated"
+                self._log('success', f'[!]   {provider.title()} authentication confirmed')
+                return True
+            
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            
+            remaining = max_wait - elapsed
+            self._update_progress("authentication", 62, f"Waiting for {provider} login ({remaining}s)...")
+        
+        self._log('warning', f'{provider.title()} authentication timed out')
+        self.context.auth_status = "timeout"
+        return False
+    
+    async def _handle_manual_auth(self) -> bool:
+        """Handle fully manual authentication via dashboard"""
+        import uuid
+        
+        self._log('info', 'Manual authentication mode - waiting for user to login via dashboard...')
+        
+        auth_request_id = f"manual_{uuid.uuid4().hex[:16]}"
+        self.context.otp_request_id = auth_request_id
+        
+        self.context.auth_status = "waiting_for_manual_auth"
+        self._update_progress("authentication", 62, "Waiting for manual login from dashboard...")
+        
+        if self._log_callback:
+            self._log('auth_required', json.dumps({
+                "type": "manual",
+                "request_id": auth_request_id,
+                "message": "Please complete login on the device and click 'Continue' when done",
+                "timeout": 300
+            }))
+        
+        max_wait = 300  # 5 minutes for manual auth
+        poll_interval = 3
+        elapsed = 0
+        
+        while elapsed < max_wait and self._running:
+            # Check for captured auth tokens from traffic
+            if self.context.auth_tokens.get('bearer') or self.context.auth_tokens.get('session'):
+                self.context.authenticated = True
+                self.context.auth_status = "authenticated"
+                self._log('success', '[!]   Authentication tokens captured - session active')
+                return True
+            
+            # Check for dashboard confirmation
+            auth_confirmed = await self._check_for_auth_confirmation(auth_request_id)
+            if auth_confirmed:
+                self.context.authenticated = True
+                self.context.auth_status = "authenticated"
+                self._log('success', '[!]   Manual authentication confirmed')
+                return True
+            
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        
+        self._log('warning', 'Manual authentication timed out')
+        self.context.auth_status = "timeout"
+        return False
+    
+    async def _check_for_otp_input(self, request_id: str) -> Optional[str]:
+        """Check if OTP was provided via API endpoint"""
+        # This would be implemented by checking a shared state or API
+        # The frontend submits OTP to /api/mobile/auth/submit-otp
+        # which stores it temporarily for this request_id
+        try:
+            from services.mobile_service import get_pending_otp
+            otp = await get_pending_otp(request_id)
+            return otp
+        except:
+            return None
+    
+    async def _check_for_auth_confirmation(self, request_id: str) -> bool:
+        """Check if auth was confirmed via dashboard"""
+        try:
+            from services.mobile_service import get_auth_confirmation
+            return await get_auth_confirmation(request_id)
+        except:
+            return False
+    
+    def _find_otp_verify_endpoint(self) -> Optional[str]:
+        """Find OTP verify endpoint from captured traffic patterns"""
+        # Search captured endpoints for common OTP verify patterns
+        otp_patterns = ['/verify', '/otp', '/auth/verify', '/login/verify']
+        
+        for endpoint in self.context.endpoints:
+            for pattern in otp_patterns:
+                if pattern in endpoint.path.lower() and endpoint.method == 'POST':
+                    return endpoint.url
+        
+        return None
     
     async def _phase_post_auth_attacks(self) -> bool:
         """Phase 7: Run attacks on authenticated endpoints"""

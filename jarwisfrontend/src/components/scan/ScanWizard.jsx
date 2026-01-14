@@ -938,7 +938,7 @@ const WebAuthStep = ({ formData, setFormData, isDarkMode }) => {
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           { id: 'email', name: 'Email OTP', icon: '📧' },
-                          { id: 'sms', name: 'SMS OTP', icon: MessageSquare },
+                          { id: 'sms', name: 'SMS OTP', icon: '📱' },
                           { id: 'authenticator', name: 'Authenticator', icon: '🔐' },
                         ].map((type) => (
                           <button

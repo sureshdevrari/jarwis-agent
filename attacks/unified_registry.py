@@ -148,6 +148,71 @@ class UnifiedScannerRegistry:
                 description="APK/IPA static analysis",
                 required=True
             ),
+            # Mobile API Attack Scanners
+            ScannerInfo(
+                name="MobileSQLiScanner",
+                module_path="attacks.mobile.api.mobile_sqli_scanner",
+                class_name="MobileSQLiScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile SQL injection scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileXSSScanner",
+                module_path="attacks.mobile.api.mobile_xss_scanner",
+                class_name="MobileXSSScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile XSS scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileIDORScanner",
+                module_path="attacks.mobile.api.mobile_idor_scanner",
+                class_name="MobileIDORScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile IDOR scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileNoSQLScanner",
+                module_path="attacks.mobile.api.mobile_nosql_scanner",
+                class_name="MobileNoSQLScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile NoSQL injection scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileCommandInjectionScanner",
+                module_path="attacks.mobile.api.mobile_cmdi_scanner",
+                class_name="MobileCommandInjectionScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile OS command injection scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileSSTIScanner",
+                module_path="attacks.mobile.api.mobile_ssti_scanner",
+                class_name="MobileSSTIScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile SSTI scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileXXEScanner",
+                module_path="attacks.mobile.api.mobile_xxe_scanner",
+                class_name="MobileXXEScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile XXE scanner",
+                required=False
+            ),
+            ScannerInfo(
+                name="MobileSSRFScanner",
+                module_path="attacks.mobile.api.mobile_ssrf_scanner",
+                class_name="MobileSSRFScanner",
+                scan_type=ScanType.MOBILE,
+                description="Mobile SSRF scanner",
+                required=False
+            ),
         ],
         ScanType.NETWORK: [
             ScannerInfo(

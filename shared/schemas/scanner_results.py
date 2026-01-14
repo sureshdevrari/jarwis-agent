@@ -46,6 +46,15 @@ class ScanStatus(str, Enum):
     WAITING_FOR_OTP = "waiting_for_otp"
 
 
+class VerificationStatus(str, Enum):
+    """Finding verification status"""
+    PENDING = "pending"          # Not yet verified
+    VERIFIED = "verified"        # AI confirmed as real vulnerability
+    UNVERIFIED = "unverified"    # AI verification failed/unavailable - needs manual review
+    FALSE_POSITIVE = "false_positive"  # AI determined this is not a real vulnerability
+    MANUAL_REVIEW = "manual_review"    # Requires human verification
+
+
 # ============== Base Finding Schema ==============
 
 class BaseFinding(BaseModel):
@@ -65,6 +74,7 @@ class BaseFinding(BaseModel):
     
     # Vulnerability metadata for reporting
     attack_type: Optional[str] = Field(None, description="Attack type key (e.g., sqli, xss)")
+    sub_type: Optional[str] = Field(None, description="Attack sub-type (e.g., reflected, stored, error_based)")
     impact: Optional[str] = Field(None, description="Business/technical impact of vulnerability")
     disclosure_days: Optional[int] = Field(None, description="Days to responsible disclosure deadline")
     compliance_refs: List[str] = Field(
@@ -75,6 +85,20 @@ class BaseFinding(BaseModel):
     # PoC request/response data
     request_data: Optional[str] = Field(None, description="Full HTTP request that triggered the vulnerability")
     response_data: Optional[str] = Field(None, description="Response snippet proving exploitation")
+    
+    # Verification status
+    verification_status: VerificationStatus = Field(
+        default=VerificationStatus.PENDING,
+        description="AI verification status - pending, verified, unverified, or false_positive"
+    )
+    verification_confidence: Optional[float] = Field(
+        None, ge=0.0, le=1.0, 
+        description="AI verification confidence score (0.0 to 1.0)"
+    )
+    verification_reasoning: Optional[str] = Field(
+        None, 
+        description="AI's reasoning for verification decision"
+    )
     
     # Metadata
     discovered_at: Optional[str] = Field(None, description="ISO timestamp")

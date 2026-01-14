@@ -45,6 +45,7 @@ class ScanResult:
     request_data: str = ""  # Full request details
     response_snippet: str = ""  # Relevant response snippet
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    verification_status: str = "pending"  # pending, verified, unverified, false_positive
 
 
 @dataclass
@@ -455,14 +456,25 @@ class PenTestRunner:
             
             if verifier.is_available:
                 verified_findings = []
+                unverified_findings = []  # Track findings that couldn't be verified
+                
                 for finding in findings:
                     finding_dict = finding.__dict__ if hasattr(finding, '__dict__') else finding
                     result = await verifier.verify_finding(finding_dict)
                     
-                    if result.is_verified:
+                    # Check if verification actually happened or failed
+                    if result.needs_manual_review:
+                        # Verification failed - mark finding as unverified
+                        if hasattr(finding, 'reasoning'):
+                            finding.reasoning += f"\n\n[⚠️ UNVERIFIED - MANUAL REVIEW REQUIRED] {result.reasoning}"
+                        if hasattr(finding, 'verification_status'):
+                            finding.verification_status = 'unverified'
+                        unverified_findings.append(finding)
+                        console.print(f"[yellow]  [!] Verification failed for: {finding_dict.get('title', 'Unknown')} - needs manual review[/yellow]")
+                    elif result.is_verified:
                         # Update finding with verification info
                         if hasattr(finding, 'reasoning'):
-                            finding.reasoning += f"\n\n[AI Verified: {result.confidence:.0%} confidence] {result.reasoning}"
+                            finding.reasoning += f"\n\n[✓ AI Verified: {result.confidence:.0%} confidence] {result.reasoning}"
                         verified_findings.append(finding)
                         
                         # Adjust severity if recommended
@@ -479,10 +491,23 @@ class PenTestRunner:
                     else:
                         console.print(f"[dim]  [OK]  Filtered false positive: {finding_dict.get('title', 'Unknown')}[/dim]")
                 
-                console.print(f"[dim]  Verified {len(verified_findings)}/{len(findings)} findings[/dim]")
-                findings = verified_findings
+                # Report verification status
+                console.print(f"[dim]  Verified: {len(verified_findings)}, Unverified: {len(unverified_findings)}, Filtered: {len(findings) - len(verified_findings) - len(unverified_findings)}[/dim]")
+                
+                # Include unverified findings but mark them clearly
+                findings = verified_findings + unverified_findings
+                
+                if unverified_findings:
+                    console.print(f"[yellow][!] {len(unverified_findings)} findings need manual verification due to AI unavailability[/yellow]")
             else:
-                console.print("[dim]  AI verification unavailable, keeping all findings[/dim]")
+                # AI completely unavailable - mark ALL findings as unverified
+                console.print("[red][!] AI verification unavailable - ALL findings marked as UNVERIFIED[/red]")
+                console.print("[yellow]    Manual review is REQUIRED for all findings[/yellow]")
+                for finding in findings:
+                    if hasattr(finding, 'reasoning'):
+                        finding.reasoning += "\n\n[⚠️ UNVERIFIED - AI UNAVAILABLE] Manual review required - this finding has not been validated"
+                    if hasattr(finding, 'verification_status'):
+                        finding.verification_status = 'unverified'
         
         self.context.findings.extend(findings)
         
@@ -711,6 +736,7 @@ class PenTestRunner:
         
         # Filter and update findings based on AI verification
         valid_findings = []
+        unverified_findings = []
         removed_count = 0
         adjusted_count = 0
         
@@ -720,13 +746,21 @@ class PenTestRunner:
             
             is_valid = verification.get('is_valid', True)
             confidence = verification.get('confidence', 0.5)
+            needs_manual_review = verification.get('needs_manual_review', False)
+            verification_status = verification.get('verification_status', 'verified')
             adjusted_severity = verification.get('adjusted_severity', getattr(finding, 'severity', 'medium'))
             reasoning = verification.get('reasoning', '')
             
-            if is_valid and confidence >= 0.4:  # Accept if confidence >= 40%
+            # Handle unverified findings (AI failed)
+            if needs_manual_review or verification_status == 'failed':
+                if hasattr(finding, 'reasoning'):
+                    finding.reasoning = f"⚠️ UNVERIFIED - MANUAL REVIEW REQUIRED: {reasoning}"
+                unverified_findings.append(finding)
+                console.print(f"[yellow]  [!] Verification failed: {getattr(finding, 'title', 'Finding')} - needs manual review[/yellow]")
+            elif is_valid and confidence >= 0.5:  # Raised threshold from 40% to 50%
                 # Update finding with Jarwis verification data
                 if hasattr(finding, 'reasoning'):
-                    finding.reasoning = f"JARWIS VERIFIED ({confidence*100:.0f}% confidence): {reasoning}"
+                    finding.reasoning = f"✓ JARWIS VERIFIED ({confidence*100:.0f}% confidence): {reasoning}"
                 if hasattr(finding, 'severity') and adjusted_severity != finding.severity:
                     old_sev = finding.severity
                     finding.severity = adjusted_severity
@@ -738,13 +772,20 @@ class PenTestRunner:
                 removed_count += 1
                 logger.info(f"Removed false positive: {getattr(finding, 'title', 'Finding')} (confidence: {confidence*100:.0f}%)")
         
+        # Include unverified findings but clearly marked
+        all_findings = valid_findings + unverified_findings
+        
         # Update context with verified findings
-        self.context.findings = valid_findings
+        self.context.findings = all_findings
         
         console.print(f"[green][OK]  Verification complete:[/green]")
-        console.print(f"  [OK]  Valid findings: {len(valid_findings)}")
+        console.print(f"  [OK]  Verified findings: {len(valid_findings)}")
+        console.print(f"  [yellow][!] Unverified (need manual review): {len(unverified_findings)}[/yellow]")
         console.print(f"  [OK]  Removed false positives: {removed_count}")
         console.print(f"  [OK]  Severity adjustments: {adjusted_count}")
+        
+        if unverified_findings:
+            console.print(f"[bold yellow][!] WARNING: {len(unverified_findings)} findings require MANUAL VERIFICATION[/bold yellow]")
         
         # Store verified results for report generation
         self._verified_results = verified_results

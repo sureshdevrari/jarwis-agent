@@ -56,6 +56,23 @@ try:
 except ImportError:
     HAS_MANUAL_AUTH_SERVICE = False
 
+# Import OTP service for 2FA handling
+try:
+    from services.otp_service import (
+        otp_service,
+        set_scan_waiting_for_otp,
+        wait_for_otp as otp_wait_for_otp,
+        set_otp_error,
+        clear_scan_otp_state,
+        reset_otp_for_retry,
+        OTP_TIMEOUT_SECONDS,
+        OTP_TIMEOUT_MESSAGE,
+        OTP_INVALID_MESSAGE
+    )
+    HAS_OTP_SERVICE = True
+except ImportError:
+    HAS_OTP_SERVICE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -625,12 +642,24 @@ class WebScanRunner:
                 await self.browser.goto(url)
                 await asyncio.sleep(0.3)  # Wait for dynamic content
                 
+                # CRITICAL: Process MITM traffic in real-time to populate RequestStore immediately
+                # This ensures we capture full request/response data as we browse
+                if self.mitm_proxy:
+                    processed = self.mitm_proxy.process_new_traffic()
+                    if processed > 0:
+                        logger.debug(f"Processed {processed} new traffic entries from MITM")
+                
                 # Update progress every 5 URLs
                 if idx % 5 == 0 and idx > 0:
                     progress = 18 + int((idx / min(total_urls, 20)) * 2)  # Scale to 18-20%
                     await self._update_status("running", progress, f"Captured {idx}/{min(total_urls, 20)} pages")
             except Exception as e:
                 logger.debug(f"Failed to visit {url}: {e}")
+        
+        # Final MITM traffic processing to capture any remaining traffic
+        if self.mitm_proxy:
+            final_processed = self.mitm_proxy.process_new_traffic()
+            logger.info(f"Final MITM processing: {final_processed} additional traffic entries captured")
         
         await self._update_status("running", 20, f"Crawl complete: {len(discovered_endpoints)} endpoints ready for scanning")
     
@@ -690,26 +719,243 @@ class WebScanRunner:
             logger.error(f"Login failed: {e}")
     
     async def _perform_form_login(self, auth: dict, login_url: str):
-        """Traditional username/password form login"""
+        """Traditional username/password form login with 2FA support.
+        
+        Enhanced flow for handling SPAs and sites where landing page == login page:
+        1. Navigate to login URL
+        2. Dismiss all popups/overlays (cookie banners, modals, etc.)
+        3. Check if login form is visible
+        4. If not visible, discover and click login trigger button/link
+        5. Auto-discover form selectors if not provided
+        6. Fill and submit the login form
+        7. Handle 2FA if configured
+        """
         
         logger.info(f"Attempting form login at {login_url}")
         
-        # Navigate to login page
+        # Step 1: Navigate to login page
         await self.browser.goto(login_url)
         await asyncio.sleep(1)
         
-        # Fill login form
+        # Step 2: Dismiss all popups/overlays before login attempt
+        await self.browser.dismiss_all_popups()
+        await asyncio.sleep(0.5)
+        
+        # Step 3: Check if login form is visible
+        form_visible = await self.browser.is_login_form_visible()
+        
+        # Step 4: If form not visible, try to discover and click login trigger
+        if not form_visible:
+            logger.info("Login form not immediately visible, searching for login trigger...")
+            trigger_clicked = await self.browser.discover_and_click_login_trigger()
+            
+            if trigger_clicked:
+                # Wait for form to appear and dismiss any new popups
+                await asyncio.sleep(1)
+                await self.browser.dismiss_all_popups()
+                form_visible = await self.browser.is_login_form_visible()
+            
+            if not form_visible:
+                logger.warning("Could not find or reveal login form - attempting with provided selectors anyway")
+        
+        # Step 5: Get selectors - use provided ones or auto-discover
+        selectors = auth.get('selectors', {})
+        username_selector = selectors.get('username')
+        password_selector = selectors.get('password')
+        submit_selector = selectors.get('submit')
+        
+        # Auto-discover selectors if not provided
+        if not username_selector or not password_selector:
+            logger.info("Auto-discovering login form selectors...")
+            discovered = await self.browser.find_login_form_elements()
+            
+            if not username_selector and discovered.get('username_field'):
+                username_selector = discovered['username_field']
+                logger.info(f"Discovered username selector: {username_selector}")
+            
+            if not password_selector and discovered.get('password_field'):
+                password_selector = discovered['password_field']
+                logger.info(f"Discovered password selector: {password_selector}")
+            
+            if not submit_selector and discovered.get('submit_button'):
+                submit_selector = discovered['submit_button']
+                logger.info(f"Discovered submit selector: {submit_selector}")
+        
+        # Validate we have minimum required selectors
+        if not username_selector or not password_selector:
+            raise Exception("Could not determine login form selectors. Please provide them manually.")
+        
+        # Default submit selector if still not found
+        if not submit_selector:
+            submit_selector = 'button[type="submit"]'
+            logger.debug(f"Using default submit selector: {submit_selector}")
+        
+        # Step 6: Fill login form
         await self.browser.fill_form({
-            auth['selectors']['username']: auth['username'],
-            auth['selectors']['password']: auth['password']
+            username_selector: auth['username'],
+            password_selector: auth['password']
         })
         
         # Submit
-        await self.browser.click(auth['selectors']['submit'])
+        await self.browser.click(submit_selector)
         await asyncio.sleep(2)  # Wait for redirect
+        
+        # Step 7: Check if 2FA is enabled and handle it
+        # 2FA config can be at auth['two_factor'] or config['two_factor']
+        two_factor_config = auth.get('two_factor') or self.config.get('two_factor', {})
+        if two_factor_config.get('enabled') and HAS_OTP_SERVICE:
+            await self._handle_2fa_after_login(two_factor_config)
         
         # Check if login successful
         await self._verify_and_store_session()
+    
+    async def _handle_2fa_after_login(self, two_factor_config: dict):
+        """Handle 2FA/OTP verification after initial login form submission
+        
+        IMPORTANT: During OTP wait, we DO NOT make any requests to the target site
+        to avoid rate limiting. We only poll our own backend for the OTP code.
+        """
+        
+        logger.info(f"Checking for 2FA page (2FA enabled: type={two_factor_config.get('type')})")
+        
+        # Check if we landed on a 2FA page
+        is_2fa_page = await self.browser._detect_2fa_page()
+        
+        if not is_2fa_page:
+            logger.info("No 2FA page detected after login - proceeding with scan")
+            return
+        
+        logger.info("2FA page detected - pausing all target requests while waiting for OTP")
+        
+        otp_type = two_factor_config.get('type', 'sms')
+        contact = two_factor_config.get('email') or two_factor_config.get('phone') or ''
+        
+        # Set scan as waiting for OTP and notify frontend
+        set_scan_waiting_for_otp(self.scan_id, otp_type, contact, timeout_seconds=OTP_TIMEOUT_SECONDS)
+        await self._update_status('waiting_for_otp', 15, f'Waiting for {otp_type.upper()} OTP code')
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            # Wait for user to provide OTP (blocks for up to 3 minutes)
+            # CRITICAL: During this wait, we only poll our own OTP service
+            # NO requests are made to the target site to avoid rate limiting
+            otp = await otp_wait_for_otp(
+                scan_id=self.scan_id,
+                timeout=OTP_TIMEOUT_SECONDS,
+                poll_interval=2.0  # Poll our backend every 2 seconds (not target!)
+            )
+            
+            if not otp:
+                # Timeout or max attempts - fail the scan
+                error_msg = OTP_TIMEOUT_MESSAGE
+                logger.error(f"2FA failed: {error_msg}")
+                await self._update_status('error', 15, error_msg)
+                raise Exception(error_msg)
+            
+            logger.info(f"OTP received, attempting to enter code (attempt {attempt + 1}/{max_attempts})")
+            
+            # Find and fill the OTP input
+            otp_selector = await self.browser._find_otp_input()
+            if not otp_selector:
+                error_msg = "Could not find OTP input field on target website"
+                set_otp_error(self.scan_id, error_msg)
+                logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            # Enter the OTP
+            await self.browser._page_fill(otp_selector, otp)
+            await asyncio.sleep(0.5)
+            
+            # Submit the OTP
+            submitted = await self._submit_otp_form()
+            if not submitted:
+                # Try pressing Enter as fallback
+                await self.browser._page_press(otp_selector, 'Enter')
+            
+            await asyncio.sleep(2)  # Wait for response
+            
+            # Check if OTP was valid (still on 2FA page = invalid)
+            still_on_2fa = await self.browser._detect_2fa_page()
+            has_error = await self._check_for_otp_error()
+            
+            if still_on_2fa or has_error:
+                if attempt < max_attempts - 1:
+                    # Wrong OTP - allow retry
+                    error_msg = OTP_INVALID_MESSAGE
+                    logger.warning(f"OTP attempt {attempt + 1} failed - waiting for new code")
+                    reset_otp_for_retry(self.scan_id, error_msg)
+                    await self._update_status('waiting_for_otp', 15, f'Invalid OTP - please enter new code (attempt {attempt + 2}/{max_attempts})')
+                    continue
+                else:
+                    # Max attempts reached
+                    error_msg = "Maximum OTP attempts exceeded. Please restart the scan."
+                    set_otp_error(self.scan_id, error_msg)
+                    logger.error(error_msg)
+                    await self._update_status('error', 15, error_msg)
+                    raise Exception(error_msg)
+            
+            # OTP verified successfully
+            logger.info("2FA verification successful!")
+            clear_scan_otp_state(self.scan_id)
+            await self._update_status('running', 20, '2FA verification complete - resuming scan')
+            return
+        
+        # Should not reach here, but handle just in case
+        raise Exception("2FA verification failed after all attempts")
+    
+    async def _submit_otp_form(self) -> bool:
+        """Try to submit the OTP form by clicking a submit button"""
+        submit_selectors = [
+            'button[type="submit"]',
+            'button:has-text("Verify")',
+            'button:has-text("Submit")',
+            'button:has-text("Continue")',
+            'button:has-text("Confirm")',
+            'button:has-text("Next")',
+            'input[type="submit"]',
+            '#verify-btn',
+            '#submit-otp',
+            '.otp-submit',
+        ]
+        
+        for selector in submit_selectors:
+            try:
+                btn = await self.browser._page_query_selector(selector)
+                if btn and await self.browser._element_is_visible(btn):
+                    await self.browser._element_click(btn)
+                    logger.info(f"Clicked OTP submit button: {selector}")
+                    return True
+            except:
+                continue
+        
+        return False
+    
+    async def _check_for_otp_error(self) -> bool:
+        """Check if the page shows an OTP error message"""
+        error_selectors = [
+            '.error',
+            '.alert-danger',
+            '.error-message',
+            '[role="alert"]',
+            '.invalid-feedback',
+            '.text-danger',
+            '.otp-error',
+        ]
+        
+        for selector in error_selectors:
+            try:
+                element = await self.browser._page_query_selector(selector)
+                if element and await self.browser._element_is_visible(element):
+                    error_text = await self.browser._element_text_content(element)
+                    if error_text:
+                        error_lower = error_text.lower()
+                        if any(word in error_lower for word in ['invalid', 'incorrect', 'expired', 'wrong', 'error', 'failed']):
+                            logger.warning(f"OTP error detected: {error_text.strip()}")
+                            return True
+            except:
+                continue
+        
+        return False
     
     async def _perform_manual_session_auth(self, auth: dict):
         """Inject pre-captured session cookie/token"""
@@ -931,28 +1177,61 @@ class WebScanRunner:
         logger.info(f"Added {endpoints_added} post-login endpoints to RequestStore")
         
         # Visit key URLs and interact with forms
-        for url in discovered_urls[:30]:  # Limit to top 30 for authenticated crawl
+        # ENHANCED: Removed artificial 30 URL limit - now uses config-based limits
+        max_urls_to_visit = self.config.get('crawl', {}).get('max_form_urls', 100)
+        max_forms_per_page = self.config.get('crawl', {}).get('max_forms_per_page', 10)
+        
+        for url in discovered_urls[:max_urls_to_visit]:
             try:
                 await self.browser.goto(url)
                 await asyncio.sleep(0.5)
                 
+                # CRITICAL: Process MITM traffic in real-time to capture authenticated requests
+                if self.mitm_proxy:
+                    processed = self.mitm_proxy.process_new_traffic()
+                    if processed > 0:
+                        logger.debug(f"Post-login: Processed {processed} new traffic entries from MITM")
+                
                 # Look for forms and interact with them
                 forms = await self.browser.find_forms()
                 
-                for form in forms[:3]:  # Limit forms per page
+                for form in forms[:max_forms_per_page]:
                     await self._interact_with_form(form)
+                    
+                    # Process MITM traffic after form interaction to capture POST data
+                    if self.mitm_proxy:
+                        self.mitm_proxy.process_new_traffic()
                     
             except Exception as e:
                 logger.debug(f"Failed to visit {url}: {e}")
+        
+        # Final MITM traffic processing for post-login phase
+        if self.mitm_proxy:
+            final_processed = self.mitm_proxy.process_new_traffic()
+            logger.info(f"Post-login MITM processing complete: {final_processed} additional entries")
     
     async def _interact_with_form(self, form: dict):
         """
         Interact with a form to capture POST request.
-        Fill with random/test data and submit.
+        Fill with intelligent test data and submit.
+        
+        ENHANCED: Now uses FormFiller for contextual test data generation.
         """
+        # Import FormFiller for intelligent data generation
+        try:
+            from .form_filler import FormFiller
+            form_filler = FormFiller()
+        except ImportError:
+            form_filler = None
         
         form_inputs = form.get('inputs', [])
         form_action = form.get('action', '')
+        
+        # Skip dangerous forms
+        dangerous_patterns = ['logout', 'signout', 'delete', 'remove', 'cancel']
+        if any(pattern in form_action.lower() for pattern in dangerous_patterns):
+            logger.debug(f"Skipping dangerous form: {form_action}")
+            return
         
         # Generate test data for each input
         test_data = {}
@@ -964,17 +1243,27 @@ class WebScanRunner:
             if not selector or not input_name:
                 continue
             
-            # Generate appropriate test value
-            if input_type == 'email':
-                test_data[selector] = 'test@jarwis-scan.com'
-            elif input_type == 'password':
-                test_data[selector] = 'TestPassword123!'
-            elif input_type == 'number':
-                test_data[selector] = '12345'
-            elif input_type == 'tel':
-                test_data[selector] = '1234567890'
+            # Use FormFiller if available for intelligent data generation
+            if form_filler:
+                value = form_filler.generate_value(input_name, input_type)
+                if value:
+                    test_data[selector] = value
             else:
-                test_data[selector] = 'test_value'
+                # Fallback to basic type-based generation
+                if input_type == 'email':
+                    test_data[selector] = 'test@jarwis-scan.com'
+                elif input_type == 'password':
+                    test_data[selector] = 'TestPassword123!'
+                elif input_type == 'number':
+                    test_data[selector] = '12345'
+                elif input_type == 'tel':
+                    test_data[selector] = '1234567890'
+                elif input_type == 'date':
+                    test_data[selector] = '2025-01-15'
+                elif input_type == 'url':
+                    test_data[selector] = 'https://jarwis-test.com'
+                else:
+                    test_data[selector] = f'jarwis_test_{input_name}'
         
         # Fill and submit form
         try:

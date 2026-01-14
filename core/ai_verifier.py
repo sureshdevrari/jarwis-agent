@@ -33,6 +33,7 @@ class VerificationResult:
     false_positive_indicators: List[str]
     true_positive_indicators: List[str]
     recommended_action: str
+    needs_manual_review: bool = False  # True when AI verification was unavailable
 
 
 @dataclass
@@ -213,15 +214,16 @@ Respond in JSON format ONLY:
     async def verify_finding(self, finding: dict) -> VerificationResult:
         """Verify a vulnerability finding using AI"""
         if not self._available:
-            # Return unverified result if AI not available
+            # Return unverified result if AI not available - DO NOT assume true
             return VerificationResult(
-                is_verified=True,  # Assume true if can't verify
-                confidence=0.5,
-                reasoning="AI verification unavailable - manual review recommended",
+                is_verified=False,  # Never assume true without verification
+                confidence=0.0,
+                reasoning="AI verification unavailable - finding unverified, manual review required",
                 severity_adjustment="unchanged",
-                false_positive_indicators=[],
+                false_positive_indicators=["AI verification was not performed"],
                 true_positive_indicators=[],
-                recommended_action="Manually verify this finding"
+                recommended_action="MANUAL REVIEW REQUIRED: AI verification unavailable",
+                needs_manual_review=True
             )
         
         prompt = self.VERIFICATION_PROMPT.format(
@@ -251,13 +253,14 @@ Respond in JSON format ONLY:
             )
         
         return VerificationResult(
-            is_verified=True,
-            confidence=0.5,
-            reasoning="AI response parsing failed - manual review recommended",
+            is_verified=False,
+            confidence=0.0,
+            reasoning="AI response parsing failed - finding unverified, manual review required",
             severity_adjustment="unchanged",
-            false_positive_indicators=[],
+            false_positive_indicators=["AI verification parsing failed"],
             true_positive_indicators=[],
-            recommended_action="Manually verify this finding"
+            recommended_action="MANUAL REVIEW REQUIRED: AI response could not be parsed",
+            needs_manual_review=True
         )
     
     async def analyze_request(

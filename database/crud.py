@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Tuple
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -298,16 +298,16 @@ async def get_scan_findings(
     if category:
         query = query.where(Finding.category == category)
     
-    query = query.order_by(
-        # Order by severity
-        func.case(
-            (Finding.severity == "critical", 1),
-            (Finding.severity == "high", 2),
-            (Finding.severity == "medium", 3),
-            (Finding.severity == "low", 4),
-            else_=5
-        )
+    # Use case() expression for severity ordering
+    severity_order = case(
+        (Finding.severity == "critical", 1),
+        (Finding.severity == "high", 2),
+        (Finding.severity == "medium", 3),
+        (Finding.severity == "low", 4),
+        else_=5
     )
+    
+    query = query.order_by(severity_order)
     
     result = await db.execute(query)
     return result.scalars().all()
@@ -611,3 +611,23 @@ async def get_scan_diagnostics(
         "suggestions": suggestions,
         "can_retry": ScanStateMachine.is_retryable(scan.status)
     }
+
+
+# Module-level namespace for backwards compatibility
+# Allows: from database.crud import crud; crud.get_users(db)
+class _CrudNamespace:
+    """Namespace wrapper for all CRUD functions."""
+    get_users = staticmethod(get_users)
+    get_users_count = staticmethod(get_users_count)
+    update_user = staticmethod(update_user)
+    update_last_login = staticmethod(update_last_login)
+    delete_user = staticmethod(delete_user)
+    create_scan = staticmethod(create_scan)
+    get_scan_by_id = staticmethod(get_scan_by_id)
+    get_scan_by_uuid = staticmethod(get_scan_by_uuid)
+    get_user_scans = staticmethod(get_user_scans)
+    update_scan_status = staticmethod(update_scan_status)
+    delete_scan = staticmethod(delete_scan)
+
+
+crud = _CrudNamespace()

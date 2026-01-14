@@ -642,3 +642,7 @@ class CloudSecurityService:
             return {'content': json.dumps(findings, indent=2), 'mime_type': 'application/json'}
         
         return None
+
+
+# Backwards compatibility alias
+CloudService = CloudSecurityService

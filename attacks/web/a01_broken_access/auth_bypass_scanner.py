@@ -259,7 +259,9 @@ class AuthBypassScanner:
                     async with session.get(url, headers=headers, allow_redirects=False) as response:
                         if response.status == 200:
                             text = await response.text()
-                            if not self._is_error_page(text):
+                            # Use proper verification - not just "not error page"
+                            is_bypass, confidence, reason = self._verify_bypass(response.status, text, url)
+                            if is_bypass and confidence >= 0.7:
                                 self.results.append(ScanResult(
                                     id=f"AUTH-JWT-ALG-NONE-{len(self.results)}",
                                     category="A07:2021",
@@ -269,11 +271,11 @@ class AuthBypassScanner:
                                     url=url,
                                     method="GET",
                                     parameter="Authorization",
-                                    evidence=f"Forged token with alg:{alg} was accepted. Response status: {response.status}",
+                                    evidence=f"Forged token with alg:{alg} was accepted. Verification: {reason}. Confidence: {confidence:.0%}",
                                     remediation="Explicitly reject tokens with 'alg: none'. Use a whitelist of allowed algorithms.",
                                     cwe_id="CWE-287",
                                     poc=f"curl -H 'Authorization: Bearer {token}' {url}",
-                                    reasoning="JWT tokens without signature verification allow attackers to forge arbitrary tokens"
+                                    reasoning=f"JWT tokens without signature verification allow attackers to forge arbitrary tokens. {reason}"
                                 ))
                                 return  # Found vulnerability, no need to continue
                 except Exception as e:
@@ -303,7 +305,9 @@ class AuthBypassScanner:
                     async with session.get(url, headers=headers, allow_redirects=False) as response:
                         if response.status == 200:
                             text = await response.text()
-                            if not self._is_error_page(text):
+                            # Use proper verification
+                            is_bypass, confidence, reason = self._verify_bypass(response.status, text, url)
+                            if is_bypass and confidence >= 0.7:
                                 self.results.append(ScanResult(
                                     id=f"AUTH-JWT-WEAK-SECRET-{len(self.results)}",
                                     category="A07:2021",
@@ -313,11 +317,11 @@ class AuthBypassScanner:
                                     url=url,
                                     method="GET",
                                     parameter="Authorization",
-                                    evidence=f"Forged admin token signed with '{weak_secret}' was accepted",
+                                    evidence=f"Forged admin token signed with '{weak_secret}' was accepted. {reason}",
                                     remediation="Use a strong, randomly generated secret key of at least 256 bits. Store secrets securely.",
                                     cwe_id="CWE-521",
                                     poc=f"curl -H 'Authorization: Bearer {token}' {url}",
-                                    reasoning=f"JWT signed with weak secret '{weak_secret}' grants admin access"
+                                    reasoning=f"JWT signed with weak secret '{weak_secret}' grants admin access. {reason}"
                                 ))
                                 return
                 except Exception as e:
@@ -357,7 +361,9 @@ class AuthBypassScanner:
                     async with session.get(url, headers=headers, allow_redirects=False) as response:
                         if response.status == 200:
                             text = await response.text()
-                            if not self._is_error_page(text):
+                            # Use proper verification
+                            is_bypass, confidence, reason = self._verify_bypass(response.status, text, url)
+                            if is_bypass and confidence >= 0.7:
                                 self.results.append(ScanResult(
                                     id=f"AUTH-JWT-KEY-CONFUSION-{len(self.results)}",
                                     category="A07:2021",
@@ -367,11 +373,11 @@ class AuthBypassScanner:
                                     url=url,
                                     method="GET",
                                     parameter="Authorization",
-                                    evidence="Token with unusual signature was accepted",
+                                    evidence=f"Token with unusual signature was accepted. {reason}",
                                     remediation="Explicitly verify the expected algorithm. Never accept HS256 if RS256 is configured.",
                                     cwe_id="CWE-327",
                                     poc="Attack requires the server's public key to forge tokens",
-                                    reasoning="Algorithm confusion allows forging tokens with public key as HMAC secret"
+                                    reasoning=f"Algorithm confusion allows forging tokens with public key as HMAC secret. {reason}"
                                 ))
                                 return
                 except Exception as e:
@@ -447,7 +453,9 @@ class AuthBypassScanner:
                     async with session.get(url, headers=bypass_headers, allow_redirects=False) as response:
                         if response.status == 200:
                             text = await response.text()
-                            if not self._is_error_page(text):
+                            # Use proper verification instead of just checking for error page
+                            is_bypass, confidence, reason = self._verify_bypass(response.status, text, url)
+                            if is_bypass and confidence >= 0.7:
                                 header_name = list(bypass_headers.keys())[0]
                                 self.results.append(ScanResult(
                                     id=f"AUTH-HEADER-BYPASS-{len(self.results)}",
@@ -458,7 +466,7 @@ class AuthBypassScanner:
                                     url=url,
                                     method="GET",
                                     parameter=header_name,
-                                    evidence=f"Setting {header_name}: {list(bypass_headers.values())[0]} bypassed authentication",
+                                    evidence=f"Setting {header_name}: {list(bypass_headers.values())[0]} bypassed authentication. {reason}",
                                     remediation="Do not trust client-provided headers for authentication. Implement proper backend authentication.",
                                     cwe_id="CWE-290",
                                     poc=f"curl -H '{header_name}: {list(bypass_headers.values())[0]}' {url}",
@@ -722,6 +730,61 @@ class AuthBypassScanner:
         ]
         text_lower = text.lower()[:500]
         return any(err in text_lower for err in error_indicators)
+    
+    def _is_public_page(self, text: str) -> bool:
+        """Check if response is a public login/register page - NOT a bypass"""
+        public_indicators = [
+            'sign in', 'log in', 'login', 'sign up', 'register',
+            'forgot password', 'reset password', 'create account',
+            'enter your email', 'enter your password'
+        ]
+        text_lower = text.lower()[:2000]
+        matches = sum(1 for ind in public_indicators if ind in text_lower)
+        return matches >= 2  # At least 2 public page indicators
+    
+    def _has_authenticated_content(self, text: str) -> bool:
+        """Check if response contains actual authenticated/private content"""
+        import re
+        auth_patterns = [
+            r'"user_?id"\s*:\s*["\d]',
+            r'"account_?id"\s*:\s*["\d]',
+            r'"profile"\s*:\s*\{',
+            r'"balance"\s*:\s*[\d"]',
+            r'"transactions"\s*:\s*\[',
+            r'"orders"\s*:\s*\[',
+            r'"permissions"\s*:\s*\[',
+            r'"role"\s*:\s*"(admin|user)',
+            r'class="dashboard',
+            r'data-user-id=',
+        ]
+        for pattern in auth_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+        return False
+    
+    def _verify_bypass(self, status: int, text: str, url: str) -> tuple:
+        """
+        Verify if this is a real bypass or false positive.
+        Returns: (is_real_bypass, confidence, reason)
+        """
+        # If not 200, not a bypass
+        if status != 200:
+            return False, 0.0, f"Status {status} - not a bypass"
+        
+        # If error page, not a bypass
+        if self._is_error_page(text):
+            return False, 0.0, "Error page detected"
+        
+        # If public page (login form), NOT a bypass - this is the key fix!
+        if self._is_public_page(text):
+            return False, 0.0, "Response is a public login/register page - not a bypass"
+        
+        # Check for actual authenticated content
+        if self._has_authenticated_content(text):
+            return True, 0.85, "Authenticated content detected in response"
+        
+        # Just 200 without clear indicators - low confidence
+        return False, 0.3, "Status 200 but no clear authenticated content"
 
 
 # Export for scanner registration

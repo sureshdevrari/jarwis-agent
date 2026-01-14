@@ -17,11 +17,12 @@ import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Callable, Awaitable
 
-from attacks.sast.github_scanner import GitHubScanner
-from attacks.sast.gitlab_scanner import GitLabScanner
-from attacks.sast.secret_scanner import SecretScanner
-from attacks.sast.dependency_scanner import DependencyScanner
-from attacks.sast.code_analyzer import CodeAnalyzer
+# Import from correct paths (providers for SCM, analyzers for analysis)
+from attacks.sast.providers.github_scanner import GitHubScanner
+from attacks.sast.providers.gitlab_scanner import GitLabScanner
+from attacks.sast.analyzers.secret_scanner import SecretScanner
+from attacks.sast.analyzers.dependency_scanner import DependencyScanner
+from attacks.sast.analyzers.code_analyzer import CodeAnalyzer
 
 logger = logging.getLogger(__name__)
 

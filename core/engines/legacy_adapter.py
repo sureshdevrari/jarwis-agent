@@ -66,7 +66,7 @@ class LegacyEngineAdapter(ScanEngineAdapter):
             "class": "SASTScanRunner",
         },
         "mobile": {
-            "module": "attacks.mobile.mobile_orchestrator",
+            "module": "attacks.mobile.orchestration.mobile_orchestrator",
             "class": "MobilePenTestOrchestrator",
         },
     }

@@ -83,6 +83,11 @@ class AttackResponse:
     body_length: int = 0
     content_type: str = ""
     
+    # Request details for Burp-style evidence (what was actually sent)
+    request_url: str = ""  # The URL with payload injected
+    request_body: str = ""  # The body with payload injected
+    request_method: str = ""  # HTTP method used
+    
     timestamp: str = ""
     
     def __post_init__(self):
@@ -372,13 +377,17 @@ class JarwisHTTPClient:
                     except:
                         response_body = ""
                     
-                    # Create attack response
+                    # Create attack response with request details for Burp-style evidence
                     attack_response = AttackResponse(
                         attack_request_id=attack_id,
                         status_code=response.status,
                         headers=dict(response.headers),
                         body=response_body,
-                        response_time_ms=response_time_ms
+                        response_time_ms=response_time_ms,
+                        # Include the actual request sent for PoC evidence
+                        request_url=url,
+                        request_body=body or "",
+                        request_method=method.upper()
                     )
                     self._attack_responses[attack_id] = attack_response
                     

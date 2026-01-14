@@ -18,6 +18,14 @@ from dataclasses import dataclass, field
 logger = logging.getLogger(__name__)
 
 
+# Constants for OTP handling
+OTP_TIMEOUT_SECONDS = 180  # 3 minutes for user to enter OTP
+OTP_MAX_ATTEMPTS = 3
+OTP_TIMEOUT_MESSAGE = "OTP not provided within 3 minutes. Please restart the scan and try again."
+OTP_MAX_ATTEMPTS_MESSAGE = "Maximum OTP attempts exceeded. Please restart the scan with the correct OTP."
+OTP_INVALID_MESSAGE = "Invalid OTP code. Please check and try again."
+
+
 @dataclass
 class OTPState:
     """State for a single OTP session"""
@@ -27,12 +35,13 @@ class OTPState:
     otp_type: Optional[str] = None  # email, sms, authenticator
     otp_contact: Optional[str] = None  # masked email/phone
     waiting_since: Optional[str] = None
-    timeout_seconds: int = 300  # 5 minutes default
+    timeout_seconds: int = OTP_TIMEOUT_SECONDS  # 3 minutes default
     attempts: int = 0
-    max_attempts: int = 3
+    max_attempts: int = OTP_MAX_ATTEMPTS
     error_message: Optional[str] = None
     two_fa_enabled: bool = False
     two_fa_config: Optional[Dict[str, Any]] = None
+    needs_retry: bool = False  # True when OTP was wrong and needs new input
 
 
 class OTPService:
@@ -85,7 +94,7 @@ class OTPService:
         scan_id: str,
         otp_type: str,
         contact: str,
-        timeout_seconds: int = 300
+        timeout_seconds: int = OTP_TIMEOUT_SECONDS
     ) -> None:
         """
         Mark a scan as waiting for OTP.
@@ -127,12 +136,14 @@ class OTPService:
         """Get current OTP status for a scan"""
         state = self._get_state(scan_id)
         
-        # Check for timeout
+        # Check for timeout and calculate time remaining
         is_timed_out = False
+        time_remaining = state.timeout_seconds
         if state.waiting_since:
             waiting_since = datetime.fromisoformat(state.waiting_since)
             elapsed = (datetime.utcnow() - waiting_since).total_seconds()
             is_timed_out = elapsed > state.timeout_seconds
+            time_remaining = max(0, int(state.timeout_seconds - elapsed))
         
         return {
             "scan_id": scan_id,
@@ -141,10 +152,12 @@ class OTPService:
             "otp_contact": state.otp_contact,
             "waiting_since": state.waiting_since,
             "timeout_seconds": state.timeout_seconds,
+            "time_remaining": time_remaining,
             "attempts": state.attempts,
             "max_attempts": state.max_attempts,
             "is_timed_out": is_timed_out,
             "error_message": state.error_message,
+            "needs_retry": state.needs_retry,
         }
     
     def set_error(self, scan_id: str, error_message: str) -> None:
@@ -161,18 +174,19 @@ class OTPService:
         state.error_message = None
         logger.info(f"OTP state cleared for scan {scan_id}")
     
-    def reset_for_retry(self, scan_id: str) -> None:
-        """Reset OTP for retry (keeps waiting state, clears value)"""
+    def reset_for_retry(self, scan_id: str, error_message: str = None) -> None:
+        """Reset OTP for retry (keeps waiting state, clears value, signals retry needed)"""
         state = self._get_state(scan_id)
         state.otp_value = None
-        state.error_message = None
+        state.error_message = error_message or OTP_INVALID_MESSAGE
         state.waiting_since = datetime.utcnow().isoformat()
-        logger.info(f"OTP reset for retry on scan {scan_id}")
+        state.needs_retry = True
+        logger.info(f"OTP reset for retry on scan {scan_id} (attempt {state.attempts}/{state.max_attempts})")
     
     async def wait_for_otp(
         self,
         scan_id: str,
-        timeout: int = 300,
+        timeout: int = OTP_TIMEOUT_SECONDS,
         poll_interval: float = 1.0
     ) -> Optional[str]:
         """
@@ -181,7 +195,7 @@ class OTPService:
         
         Args:
             scan_id: The scan ID
-            timeout: Maximum wait time in seconds
+            timeout: Maximum wait time in seconds (default 180 = 3 minutes)
             poll_interval: How often to check for OTP
             
         Returns:
@@ -195,21 +209,22 @@ class OTPService:
             if state.otp_value:
                 otp = state.otp_value
                 state.otp_value = None  # Clear after reading
+                state.needs_retry = False
                 return otp
             
             # Check timeout
             elapsed = (datetime.utcnow() - start_time).total_seconds()
             if elapsed >= timeout:
-                logger.warning(f"OTP timeout for scan {scan_id}")
+                logger.warning(f"OTP timeout for scan {scan_id} after {timeout}s")
                 state.waiting_for_otp = False
-                state.error_message = "OTP timeout - no code submitted"
+                state.error_message = OTP_TIMEOUT_MESSAGE
                 return None
             
             # Check max attempts
             if state.attempts >= state.max_attempts:
                 logger.warning(f"Max OTP attempts reached for scan {scan_id}")
                 state.waiting_for_otp = False
-                state.error_message = "Maximum OTP attempts exceeded"
+                state.error_message = OTP_MAX_ATTEMPTS_MESSAGE
                 return None
             
             await asyncio.sleep(poll_interval)
@@ -262,7 +277,7 @@ def set_scan_waiting_for_otp(
     scan_id: str,
     otp_type: str,
     contact: str,
-    timeout_seconds: int = 300
+    timeout_seconds: int = OTP_TIMEOUT_SECONDS
 ) -> None:
     """Set scan waiting for OTP (backward compatible)"""
     otp_service.set_waiting(scan_id, otp_type, contact, timeout_seconds)
@@ -273,7 +288,7 @@ def submit_otp_for_scan(scan_id: str, otp: str) -> bool:
     return otp_service.submit_otp(scan_id, otp)
 
 
-async def wait_for_otp(scan_id: str, timeout: int = 300) -> Optional[str]:
+async def wait_for_otp(scan_id: str, timeout: int = OTP_TIMEOUT_SECONDS) -> Optional[str]:
     """Wait for OTP (backward compatible)"""
     return await otp_service.wait_for_otp(scan_id, timeout)
 
@@ -288,6 +303,6 @@ def clear_scan_otp_state(scan_id: str) -> None:
     otp_service.clear_state(scan_id)
 
 
-def reset_otp_for_retry(scan_id: str) -> None:
+def reset_otp_for_retry(scan_id: str, error_message: str = None) -> None:
     """Reset OTP for retry (backward compatible)"""
-    otp_service.reset_for_retry(scan_id)
+    otp_service.reset_for_retry(scan_id, error_message)

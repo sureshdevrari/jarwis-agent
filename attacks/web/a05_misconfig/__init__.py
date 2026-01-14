@@ -14,4 +14,15 @@ from .response_manipulation_scanner import ScanResult, CapturedResponse, Respons
 from .response_swap_scanner import ScanResult, AuthToken, TestCredentials, ResponseSwapScanner
 from .security_headers_scanner import ScanResult, SecurityHeadersScanner, CSPAnalyzer, CookieSecurityScanner
 
-__all__ = ['ScanResult', 'CORSScanner', 'CacheDeceptionScanner', 'ScanResult', 'Log4ShellScanner', 'Spring4ShellScanner', 'FrameworkScanner', 'ScanResult', 'HostHeaderInjectionScanner', 'CRLFInjectionScanner', 'ScanResult', 'HTTPParameterPollutionScanner', 'ScanResult', 'InformationDisclosureScanner', 'DirectoryListingScanner', 'ScanResult', 'MisconfigScanner', 'ScanResult', 'OpenRedirectScanner', 'ResponseManipulationAddon', 'ScanResult', 'CapturedResponse', 'ResponseManipulationScanner', 'ScanResult', 'AuthToken', 'TestCredentials', 'ResponseSwapScanner', 'ScanResult', 'SecurityHeadersScanner', 'CSPAnalyzer', 'CookieSecurityScanner']
+# NEW: PortSwigger-based enterprise scanners (MITM-based)
+from .cache_poisoning_scanner import WebCachePoisoningScannerV2, WebCachePoisoningScanner
+
+__all__ = [
+    'ScanResult', 'CORSScanner', 'CacheDeceptionScanner', 'Log4ShellScanner', 'Spring4ShellScanner',
+    'FrameworkScanner', 'HostHeaderInjectionScanner', 'CRLFInjectionScanner', 'HTTPParameterPollutionScanner',
+    'InformationDisclosureScanner', 'DirectoryListingScanner', 'MisconfigScanner', 'OpenRedirectScanner',
+    'ResponseManipulationAddon', 'CapturedResponse', 'ResponseManipulationScanner', 'AuthToken',
+    'TestCredentials', 'ResponseSwapScanner', 'SecurityHeadersScanner', 'CSPAnalyzer', 'CookieSecurityScanner',
+    # NEW PortSwigger-based enterprise scanners
+    'WebCachePoisoningScannerV2', 'WebCachePoisoningScanner',
+]

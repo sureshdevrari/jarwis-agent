@@ -569,8 +569,11 @@ class BaseAttackScanner(ABC):
             final_severity = severity or self._infer_severity(confidence)
             disclosure_days = get_disclosure_days(final_severity)
         
-        # Build full request data for PoC
-        request_data = self._build_request_data(request, payload)
+        # Build full request data for PoC - use the ACTUAL attack request sent, not original
+        # This is critical for Burp-style evidence showing exactly what triggered the vuln
+        injected_url = getattr(response, 'request_url', None) or request.url
+        injected_body = getattr(response, 'request_body', None) or request.body
+        request_data = self._build_request_data(request, payload, injected_url, injected_body)
         response_data = response.body[:2000] if response.body else ""
         
         return Finding(
@@ -603,27 +606,43 @@ class BaseAttackScanner(ABC):
             response_data=response_data
         )
     
-    def _build_request_data(self, request: StoredRequest, payload: str) -> str:
-        """Build full HTTP request string for PoC documentation."""
+    def _build_request_data(self, request: StoredRequest, payload: str, injected_url: str = None, injected_body: str = None) -> str:
+        """
+        Build full HTTP request string for PoC documentation.
+        Shows the ATTACK request with payload injected, not the original clean request.
+        This is critical for Burp Suite-style evidence in reports.
+        """
         try:
-            parsed = urlparse(request.url)
-            lines = [f"{request.method} {parsed.path or '/'} HTTP/1.1"]
+            # Use injected URL if provided, otherwise try to show payload in URL
+            url_to_use = injected_url or request.url
+            parsed = urlparse(url_to_use)
+            
+            # Build path with query string (may contain payload)
+            path_with_query = parsed.path or '/'
+            if parsed.query:
+                path_with_query += '?' + parsed.query
+            
+            lines = [f"{request.method} {path_with_query} HTTP/1.1"]
             lines.append(f"Host: {parsed.netloc}")
             
-            # Add headers
+            # Add headers (including any modified headers with payload)
             if request.headers:
                 for key, value in request.headers.items():
                     if key.lower() not in ['host', 'content-length']:
                         lines.append(f"{key}: {value}")
             
-            # Add blank line and body
+            # Add X-Jarwis-Payload header to clearly show what payload was used
+            lines.append(f"X-Jarwis-Payload: {payload}")
+            
+            # Add blank line and body (use injected body if provided)
             lines.append("")
-            if request.body:
-                lines.append(str(request.body))
+            body_to_use = injected_body or request.body
+            if body_to_use:
+                lines.append(str(body_to_use))
             
             return "\n".join(lines)
         except Exception:
-            return f"{request.method} {request.url}"
+            return f"{request.method} {request.url}\nPayload: {payload}"
     
     def _infer_severity(self, confidence: str) -> str:
         """Infer severity from confidence and attack type"""

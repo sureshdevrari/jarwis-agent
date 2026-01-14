@@ -420,16 +420,91 @@ class XSSScanner:
             logger.debug(f"DOM XSS check failed: {e}")
     
     def _is_executable_context(self, body: str, payload: str) -> bool:
-        """Check if payload is in an executable context"""
+        """
+        Check if payload is in an executable context.
+        This is CRITICAL for preventing false positives.
+        
+        A payload is NOT executable if it's:
+        - Inside a JSON response (escaped in string)
+        - Inside HTML comments (<!-- -->)
+        - Inside <script> but as a string literal
+        - Inside <textarea> or <input value="">
+        - URL-encoded or HTML-entity encoded
+        - In a response with Content-Type: application/json
+        """
         # Find payload position
         pos = body.find(payload)
         if pos == -1:
             return False
         
-        # Get surrounding context
-        start = max(0, pos - 100)
-        end = min(len(body), pos + len(payload) + 100)
+        # Get surrounding context (larger for better analysis)
+        start = max(0, pos - 200)
+        end = min(len(body), pos + len(payload) + 200)
         context = body[start:end]
+        before_payload = body[:pos]
+        
+        # ===== FALSE POSITIVE CHECKS (return False if in non-executable context) =====
+        
+        # Check 1: Inside HTML comments - NOT executable
+        last_comment_open = before_payload.rfind('<!--')
+        last_comment_close = before_payload.rfind('-->')
+        if last_comment_open > last_comment_close:
+            return False
+        
+        # Check 2: Inside JSON response - NOT executable
+        # Check if this looks like a JSON response
+        body_stripped = body.strip()
+        if body_stripped.startswith('{') or body_stripped.startswith('['):
+            # Likely JSON - payload in JSON strings is not executable
+            # Check if payload is inside quotes (JSON string)
+            if f'"{payload}"' in body or f"'{payload}'" in body:
+                return False
+            # Check for escaped version
+            escaped = payload.replace('<', '\\u003c').replace('>', '\\u003e')
+            if escaped in body:
+                return False
+        
+        # Check 3: Inside <textarea> - NOT executable
+        last_textarea_open = before_payload.lower().rfind('<textarea')
+        last_textarea_close = before_payload.lower().rfind('</textarea')
+        if last_textarea_open > last_textarea_close:
+            return False
+        
+        # Check 4: Inside <input value="..."> - NOT executable
+        # Find if we're inside an input tag's value attribute
+        if 'value="' in before_payload[-100:] or "value='" in before_payload[-100:]:
+            # Check if the value hasn't been closed
+            quote_char = '"' if 'value="' in before_payload[-100:] else "'"
+            value_start = before_payload.rfind(f'value={quote_char}')
+            if value_start != -1:
+                between = before_payload[value_start:]
+                # Count quotes to see if we're still inside
+                if between.count(quote_char) % 2 == 1:
+                    # We're inside a value attribute - check if payload breaks out
+                    if quote_char not in payload and '>' not in payload:
+                        return False
+        
+        # Check 5: Inside <script> but as a JavaScript string - NOT executable
+        last_script_open = before_payload.lower().rfind('<script')
+        last_script_close = before_payload.lower().rfind('</script')
+        if last_script_open > last_script_close:
+            # We're inside a script tag - check if payload is in a string
+            script_content = before_payload[last_script_open:]
+            # Count quotes to check if we're in a string
+            double_quotes = script_content.count('"') - script_content.count('\\"')
+            single_quotes = script_content.count("'") - script_content.count("\\'")
+            backticks = script_content.count('`')
+            if double_quotes % 2 == 1 or single_quotes % 2 == 1 or backticks % 2 == 1:
+                # We're inside a JS string - check if payload breaks out
+                if not any(c in payload for c in ['"', "'", '`', '\n']):
+                    return False
+        
+        # Check 6: HTML entity encoded - NOT executable
+        html_encoded_payload = payload.replace('<', '&lt;').replace('>', '&gt;')
+        if html_encoded_payload in body and payload not in body:
+            return False
+        
+        # ===== TRUE POSITIVE CHECKS (return True if in executable context) =====
         
         # Check for script context
         if '<script' in payload and '</script>' in payload:
@@ -438,15 +513,28 @@ class XSSScanner:
         # Check for event handler context
         if 'onerror=' in payload or 'onload=' in payload:
             # Verify we're inside a tag
-            before = body[:pos]
-            last_open = before.rfind('<')
-            last_close = before.rfind('>')
+            last_open = before_payload.rfind('<')
+            last_close = before_payload.rfind('>')
             if last_open > last_close:
                 return True
         
+        # Check for SVG context
+        if '<svg' in payload.lower() and 'onload=' in payload.lower():
+            return True
+        
+        # Check for img tag
+        if '<img' in payload.lower() and 'onerror=' in payload.lower():
+            return True
+        
         # Check for href/src context
         if 'javascript:' in payload:
-            return 'href=' in context or 'src=' in context
+            return 'href=' in context.lower() or 'src=' in context.lower()
+        
+        # If we have an unescaped script tag in HTML context
+        if '<script>' in body and '</script>' in body:
+            script_pos = body.find('<script>')
+            if script_pos != -1 and body.find(payload, script_pos) != -1:
+                return True
         
         return False
     

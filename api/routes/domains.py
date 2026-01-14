@@ -299,6 +299,18 @@ async def check_scan_authorization(
     Check if user is authorized to scan a target URL.
     Returns authorization status and reason.
     """
+    # ========== DEVELOPER ACCOUNT BYPASS ==========
+    from shared.constants import is_developer_account
+    if is_developer_account(current_user.email):
+        normalized = DomainVerificationService(db).normalize_domain(target_url)
+        return {
+            "target": normalized,
+            "authorized": True,
+            "reason": "Developer account - all domains authorized",
+            "user_email": current_user.email
+        }
+    # ==============================================
+    
     service = DomainVerificationService(db)
     
     is_authorized, reason = await service.is_authorized_to_scan(

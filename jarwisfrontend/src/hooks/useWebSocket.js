@@ -261,7 +261,10 @@ export function useWebSocket(endpoint, options = {}) {
 }
 
 /**
- * Specialized hook for scan updates
+ * Specialized hook for scan updates with polling fallback
+ * 
+ * WebSocket is the primary transport, but if messages stall for 5 seconds,
+ * polling kicks in as a fallback to ensure updates are still received.
  * 
  * @param {string} scanId - Scan ID to subscribe to
  * @param {Object} callbacks - Event callbacks
@@ -277,11 +280,33 @@ export function useScanWebSocket(scanId, callbacks = {}) {
     onFinding,
     onConnect,
     onDisconnect,
+    // Polling fallback options
+    pollingEnabled = true,
+    pollingInterval = 5000,     // Poll every 5 seconds when WS stalls
+    stallThreshold = 5000,       // Consider WS stalled after 5 seconds of no messages
   } = callbacks;
 
+  // Track last message time for stall detection
+  const lastMessageTimeRef = useRef(Date.now());
+  const pollingIntervalRef = useRef(null);
+  const pollActiveRef = useRef(false);
+  const lastPolledProgressRef = useRef(0);
+  const [isPollingActive, setIsPollingActive] = useState(false);
+
+  // Handle WebSocket messages (resets stall timer)
   const handleMessage = useCallback((message) => {
+    lastMessageTimeRef.current = Date.now();
+    
+    // If we receive a WS message while polling, stop polling
+    if (pollActiveRef.current) {
+      console.log('[ScanWS] WebSocket message received, stopping polling fallback');
+      pollActiveRef.current = false;
+      setIsPollingActive(false);
+    }
+    
     switch (message.type) {
       case MessageType.SCAN_PROGRESS:
+        lastPolledProgressRef.current = message.data?.progress || 0;
         onProgress?.(message.data);
         break;
       case MessageType.SCAN_STATUS:
@@ -304,17 +329,145 @@ export function useScanWebSocket(scanId, callbacks = {}) {
     }
   }, [onProgress, onStatus, onLog, onComplete, onError, onFinding]);
 
+  // Polling fallback function
+  const pollScanStatus = useCallback(async () => {
+    if (!scanId) return;
+    
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const token = getAccessToken();
+      
+      const response = await fetch(`${apiUrl}/api/scans/${scanId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        console.warn('[ScanWS Polling] Failed to fetch scan status:', response.status);
+        return;
+      }
+      
+      const scan = await response.json();
+      
+      // Only emit progress updates if progress changed
+      if (scan.progress !== lastPolledProgressRef.current) {
+        lastPolledProgressRef.current = scan.progress;
+        onProgress?.({
+          progress: scan.progress,
+          stage: scan.current_stage || 'scanning',
+          message: scan.status_message || 'Scanning...',
+        });
+      }
+      
+      // Emit status update
+      onStatus?.({
+        status: scan.status,
+        stage: scan.current_stage,
+      });
+      
+      // Check for completion
+      if (scan.status === 'completed') {
+        console.log('[ScanWS Polling] Scan completed via polling');
+        onComplete?.({
+          scan_id: scanId,
+          status: 'completed',
+          results: scan.results || {},
+          report_paths: scan.report_paths || {},
+        });
+        
+        // Stop polling after completion
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        pollActiveRef.current = false;
+        setIsPollingActive(false);
+      }
+      
+      // Check for error
+      if (scan.status === 'failed' || scan.status === 'error') {
+        console.log('[ScanWS Polling] Scan failed via polling');
+        onError?.({
+          message: scan.error_message || 'Scan failed',
+          scan_id: scanId,
+        });
+        
+        // Stop polling after failure
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        pollActiveRef.current = false;
+        setIsPollingActive(false);
+      }
+      
+    } catch (err) {
+      console.warn('[ScanWS Polling] Error:', err.message);
+    }
+  }, [scanId, onProgress, onStatus, onComplete, onError]);
+
+  // Check for WebSocket stall and start polling if needed
+  const checkForStall = useCallback(() => {
+    if (!pollingEnabled || !scanId) return;
+    
+    const timeSinceLastMessage = Date.now() - lastMessageTimeRef.current;
+    
+    if (timeSinceLastMessage > stallThreshold && !pollActiveRef.current) {
+      console.log(`[ScanWS] WebSocket stalled for ${timeSinceLastMessage}ms, starting polling fallback`);
+      pollActiveRef.current = true;
+      setIsPollingActive(true);
+      
+      // Start polling immediately
+      pollScanStatus();
+      
+      // Continue polling at interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      pollingIntervalRef.current = setInterval(pollScanStatus, pollingInterval);
+    }
+  }, [pollingEnabled, scanId, stallThreshold, pollingInterval, pollScanStatus]);
+
+  // Set up stall checker
+  useEffect(() => {
+    if (!enabled || !scanId) return;
+    
+    // Check for stall every second
+    const stallCheckInterval = setInterval(checkForStall, 1000);
+    
+    return () => {
+      clearInterval(stallCheckInterval);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      pollActiveRef.current = false;
+    };
+  }, [enabled, scanId, checkForStall]);
+
+  // Handle connect - reset stall timer
+  const handleConnect = useCallback(() => {
+    lastMessageTimeRef.current = Date.now();
+    onConnect?.();
+  }, [onConnect]);
+
   const ws = useWebSocket(
     (scanId && enabled) ? `/ws/scans/${scanId}` : null,
     {
       autoConnect: !!(scanId && enabled),
       onMessage: handleMessage,
-      onConnect,
+      onConnect: handleConnect,
       onDisconnect,
     }
   );
 
-  return ws;
+  return {
+    ...ws,
+    isPollingActive,  // Expose polling state for UI indicators
+    pollNow: pollScanStatus,  // Manual poll trigger
+  };
 }
 
 /**

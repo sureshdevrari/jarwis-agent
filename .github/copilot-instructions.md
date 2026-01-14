@@ -10,6 +10,30 @@
 
 ---
 
+## 🔄 AUTO-GENERATED DOCUMENTATION (Always Current)
+
+These files are auto-generated from code introspection and **cannot go stale**:
+
+| Document | Purpose | Regenerate Command |
+|----------|---------|-------------------|
+| [`docs/generated/API_ROUTES.md`](../docs/generated/API_ROUTES.md) | All API routes with endpoints | `python scripts/generate_architecture_docs.py` |
+| [`docs/generated/SCANNERS.md`](../docs/generated/SCANNERS.md) | All discovered scanners | `python scripts/generate_architecture_docs.py` |
+| [`docs/generated/EXPORTS.md`](../docs/generated/EXPORTS.md) | __init__.py exports & risk levels | `python scripts/generate_architecture_docs.py` |
+| [`docs/generated/WIRING.md`](../docs/generated/WIRING.md) | Architecture wiring diagram | `python scripts/generate_architecture_docs.py` |
+
+**Check these BEFORE modifying:**
+- Routes → Check `API_ROUTES.md` for current registrations
+- Scanners → Check `SCANNERS.md` for discovery status
+- __init__.py → Check `EXPORTS.md` for risk level (🔴 = high import count)
+
+**After making structural changes, run:**
+```bash
+python scripts/generate_architecture_docs.py
+python -m pytest tests/test_architecture.py -v
+```
+
+---
+
 ## ⚠️ CRITICAL: Existing File Structure (DO NOT CREATE DUPLICATES)
 
 Before creating ANY file or folder, CHECK if it already exists. The project has an established structure:

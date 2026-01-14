@@ -422,70 +422,90 @@ async def create_scan(
     - **password**: Optional password for authenticated scanning
     - **config**: Optional additional configuration
     """
+    # ========== DEVELOPER ACCOUNT CHECK (FIRST!) ==========
+    # Developer accounts (dev@jarwis.ai) bypass ALL restrictions
+    # Only authentication is required - no other policies apply
+    from shared.constants import is_developer_account
+    is_dev_account = is_developer_account(current_user.email)
+    
+    if is_dev_account:
+        logger.info(f"🔧 DEVELOPER ACCOUNT: {current_user.email} - bypassing ALL restrictions (plan, subscription, SSRF, domain)")
+    # =====================================================
+    
     # ========== SCAN TYPE RESTRICTIONS BY PLAN ==========
     # Check plan restrictions BEFORE checking scan limits
     # Developer plan bypasses all restrictions (for testing)
+    # Developer accounts (dev@jarwis.ai) also bypass everything
     is_dev_plan = current_user.plan == "developer"
     
-    # Individual plan can ONLY do web scans
-    if not is_dev_plan and current_user.plan == "individual" and scan_data.scan_type != "web":
+    # Individual plan can ONLY do web scans (skip for dev accounts)
+    if not is_dev_account and not is_dev_plan and current_user.plan == "individual" and scan_data.scan_type != "web":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Individual plan only supports web scanning. Please upgrade to Professional for {scan_data.scan_type} scanning."
         )
     
-    # Free plan restrictions (depends on admin approval)
-    if not is_dev_plan and current_user.plan == "free" and scan_data.scan_type != "web":
+    # Free plan restrictions (skip for dev accounts)
+    if not is_dev_account and not is_dev_plan and current_user.plan == "free" and scan_data.scan_type != "web":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Free plan only supports web scanning. Please upgrade to Professional for {scan_data.scan_type} scanning."
         )
     
     # Check scan type access based on subscription (feature-based checks)
-    if scan_data.scan_type == "mobile":
-        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_MOBILE_PENTEST)
-    
-    # Check network scanning access
-    if scan_data.scan_type == "network":
-        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_NETWORK_SCAN)
-    
-    # Check cloud scanning access
-    if scan_data.scan_type == "cloud":
-        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CLOUD_SCAN)
-    
-    # Check if API testing is requested and allowed
-    if scan_data.scan_type == "api" or (scan_data.config and scan_data.config.get("api_testing", False)):
-        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_API_TESTING)
+    # Developer accounts skip ALL subscription checks
+    if not is_dev_account:
+        if scan_data.scan_type == "mobile":
+            await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_MOBILE_PENTEST)
+        
+        # Check network scanning access
+        if scan_data.scan_type == "network":
+            await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_NETWORK_SCAN)
+        
+        # Check cloud scanning access
+        if scan_data.scan_type == "cloud":
+            await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CLOUD_SCAN)
+        
+        # Check if API testing is requested and allowed
+        if scan_data.scan_type == "api" or (scan_data.config and scan_data.config.get("api_testing", False)):
+            await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_API_TESTING)
     
     # Check credential scanning (authenticated scanning)
-    if scan_data.username or scan_data.password or (scan_data.config and scan_data.config.get("credential_scanning", False)):
-        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CREDENTIAL_SCAN)
+    if not is_dev_account:
+        if scan_data.username or scan_data.password or (scan_data.config and scan_data.config.get("credential_scanning", False)):
+            await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CREDENTIAL_SCAN)
     # ==================================================
     
     # ========== SUBSCRIPTION LIMIT CHECK ==========
     # Check if user can start a new scan based on their scan quota
-    await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
+    # Developer accounts bypass this check
+    if not is_dev_account:
+        await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     # ==============================================
     
     # ========== SSRF PROTECTION ==========
     # Validate target URL is safe to scan (not internal/private)
-    is_safe, error_msg = is_safe_target(scan_data.target_url)
-    if not is_safe:
-        logger.warning(f"SSRF attempt blocked: user={current_user.email}, url={scan_data.target_url}, reason={error_msg}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid target URL: {error_msg}"
-        )
-    
-    # Also validate login_url if provided
-    if scan_data.login_url:
-        is_safe_login, login_error = is_safe_target(scan_data.login_url)
-        if not is_safe_login:
-            logger.warning(f"SSRF attempt in login_url blocked: user={current_user.email}, url={scan_data.login_url}")
+    # Developer accounts bypass SSRF protection to test internal services
+    if not is_dev_account:
+        is_safe, error_msg = is_safe_target(scan_data.target_url)
+        if not is_safe:
+            logger.warning(f"SSRF attempt blocked: user={current_user.email}, url={scan_data.target_url}, reason={error_msg}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid login URL: {login_error}"
+                detail=f"Invalid target URL: {error_msg}"
             )
+        
+        # Also validate login_url if provided
+        if scan_data.login_url:
+            is_safe_login, login_error = is_safe_target(scan_data.login_url)
+            if not is_safe_login:
+                logger.warning(f"SSRF attempt in login_url blocked: user={current_user.email}, url={scan_data.login_url}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid login URL: {login_error}"
+                )
+    else:
+        logger.info(f"🔧 DEVELOPER BYPASS: SSRF protection skipped for {current_user.email}")
     # =====================================
     
     # ========== DOMAIN SCOPE VALIDATION ==========
@@ -518,6 +538,7 @@ async def create_scan(
     # 1. User's email domain matches target domain (corporate email only)
     # 2. Domain is explicitly verified via DNS TXT record
     # 3. Developer plan bypasses domain verification (for testing)
+    # 4. Developer accounts (dev@jarwis.ai) bypass ALL checks
     
     from shared.constants import is_personal_email
     from urllib.parse import urlparse
@@ -533,8 +554,11 @@ async def create_scan(
         scan_data.username and scan_data.password
     ) or getattr(scan_data, 'auth_method', 'none') not in ['none', None]
     
+    # Developer ACCOUNTS bypass ALL domain verification (dev@jarwis.ai)
+    if is_dev_account:
+        logger.info(f"🔧 DEVELOPER ACCOUNT BYPASS: {current_user.email} skipping domain verification")
     # Developer plan bypasses ALL domain verification
-    if current_user.plan == "developer":
+    elif current_user.plan == "developer":
         logger.info(f"Developer plan bypass: {current_user.email} skipping domain verification")
     # ALL USERS must be authorized to scan any domain
     # Personal email users: MUST verify domain via DNS TXT
@@ -1082,8 +1106,14 @@ async def retry_scan(
             detail=f"Scan with status '{scan.status}' cannot be retried. Only 'error' or 'stopped' scans can be retried."
         )
     
-    # Check subscription limits
-    await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
+    # ========== DEVELOPER ACCOUNT CHECK ==========
+    from shared.constants import is_developer_account
+    is_dev_account = is_developer_account(current_user.email)
+    # ==============================================
+    
+    # Check subscription limits (skip for developer accounts)
+    if not is_dev_account:
+        await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     
     # Create new scan with same config
     new_scan_id = str(uuid_lib.uuid4())[:8]
@@ -1845,7 +1875,7 @@ async def run_security_scan(
                 'attacks': _build_attacks_config(attacks_config, scan_profile),
                 'report': {
                     'output_dir': str(Path(__file__).parent.parent.parent / 'data' / 'reports'),
-                    'formats': (scan.config or {}).get('report_formats', ['html', 'json'])
+                    'formats': (scan.config or {}).get('report_formats', ['html', 'json', 'pdf'])
                 }
             }
             
@@ -1994,6 +2024,12 @@ async def run_security_scan(
                                 await _update_db_with_retry(scan_id, 'waiting_for_otp', actual_progress, 'Waiting for OTP')
                                 log(f"Scan paused: Waiting for OTP input", persist=True)
                                 await broadcast_scan_status(scan_id, 'waiting_for_otp', 'Waiting for OTP input')
+                            elif status == 'error':
+                                # Handle error status (e.g., OTP timeout, max attempts)
+                                error_message = phase or 'Scan encountered an error'
+                                await _update_db_with_retry(scan_id, 'error', actual_progress, error_message)
+                                log(f"Scan error: {error_message}", level="error", persist=True)
+                                await broadcast_scan_error(scan_id, error_message, recoverable=False)
                             else:
                                 # Update database with current phase and progress
                                 await _update_db_with_retry(scan_id, 'running', actual_progress, actual_phase)
@@ -2333,7 +2369,7 @@ async def run_scan_with_orchestrator(
             'attacks': _build_attacks_config(attacks_config, scan_profile),
             'report': {
                 'output_dir': str(Path(__file__).parent.parent.parent / 'data' / 'reports'),
-                'formats': (scan.config or {}).get('report_formats', ['html', 'json'])
+                'formats': (scan.config or {}).get('report_formats', ['html', 'json', 'pdf'])
             }
         }
         

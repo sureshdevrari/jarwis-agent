@@ -109,6 +109,23 @@ from ..other.post_method_scanner import PostMethodScanner, SmartFormDataGenerato
 from ..other.smuggling_scanner import HTTPSmugglingScanner, CachePoisoningScanner
 from ..other.rate_limit_scanner import RateLimitBypassScanner
 
+# Input Field Attacker (comprehensive form/input vulnerability scanner)
+try:
+    from ..input_field_attacker import InputFieldAttacker
+except ImportError:
+    InputFieldAttacker = None  # Optional - file may not exist
+
+# V2 Scanners (enhanced versions)
+try:
+    from ..a03_injection.sqli_scanner_v2 import SQLiScannerV2
+except ImportError:
+    SQLiScannerV2 = None
+
+try:
+    from ..file_upload.file_upload_scanner_v2 import FileUploadScannerV2
+except ImportError:
+    FileUploadScannerV2 = None
+
 # Note: MobileSecurityScanner was moved to attacks/mobile/utils/
 # Import from there if needed:
 # from attacks.mobile.utils.mobile_security_scanner import MobileSecurityScanner
@@ -495,4 +512,11 @@ __all__ = [
     'HTTPSmugglingScanner',
     'CachePoisoningScanner',
     'RateLimitBypassScanner',
+    
+    # Input Field Attacker (comprehensive form scanner)
+    'InputFieldAttacker',
+    
+    # V2 Enhanced Scanners
+    'SQLiScannerV2',
+    'FileUploadScannerV2',
 ]

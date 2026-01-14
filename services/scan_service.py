@@ -64,24 +64,33 @@ class ScanService:
             SubscriptionError: If subscription limits exceeded
             ValueError: If validation fails
         """
+        # 0. Check if developer account (bypass all checks)
+        from shared.constants import is_developer_account
+        is_dev_account = is_developer_account(user.email)
+        
+        if is_dev_account:
+            logger.info(f"🔧 DEVELOPER ACCOUNT: {user.email} - bypassing all validation checks")
+        
         # 1. Validate URL
         from core.scope import ScopeManager
         
         if not config.target_url:
             raise ValueError("Target URL is required")
         
-        # 2. Check SSRF protection
-        is_safe, error = cls._is_safe_target(config.target_url)
-        if not is_safe:
-            raise ValueError(f"Invalid target: {error}")
+        # 2. Check SSRF protection (skip for developer accounts)
+        if not is_dev_account:
+            is_safe, error = cls._is_safe_target(config.target_url)
+            if not is_safe:
+                raise ValueError(f"Invalid target: {error}")
         
-        # 3. Check subscription limits
-        await SubscriptionService.enforce_scan_limit(
-            db, user, config.scan_type
-        )
+        # 3. Check subscription limits (skip for developer accounts)
+        if not is_dev_account:
+            await SubscriptionService.enforce_scan_limit(
+                db, user, config.scan_type
+            )
         
-        # 4. Check domain verification for credential scans
-        if config.username and config.password:
+        # 4. Check domain verification for credential scans (skip for developer accounts)
+        if not is_dev_account and config.username and config.password:
             scope = ScopeManager(config.target_url)
             target_domain = scope.get_domain_for_subscription()
             

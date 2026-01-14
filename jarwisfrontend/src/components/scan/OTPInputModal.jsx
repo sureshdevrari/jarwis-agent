@@ -2,7 +2,7 @@
 // Modal shown when scan is waiting for user to enter OTP code
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Send, Clock, AlertTriangle, Loader2, RefreshCw, Phone, Mail } from "lucide-react";
+import { X, Send, Clock, AlertTriangle, Loader2, RefreshCw, Phone, Mail, Key, AlertCircle } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { scanOtpAPI } from "../../services/api";
 
@@ -13,7 +13,8 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [otpCode, setOtpCode] = useState("");
-  const [timeRemaining, setTimeRemaining] = useState(300);
+  const [timeRemaining, setTimeRemaining] = useState(180); // 3 minutes default
+  const [isRetry, setIsRetry] = useState(false);
   const inputRef = useRef(null);
 
   // Fetch OTP status
@@ -22,11 +23,29 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
       const data = await scanOtpAPI.getStatus(scanId);
       setStatus(data);
       setTimeRemaining(data.time_remaining || 0);
+      
+      // Check if this is a retry (wrong OTP was entered)
+      if (data.needs_retry) {
+        setIsRetry(true);
+        setError(data.error_message || "Invalid OTP code. Please try again.");
+        setOtpCode(""); // Clear the input for retry
+      }
+      
+      // Show error message from backend
+      if (data.error_message && !data.needs_retry) {
+        setError(data.error_message);
+      }
+      
       setLoading(false);
       
-      // If no longer waiting, close modal
-      if (!data.waiting_for_otp) {
-        onComplete?.(data);
+      // If no longer waiting (timeout or completed), close modal
+      if (!data.waiting_for_otp && !data.needs_retry) {
+        if (data.is_timed_out) {
+          setError("OTP timeout - scan will be stopped");
+          setTimeout(() => onComplete?.({ success: false, reason: 'timeout' }), 2000);
+        } else {
+          onComplete?.(data);
+        }
       }
     } catch (err) {
       console.error("Error fetching OTP status:", err);
@@ -38,16 +57,16 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
   // Poll for status updates
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000);
+    const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  // Focus input on mount
+  // Focus input on mount and when retrying
   useEffect(() => {
     if (!loading && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [loading]);
+  }, [loading, isRetry]);
 
   // Countdown timer
   useEffect(() => {
@@ -63,17 +82,19 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!otpCode.trim() || otpCode.length < 4) {
-      setError("Please enter a valid OTP code");
+      setError("Please enter a valid OTP code (at least 4 digits)");
       return;
     }
 
     setSubmitting(true);
     setError(null);
+    setIsRetry(false);
     try {
       await scanOtpAPI.submitOtp(scanId, otpCode.trim());
-      onComplete?.({ success: true });
+      // Don't close modal yet - wait for backend to validate
+      // Modal will close when status changes to not waiting
     } catch (err) {
-      setError(err.response?.data?.detail || "Invalid OTP code");
+      setError(err.response?.data?.detail || "Failed to submit OTP. Please try again.");
       setSubmitting(false);
     }
   };
@@ -82,20 +103,37 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
   const handleOtpChange = (e) => {
     const value = e.target.value.replace(/\D/g, "").slice(0, 8);
     setOtpCode(value);
-    setError(null);
+    if (error && !status?.needs_retry) {
+      setError(null);
+    }
   };
 
-  // Format time remaining
+  // Format time remaining with warning colors
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Get urgency level for timer
+  const getTimerUrgency = () => {
+    if (timeRemaining <= 30) return "critical"; // Last 30 seconds
+    if (timeRemaining <= 60) return "warning";  // Last minute
+    return "normal";
+  };
+
   // Get OTP type icon
   const getOtpIcon = () => {
     if (status?.otp_type === "email") return <Mail className="w-5 h-5" />;
+    if (status?.otp_type === "authenticator") return <Key className="w-5 h-5" />;
     return <Phone className="w-5 h-5" />;
+  };
+
+  // Get OTP type label
+  const getOtpLabel = () => {
+    if (status?.otp_type === "email") return "Email";
+    if (status?.otp_type === "authenticator") return "Authenticator App";
+    return "SMS";
   };
 
   // Modal styles
@@ -144,23 +182,48 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Retry Warning Banner */}
+          {isRetry && (
+            <div className={`rounded-lg p-3 flex items-center gap-2 ${
+              isDarkMode ? "bg-amber-900/30 border border-amber-700/50" : "bg-amber-50 border border-amber-200"
+            }`}>
+              <AlertCircle className={`w-5 h-5 flex-shrink-0 ${isDarkMode ? "text-amber-400" : "text-amber-600"}`} />
+              <div>
+                <p className={`text-sm font-medium ${isDarkMode ? "text-amber-300" : "text-amber-800"}`}>
+                  Incorrect OTP - Please try again
+                </p>
+                <p className={`text-xs ${isDarkMode ? "text-amber-400/80" : "text-amber-600"}`}>
+                  Attempt {status?.attempts || 1} of {status?.max_attempts || 3}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Timer */}
           <div className="flex items-center justify-center gap-2">
-            <Clock className={`w-5 h-5 ${timeRemaining < 60 ? "text-red-500" : "text-blue-500"}`} />
+            <Clock className={`w-5 h-5 ${
+              getTimerUrgency() === "critical" ? "text-red-500 animate-pulse" :
+              getTimerUrgency() === "warning" ? "text-amber-500" : "text-blue-500"
+            }`} />
             <span className={`text-2xl font-mono font-bold ${
-              timeRemaining < 60 
-                ? "text-red-500" 
-                : isDarkMode ? "text-white" : "text-gray-900"
+              getTimerUrgency() === "critical" ? "text-red-500" :
+              getTimerUrgency() === "warning" ? "text-amber-500" :
+              isDarkMode ? "text-white" : "text-gray-900"
             }`}>
               {formatTime(timeRemaining)}
             </span>
+            {getTimerUrgency() === "critical" && (
+              <span className={`text-xs ${isDarkMode ? "text-red-400" : "text-red-600"}`}>
+                Hurry!
+              </span>
+            )}
           </div>
 
           {/* OTP sent to info */}
           {status?.otp_contact && (
             <div className={`text-center ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
               <p className="text-sm">
-                OTP sent to: <span className="font-medium">{status.otp_contact}</span>
+                {getOtpLabel()} code sent to: <span className="font-medium">{status.otp_contact}</span>
               </p>
             </div>
           )}
@@ -184,12 +247,12 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
               disabled={submitting}
             />
             <p className={`text-center text-sm ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
-              Enter the {status?.otp_type === "email" ? "email" : "SMS"} code you received
+              Enter the {getOtpLabel()} code you received
             </p>
           </div>
 
-          {/* Attempts info */}
-          {status?.attempts > 0 && (
+          {/* Attempts info - only show after first attempt */}
+          {status?.attempts > 0 && !isRetry && (
             <div className={`text-center text-sm ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
               Attempt {status.attempts} of {status.max_attempts}
             </div>
@@ -208,18 +271,27 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={submitting || otpCode.length < 4}
-            className="w-full px-4 py-4 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={submitting || otpCode.length < 4 || timeRemaining === 0}
+            className={`w-full px-4 py-4 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+              isRetry 
+                ? "bg-amber-600 hover:bg-amber-500 text-white"
+                : "bg-blue-600 hover:bg-blue-500 text-white"
+            }`}
           >
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
                 Verifying...
               </>
+            ) : timeRemaining === 0 ? (
+              <>
+                <AlertTriangle className="w-5 h-5" />
+                Time Expired
+              </>
             ) : (
               <>
                 <Send className="w-5 h-5" />
-                Submit OTP
+                {isRetry ? "Retry OTP" : "Submit OTP"}
               </>
             )}
           </button>
@@ -228,7 +300,13 @@ const OTPInputModal = ({ scanId, onClose, onComplete }) => {
         {/* Footer */}
         <div className={`px-6 pb-6 ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
           <p className="text-xs text-center">
-            Didn't receive the code? Check your {status?.otp_type === "email" ? "email spam folder" : "phone's SMS inbox"}.
+            {status?.otp_type === "authenticator" 
+              ? "Open your authenticator app to get the current code."
+              : `Didn't receive the code? Check your ${status?.otp_type === "email" ? "email spam folder" : "phone's SMS inbox"}.`
+            }
+          </p>
+          <p className={`text-xs text-center mt-2 ${isDarkMode ? "text-gray-600" : "text-gray-400"}`}>
+            You have 3 minutes to enter the code before the scan times out.
           </p>
         </div>
       </div>

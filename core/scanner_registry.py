@@ -114,6 +114,29 @@ class ScannerRegistry:
                 Log4ShellScanner, Spring4ShellScanner, FrameworkScanner,
             )
             
+            # Try to import InputFieldAttacker (comprehensive form scanner)
+            try:
+                from attacks.web.pre_login import InputFieldAttacker
+                has_input_field_attacker = InputFieldAttacker is not None
+            except (ImportError, TypeError):
+                has_input_field_attacker = False
+                InputFieldAttacker = None
+            
+            # Try to import V2 scanners
+            try:
+                from attacks.web.pre_login import SQLiScannerV2
+                has_sqli_v2 = SQLiScannerV2 is not None
+            except (ImportError, TypeError):
+                has_sqli_v2 = False
+                SQLiScannerV2 = None
+                
+            try:
+                from attacks.web.pre_login import FileUploadScannerV2
+                has_upload_v2 = FileUploadScannerV2 is not None
+            except (ImportError, TypeError):
+                has_upload_v2 = False
+                FileUploadScannerV2 = None
+            
             # Register all pre-login scanners (most run on BOTH contexts)
             pre_login_scanners = [
                 # Core OWASP - A01-A10
@@ -202,6 +225,20 @@ class ScannerRegistry:
                 (Spring4ShellScanner, "A06", "Spring4Shell"),
                 (FrameworkScanner, "A06", "Framework Vulnerabilities"),
             ]
+            
+            # Add InputFieldAttacker if available
+            if has_input_field_attacker and InputFieldAttacker:
+                pre_login_scanners.append((InputFieldAttacker, "A03", "Comprehensive Input Field Scanner"))
+                logger.info("InputFieldAttacker registered")
+            
+            # Add V2 scanners if available
+            if has_sqli_v2 and SQLiScannerV2:
+                pre_login_scanners.append((SQLiScannerV2, "A03", "SQL Injection V2 (Enhanced)"))
+                logger.info("SQLiScannerV2 registered")
+            
+            if has_upload_v2 and FileUploadScannerV2:
+                pre_login_scanners.append((FileUploadScannerV2, "A04", "File Upload V2 (Enhanced)"))
+                logger.info("FileUploadScannerV2 registered")
             
             for scanner_class, owasp_cat, description in pre_login_scanners:
                 self._register_scanner(

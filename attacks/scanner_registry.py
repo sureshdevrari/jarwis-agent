@@ -561,3 +561,12 @@ def validate_scanner_file(file_path: str) -> Dict[str, List[ValidationIssue]]:
         )]
     
     return results
+
+
+# Module-level instance for backwards compatibility
+scanner_registry = ScannerRegistry()
+
+# Convenience function to get registry
+def get_registry() -> ScannerRegistry:
+    """Get the global scanner registry instance."""
+    return scanner_registry

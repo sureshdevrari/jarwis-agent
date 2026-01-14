@@ -190,6 +190,7 @@ class ReportGenerator:
         """
         Format HTTP request/response data line-by-line for PDF rendering.
         Parses headers and body separately with proper color coding.
+        Highlights payloads and evidence for Burp-style vulnerability proof.
         """
         if not http_data:
             return ''
@@ -220,12 +221,21 @@ class ReportGenerator:
                     # Header line (Key: Value)
                     if ':' in line:
                         key, _, value = line.partition(':')
-                        formatted_lines.append(
-                            f'<span class="http-line">'
-                            f'<span class="http-line-header">{self._escape_html(key)}:</span> '
-                            f'<span class="http-line-value">{self._escape_html(value.strip())}</span>'
-                            f'</span>'
-                        )
+                        # Highlight payload header specially for evidence
+                        if key.lower() == 'x-jarwis-payload':
+                            formatted_lines.append(
+                                f'<span class="http-line http-payload-highlight">'
+                                f'<span class="http-line-header">🎯 {self._escape_html(key)}:</span> '
+                                f'<span class="http-payload-value">{self._escape_html(value.strip())}</span>'
+                                f'</span>'
+                            )
+                        else:
+                            formatted_lines.append(
+                                f'<span class="http-line">'
+                                f'<span class="http-line-header">{self._escape_html(key)}:</span> '
+                                f'<span class="http-line-value">{self._escape_html(value.strip())}</span>'
+                                f'</span>'
+                            )
                     else:
                         formatted_lines.append(
                             f'<span class="http-line">{self._escape_html(line)}</span>'

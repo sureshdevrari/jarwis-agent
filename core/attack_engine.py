@@ -1288,27 +1288,49 @@ class IDORAttack(BaseAttack):
                     modified_url=modified_url
                 )
                 
-                # Check if we got different user's data
+                # Check if we got different user's data - requires baseline comparison
                 if status == 200 and len(body) > 50:
-                    result = AttackResult(
-                        id=f"IDOR-{len(self.results)+1}",
-                        category="A01:2021 - Broken Access Control",
-                        severity="high",
-                        title="Insecure Direct Object Reference (IDOR)",
-                        description=f"Accessed other user's data with ID: {test_id}",
-                        original_request_id=request.id,
-                        url=request.url,
-                        method=request.method,
-                        parameter=param_name,
-                        payload=f"ID changed from {original_id} to {test_id}",
-                        evidence=f"Got 200 with different ID",
-                        remediation="Implement proper authorization checks.",
-                        cwe_id="CWE-639",
-                        reasoning="Accessed data with different object ID",
-                        is_post_login=is_post_login
+                    # IMPORTANT: Compare with original response to detect actual IDOR
+                    from core.verification import BaselineComparator
+                    comparator = BaselineComparator()
+                    
+                    # Get original response for comparison
+                    orig_status, orig_headers, orig_body = await self.engine.send_modified_request(
+                        session, request
                     )
-                    self.results.append(result)
-                    return self.results
+                    
+                    # Analyze if this is a real IDOR
+                    comparison = comparator.compare_responses(
+                        baseline_status=orig_status,
+                        baseline_body=orig_body,
+                        baseline_headers=orig_headers or {},
+                        test_status=status,
+                        test_body=body,
+                        test_headers=headers or {},
+                        attack_type="idor"
+                    )
+                    
+                    # Only report if we have high confidence this is real
+                    if comparison.confidence >= 0.7:
+                        result = AttackResult(
+                            id=f"IDOR-{len(self.results)+1}",
+                            category="A01:2021 - Broken Access Control",
+                            severity="high",
+                            title="Insecure Direct Object Reference (IDOR)",
+                            description=f"Accessed other user's data with ID: {test_id}",
+                            original_request_id=request.id,
+                            url=request.url,
+                            method=request.method,
+                            parameter=param_name,
+                            payload=f"ID changed from {original_id} to {test_id}",
+                            evidence=f"Baseline comparison: {comparison.reasoning}. Confidence: {comparison.confidence:.0%}",
+                            remediation="Implement proper authorization checks.",
+                            cwe_id="CWE-639",
+                            reasoning=comparison.reasoning,
+                            is_post_login=is_post_login
+                        )
+                        self.results.append(result)
+                        return self.results
         
         return self.results
 
@@ -1343,23 +1365,44 @@ class BOLAAttack(BaseAttack):
             )
             
             if status == 200 and len(body) > 50:
-                result = AttackResult(
-                    id=f"BOLA-{len(self.results)+1}",
-                    category="A01:2021 - Broken Access Control",
-                    severity="high",
-                    title="Broken Object Level Authorization (BOLA)",
-                    description="API endpoint returns data for different object",
-                    original_request_id=request.id,
-                    url=request.url,
-                    method=request.method,
-                    payload=f"UUID replaced with {test_uuid}",
-                    evidence="Got 200 with different UUID",
-                    remediation="Verify user owns the object before access.",
-                    cwe_id="CWE-639",
-                    reasoning="Accessed different object via UUID manipulation",
-                    is_post_login=is_post_login
+                # IMPORTANT: Compare with original response to detect actual BOLA
+                from core.verification import BaselineComparator
+                comparator = BaselineComparator()
+                
+                # Get original response for comparison
+                orig_status, orig_headers, orig_body = await self.engine.send_modified_request(
+                    session, request
                 )
-                self.results.append(result)
+                
+                comparison = comparator.compare_responses(
+                    baseline_status=orig_status,
+                    baseline_body=orig_body,
+                    baseline_headers=orig_headers or {},
+                    test_status=status,
+                    test_body=body,
+                    test_headers=headers or {},
+                    attack_type="bola"
+                )
+                
+                # Only report if we have high confidence this is real
+                if comparison.confidence >= 0.7:
+                    result = AttackResult(
+                        id=f"BOLA-{len(self.results)+1}",
+                        category="A01:2021 - Broken Access Control",
+                        severity="high",
+                        title="Broken Object Level Authorization (BOLA)",
+                        description="API endpoint returns data for different object",
+                        original_request_id=request.id,
+                        url=request.url,
+                        method=request.method,
+                        payload=f"UUID replaced with {test_uuid}",
+                        evidence=f"Baseline comparison: {comparison.reasoning}. Confidence: {comparison.confidence:.0%}",
+                        remediation="Verify user owns the object before access.",
+                        cwe_id="CWE-639",
+                        reasoning=comparison.reasoning,
+                        is_post_login=is_post_login
+                    )
+                    self.results.append(result)
         
         return self.results
 
@@ -1385,31 +1428,61 @@ class BFLAAttack(BaseAttack):
         parsed = urlparse(request.url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
         
+        # Import verification utility
+        from core.verification import BaselineComparator
+        comparator = BaselineComparator()
+        
         # Test admin paths
         for admin_path in self.ADMIN_PATHS[:5]:
             test_url = urljoin(base_url, admin_path)
             
+            # First, get unauthenticated response as baseline
+            unauth_headers = {k: v for k, v in request.headers.items()
+                            if k.lower() not in ['authorization', 'cookie', 'x-api-key']}
+            
+            baseline_status, baseline_hdrs, baseline_body = await self.engine.send_modified_request(
+                session, request,
+                modified_url=test_url,
+                modified_headers=unauth_headers
+            )
+            
+            # Now test with auth token
             status, headers, body = await self.engine.send_modified_request(
                 session, request,
                 modified_url=test_url
             )
             
-            # If we can access admin endpoint with regular user token
-            if status == 200 and 'login' not in body.lower() and 'unauthorized' not in body.lower():
+            # Skip if endpoint doesn't exist or both return same thing
+            if status != 200:
+                continue
+            
+            # Use baseline comparator to analyze
+            comparison = comparator.compare_responses(
+                baseline_status=baseline_status,
+                baseline_body=baseline_body,
+                baseline_headers=baseline_hdrs or {},
+                test_status=status,
+                test_body=body,
+                test_headers=headers or {},
+                attack_type="bfla"
+            )
+            
+            # Check for actual admin content, not just 200
+            if comparison.confidence >= 0.7:
                 result = AttackResult(
                     id=f"BFLA-{len(self.results)+1}",
                     category="A01:2021 - Broken Access Control",
                     severity="critical",
                     title="Broken Function Level Authorization",
-                    description=f"Admin endpoint accessible: {admin_path}",
+                    description=f"Admin endpoint accessible with regular user token: {admin_path}",
                     original_request_id=request.id,
                     url=test_url,
                     method="GET",
                     payload="Used regular user token",
-                    evidence="Admin endpoint returned 200",
+                    evidence=f"BFLA analysis: {comparison.reasoning}. Confidence: {comparison.confidence:.0%}",
                     remediation="Implement role-based access control.",
                     cwe_id="CWE-285",
-                    reasoning="Admin function accessible to regular user",
+                    reasoning=comparison.reasoning,
                     is_post_login=is_post_login
                 )
                 self.results.append(result)
@@ -1495,6 +1568,19 @@ class AuthBypassAttack(BaseAttack):
     async def run(self, session, request: CapturedRequest, is_post_login: bool = False) -> List[AttackResult]:
         self.results = []
         
+        # Import verification utility
+        from core.verification import BaselineComparator
+        comparator = BaselineComparator()
+        
+        # Skip public endpoints - they're supposed to return 200 without auth!
+        if comparator.is_public_endpoint(request.url):
+            return self.results
+        
+        # Get original authenticated response first
+        orig_status, orig_headers, orig_body = await self.engine.send_modified_request(
+            session, request
+        )
+        
         # Test removing auth headers
         headers_without_auth = {k: v for k, v in request.headers.items()
                                if k.lower() not in ['authorization', 'cookie', 'x-api-key']}
@@ -1504,21 +1590,30 @@ class AuthBypassAttack(BaseAttack):
             modified_headers=headers_without_auth
         )
         
-        if status == 200 and len(body) > 100 and 'login' not in body.lower():
+        # Use baseline comparison for proper verification
+        is_vulnerable, confidence, reasoning = comparator.verify_auth_bypass_for_url(
+            url=request.url,
+            status=status,
+            body=body,
+            original_status=orig_status,
+            original_body=orig_body
+        )
+        
+        if is_vulnerable and confidence >= 0.7:
             result = AttackResult(
                 id=f"AUTH-{len(self.results)+1}",
                 category="A07:2021 - Auth Failures",
                 severity="critical",
                 title="Authentication Bypass",
-                description="Endpoint accessible without authentication",
+                description="Endpoint accessible without authentication - verified with baseline comparison",
                 original_request_id=request.id,
                 url=request.url,
                 method=request.method,
                 payload="Removed auth headers",
-                evidence="200 response without auth",
+                evidence=f"Auth bypass verified: {reasoning}. Confidence: {confidence:.0%}",
                 remediation="Enforce authentication on all protected endpoints.",
                 cwe_id="CWE-287",
-                reasoning="Protected content accessible without auth",
+                reasoning=reasoning,
                 is_post_login=is_post_login
             )
             self.results.append(result)

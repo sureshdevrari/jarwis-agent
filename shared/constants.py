@@ -72,6 +72,36 @@ FREE_EMAIL_PROVIDERS = [
 ]
 
 
+# ==================== DEVELOPER ACCOUNTS ====================
+# These accounts bypass ALL restrictions (domain verification, SSRF, etc.)
+# Only authentication is required - no other policies apply
+DEVELOPER_ACCOUNTS = [
+    'dev@jarwis.ai',  # Primary developer account - full bypass
+]
+
+
+def is_developer_account(email: str) -> bool:
+    """
+    Check if email is a developer account with bypass privileges.
+    
+    Developer accounts:
+    - Can scan ANY domain without verification
+    - Bypass SSRF protection (can scan localhost, internal IPs)
+    - Bypass subscription limits
+    - No rate limiting
+    - Only authentication is required
+    
+    Args:
+        email: User's email address
+        
+    Returns:
+        True if developer account, False otherwise
+    """
+    if not email:
+        return False
+    return email.lower().strip() in [e.lower() for e in DEVELOPER_ACCOUNTS]
+
+
 def is_personal_email(email: str) -> bool:
     """
     Check if email is from a personal/free email provider.

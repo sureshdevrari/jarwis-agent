@@ -509,7 +509,11 @@ __all__ = [
     'ScannerInterface',
     'ScannerInfo',
     'ScannerRegistry',
+    'AttackRegistry',  # Alias for backwards compatibility
     'get_web_scanners',
     'get_scanner',
     'create_scanner',
 ]
+
+# Backwards compatibility alias
+AttackRegistry = ScannerRegistry

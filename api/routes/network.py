@@ -107,6 +107,14 @@ async def start_network_scan(
     
     For private IP ranges, you must use a Jarwis Agent deployed in your network.
     """
+    # ========== DEVELOPER ACCOUNT CHECK ==========
+    from shared.constants import is_developer_account
+    is_dev_account = is_developer_account(current_user.email)
+    
+    if is_dev_account:
+        logger.info(f"🔧 DEVELOPER ACCOUNT: {current_user.email} - bypassing restrictions for network scan")
+    # ==============================================
+    
     try:
         # Validate targets
         is_valid, error_msg, host_count = NetworkScanService.validate_targets(
@@ -115,14 +123,15 @@ async def start_network_scan(
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # Check for private IPs
+        # Check for private IPs (developer accounts can scan private IPs without agent)
         has_private = False
         for target in scan_request.targets.split(','):
             if NetworkScanService.is_private_target(target.strip()):
                 has_private = True
                 break
         
-        if has_private and not scan_request.use_agent:
+        # Developer accounts can scan private IPs directly without an agent
+        if has_private and not scan_request.use_agent and not is_dev_account:
             raise HTTPException(
                 status_code=400,
                 detail="Private IP ranges require a Jarwis Agent. "

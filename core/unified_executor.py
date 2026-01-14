@@ -178,6 +178,10 @@ class UnifiedExecutor:
             # Sequential execution
             results = await self._run_sequential(scanners, context)
         
+        # Run NEW sub-category scanners (XSS reflected/stored/dom, SQLi error/blind/union, etc.)
+        subcategory_results = await self._run_subcategory_scanners(context)
+        results.extend(subcategory_results)
+        
         # Aggregate results
         for result in results:
             summary.scanner_results.append(result)
@@ -445,6 +449,57 @@ class UnifiedExecutor:
             error=f"Failed after {self.max_retries + 1} attempts. Last error: {last_error}",
             retry_count=self.max_retries
         )
+    
+    async def _run_subcategory_scanners(self, context: str) -> List[ScannerExecutionResult]:
+        """
+        Run NEW sub-category scanners (XSS reflected/stored/dom, SQLi variants, SSRF variants).
+        
+        These scanners have enhanced detection with proper sub-type classification.
+        """
+        results = []
+        
+        try:
+            from attacks.scanner_adapter import SubCategoryScannerAdapter
+            
+            logger.info(f"Running sub-category scanners for {context}")
+            
+            # Create adapter with scan context
+            adapter = SubCategoryScannerAdapter(self.config, self.scan_context)
+            
+            # Run all sub-category scanners
+            start_time = time.time()
+            adapted_findings = await adapter.run_all()
+            exec_time = time.time() - start_time
+            
+            # Convert to ScannerExecutionResult
+            if adapted_findings:
+                findings_dicts = [f.to_dict() for f in adapted_findings]
+                results.append(ScannerExecutionResult(
+                    scanner_name="SubCategoryScanners",
+                    status="success",
+                    findings=findings_dicts,
+                    execution_time=exec_time
+                ))
+                logger.info(f"Sub-category scanners found {len(findings_dicts)} findings in {exec_time:.1f}s")
+            else:
+                results.append(ScannerExecutionResult(
+                    scanner_name="SubCategoryScanners",
+                    status="success",
+                    findings=[],
+                    execution_time=exec_time
+                ))
+                
+        except ImportError as e:
+            logger.warning(f"Sub-category scanners not available: {e}")
+        except Exception as e:
+            logger.error(f"Sub-category scanner error: {e}")
+            results.append(ScannerExecutionResult(
+                scanner_name="SubCategoryScanners",
+                status="failed",
+                error=str(e)
+            ))
+        
+        return results
     
     async def _execute_scanner(
         self,

@@ -25,6 +25,9 @@ class PayloadCategory(Enum):
     XXE = "xxe"
     LFI = "lfi"
     NOSQL = "nosql"
+    CRLF = "crlf"
+    CACHE_POISONING = "cache_poisoning"
+    DESERIALIZATION = "deserialization"
 
 
 @dataclass
@@ -80,7 +83,10 @@ class PayloadManager:
             "all_engines": "ssti/all_engines.txt",
         },
         PayloadCategory.CMDI: {
-            "all": "cmdi/all.txt",
+            "basic": "cmdi/basic.txt",
+            "time_based": "cmdi/time_based.txt",
+            "oob": "cmdi/oob.txt",
+            "filter_bypass": "cmdi/filter_bypass.txt",
         },
         PayloadCategory.XXE: {
             "all": "xxe/all.txt",
@@ -89,7 +95,21 @@ class PayloadManager:
             "all": "lfi/all.txt",
         },
         PayloadCategory.NOSQL: {
-            "all": "nosql/all.txt",
+            "operators": "nosql/operators.txt",
+            "url_encoded": "nosql/url_encoded.txt",
+            "javascript": "nosql/javascript.txt",
+            "syntax": "nosql/syntax.txt",
+        },
+        PayloadCategory.CRLF: {
+            "all": "crlf/all.txt",
+        },
+        PayloadCategory.CACHE_POISONING: {
+            "all": "cache_poisoning/all.txt",
+        },
+        PayloadCategory.DESERIALIZATION: {
+            "detection": "deserialization/detection.txt",
+            "php_gadgets": "deserialization/php_gadgets.txt",
+            "java_markers": "deserialization/java_markers.txt",
         },
     }
     

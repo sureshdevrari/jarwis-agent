@@ -75,14 +75,37 @@ class EmulatorManager:
     
     def __init__(self, jarwis_home: Optional[str] = None):
         self.jarwis_home = Path(jarwis_home or os.path.expanduser("~/.jarwis"))
-        self.sdk_root = self.jarwis_home / "android-sdk"
-        self.avd_home = self.jarwis_home / "avd"
+        
+        # SDK Root priority:
+        # 1. ANDROID_SDK_ROOT or ANDROID_HOME environment variable
+        # 2. C:\Android\Sdk on Windows (common installation path)
+        # 3. ~/.jarwis/android-sdk (Jarwis default)
+        sdk_from_env = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
+        if sdk_from_env and Path(sdk_from_env).exists():
+            self.sdk_root = Path(sdk_from_env)
+        elif platform.system() == "Windows" and Path("C:/Android/Sdk").exists():
+            self.sdk_root = Path("C:/Android/Sdk")
+        else:
+            self.sdk_root = self.jarwis_home / "android-sdk"
+        
+        # AVD Home - check ANDROID_AVD_HOME first
+        avd_from_env = os.environ.get("ANDROID_AVD_HOME")
+        if avd_from_env and Path(avd_from_env).exists():
+            self.avd_home = Path(avd_from_env)
+        elif platform.system() == "Windows" and Path("C:/Android/avd").exists():
+            self.avd_home = Path("C:/Android/avd")
+        else:
+            self.avd_home = self.jarwis_home / "avd"
+            
         self.frida_dir = self.jarwis_home / "frida"
         self.certs_dir = self.jarwis_home / "certs"
         
-        # Ensure directories exist
-        for dir_path in [self.jarwis_home, self.sdk_root, self.avd_home, self.frida_dir, self.certs_dir]:
+        # Ensure directories exist (don't try to create sdk_root - it should already exist)
+        for dir_path in [self.jarwis_home, self.avd_home, self.frida_dir, self.certs_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
+        
+        # Log SDK path for debugging
+        console.print(f"[info] Using Android SDK: {self.sdk_root}", style="cyan")
         
         # SDK tools paths
         self.cmdline_tools = self.sdk_root / "cmdline-tools" / "latest" / "bin"
@@ -703,7 +726,13 @@ class EmulatorManager:
         return True
     
     async def install_apk(self, apk_path: str) -> bool:
-        """Install APK on emulator"""
+        """Install APK/XAPK/APKM on emulator
+        
+        Supports:
+        - Regular APK files
+        - XAPK bundles (split APKs)
+        - APKM bundles
+        """
         if not self.status.running:
             console.print("[error] [X] Emulator not running", style="red")
             return False
@@ -713,9 +742,15 @@ class EmulatorManager:
             return False
         
         adb = self._get_adb_path()
+        file_ext = os.path.splitext(apk_path)[1].lower()
         
-        console.print(f"[info] Installing APK: {os.path.basename(apk_path)}...", style="cyan")
+        console.print(f"[info] Installing: {os.path.basename(apk_path)}...", style="cyan")
         
+        # Handle XAPK/APKM bundles (split APKs)
+        if file_ext in ['.xapk', '.apkm', '.apks']:
+            return await self._install_split_apk(apk_path)
+        
+        # Regular APK installation
         code, stdout, stderr = self._run_command([adb, "install", "-r", apk_path], timeout=120)
         
         if "Success" in stdout:
@@ -723,6 +758,165 @@ class EmulatorManager:
             return True
         else:
             console.print(f"[error] [X] Failed to install APK: {stderr}", style="red")
+            return False
+    
+    async def _install_split_apk(self, bundle_path: str) -> bool:
+        """Install split APK bundle (XAPK/APKM/APKS)
+        
+        These bundles are ZIP files containing:
+        - Multiple APK files (base.apk + split APKs)
+        - manifest.json with package info
+        """
+        import zipfile
+        import tempfile
+        import shutil
+        import json
+        
+        adb = self._get_adb_path()
+        temp_dir = None
+        
+        try:
+            # Extract bundle to temp directory
+            temp_dir = tempfile.mkdtemp(prefix="jarwis_apk_")
+            console.print(f"[info] Extracting split APK bundle...", style="cyan")
+            
+            with zipfile.ZipFile(bundle_path, 'r') as zf:
+                zf.extractall(temp_dir)
+            
+            # Find all APK files
+            apk_files = []
+            for root, dirs, files in os.walk(temp_dir):
+                for f in files:
+                    if f.endswith('.apk'):
+                        apk_files.append(os.path.join(root, f))
+            
+            if not apk_files:
+                console.print("[error] [X] No APK files found in bundle", style="red")
+                return False
+            
+            console.print(f"[info] Found {len(apk_files)} APK file(s) in bundle", style="cyan")
+            
+            # Try adb install-multiple for split APKs
+            if len(apk_files) > 1:
+                console.print("[info] Installing split APKs using install-multiple...", style="cyan")
+                
+                # Use adb install-multiple for split APK installation
+                cmd = [adb, "install-multiple", "-r"] + apk_files
+                code, stdout, stderr = self._run_command(cmd, timeout=180)
+                
+                if "Success" in stdout:
+                    console.print("[success] [OK] Split APK bundle installed", style="green")
+                    return True
+                
+                # Fallback: try pm install-create session
+                console.print("[info] Trying session-based installation...", style="cyan")
+                return await self._install_via_session(apk_files)
+            else:
+                # Single APK in bundle
+                code, stdout, stderr = self._run_command(
+                    [adb, "install", "-r", apk_files[0]], timeout=120
+                )
+                if "Success" in stdout:
+                    console.print("[success] [OK] APK installed from bundle", style="green")
+                    return True
+                else:
+                    console.print(f"[error] [X] Failed to install: {stderr}", style="red")
+                    return False
+                    
+        except zipfile.BadZipFile:
+            console.print("[error] [X] Invalid bundle file (not a valid ZIP)", style="red")
+            return False
+        except Exception as e:
+            console.print(f"[error] [X] Bundle installation error: {e}", style="red")
+            return False
+        finally:
+            # Cleanup temp directory
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass
+    
+    async def _install_via_session(self, apk_files: list) -> bool:
+        """Install split APKs using pm install session
+        
+        This is the most reliable method for split APKs on newer Android versions.
+        """
+        import os
+        
+        adb = self._get_adb_path()
+        
+        try:
+            # Calculate total size
+            total_size = sum(os.path.getsize(f) for f in apk_files)
+            
+            # Create install session
+            code, stdout, stderr = self._run_command(
+                [adb, "shell", "pm", "install-create", "-S", str(total_size)]
+            )
+            
+            # Extract session ID
+            session_id = None
+            for part in stdout.split():
+                if part.isdigit():
+                    session_id = part
+                    break
+            
+            if not session_id:
+                # Try extracting from [session_id] format
+                import re
+                match = re.search(r'\[(\d+)\]', stdout)
+                if match:
+                    session_id = match.group(1)
+            
+            if not session_id:
+                console.print(f"[error] [X] Could not create install session: {stdout}", style="red")
+                return False
+            
+            console.print(f"[info] Created install session: {session_id}", style="cyan")
+            
+            # Write each APK to session
+            for i, apk_file in enumerate(apk_files):
+                apk_name = os.path.basename(apk_file)
+                apk_size = os.path.getsize(apk_file)
+                
+                console.print(f"[info] Writing {apk_name} ({i+1}/{len(apk_files)})...", style="cyan")
+                
+                # Push file and write to session
+                # adb shell pm install-write -S <size> <session_id> <split_name> -
+                # We need to stream the file
+                cmd = f'"{adb}" push "{apk_file}" /data/local/tmp/{apk_name}'
+                os.system(cmd)
+                
+                code, stdout, stderr = self._run_command([
+                    adb, "shell", "pm", "install-write", "-S", str(apk_size),
+                    session_id, apk_name, f"/data/local/tmp/{apk_name}"
+                ], timeout=120)
+                
+                if code != 0 and "Success" not in stdout:
+                    console.print(f"[warning] [!] Write warning for {apk_name}: {stderr}", style="yellow")
+            
+            # Commit session
+            console.print("[info] Committing install session...", style="cyan")
+            code, stdout, stderr = self._run_command(
+                [adb, "shell", "pm", "install-commit", session_id]
+            )
+            
+            if "Success" in stdout or code == 0:
+                console.print("[success] [OK] Split APK bundle installed via session", style="green")
+                # Cleanup temp files
+                for apk_file in apk_files:
+                    apk_name = os.path.basename(apk_file)
+                    self._run_command([adb, "shell", "rm", f"/data/local/tmp/{apk_name}"])
+                return True
+            else:
+                console.print(f"[error] [X] Session commit failed: {stderr}", style="red")
+                # Abandon session on failure
+                self._run_command([adb, "shell", "pm", "install-abandon", session_id])
+                return False
+                
+        except Exception as e:
+            console.print(f"[error] [X] Session installation error: {e}", style="red")
             return False
     
     async def launch_app(self, package_name: str, activity: Optional[str] = None) -> bool:
@@ -802,8 +996,39 @@ class EmulatorManager:
         
         return True
     
+    def _check_running_emulator(self) -> Tuple[bool, str]:
+        """Check if any emulator is currently running via ADB"""
+        try:
+            adb = self._get_adb_path()
+            if not os.path.exists(adb):
+                return False, ""
+            
+            code, stdout, stderr = self._run_command([adb, "devices"], timeout=10)
+            
+            # Parse for running emulators
+            for line in stdout.split('\n'):
+                line = line.strip()
+                if '\tdevice' in line:
+                    device_id = line.split('\t')[0]
+                    # Check if it's an emulator or real device
+                    if device_id.startswith('emulator-') or device_id.startswith('127.0.0.1:'):
+                        return True, device_id
+                    # Also accept real devices
+                    return True, device_id
+            
+            return False, ""
+        except Exception as e:
+            console.print(f"[warning] ADB check failed: {e}", style="yellow")
+            return False, ""
+    
     def get_status(self) -> Dict:
-        """Get current emulator status"""
+        """Get current emulator status - actively checks for running emulator"""
+        # Actively check for running emulator/device
+        is_running, device_id = self._check_running_emulator()
+        if is_running:
+            self.status.running = True
+            self.status.device_id = device_id
+        
         return {
             "sdk_installed": self.is_sdk_installed(),
             "emulator_installed": self.is_emulator_installed(),
@@ -819,7 +1044,9 @@ class EmulatorManager:
                 "api_level": self.config.api_level,
                 "ram_mb": self.config.ram_mb,
                 "proxy_port": self.config.proxy_port
-            }
+            },
+            "sdk_root": str(self.sdk_root),
+            "avd_home": str(self.avd_home)
         }
 
 

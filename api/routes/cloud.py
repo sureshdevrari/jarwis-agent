@@ -280,12 +280,21 @@ async def start_cloud_scan(
     - **Service Account Key (Legacy)**: Provide `service_account_key` JSON
     - **Workload Identity (Enterprise)**: Provide pool and provider IDs
     """
-    # ========== SUBSCRIPTION ENFORCEMENT ==========
-    # Check if user has cloud scan feature
-    await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CLOUD_SCAN)
+    # ========== DEVELOPER ACCOUNT CHECK ==========
+    from shared.constants import is_developer_account
+    is_dev_account = is_developer_account(current_user.email)
     
-    # Check scan limit
-    await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
+    if is_dev_account:
+        logger.info(f"🔧 DEVELOPER ACCOUNT: {current_user.email} - bypassing subscription limits for cloud scan")
+    # ==============================================
+    
+    # ========== SUBSCRIPTION ENFORCEMENT ==========
+    # Check if user has cloud scan feature (skip for developer accounts)
+    if not is_dev_account:
+        await enforce_subscription_limit(db, current_user, SubscriptionAction.ACCESS_CLOUD_SCAN)
+        
+        # Check scan limit
+        await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     # ==============================================
     
     # Validate credentials based on provider

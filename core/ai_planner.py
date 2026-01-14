@@ -781,13 +781,19 @@ You MUST respond with ONLY valid JSON:
             return self._default_verification(finding)
     
     def _default_verification(self, finding: Dict) -> Dict:
-        """Default verification when Jarwis intelligence is unavailable"""
+        """Default verification when Jarwis intelligence is unavailable.
+        
+        IMPORTANT: We do NOT assume findings are valid when verification fails.
+        This prevents false positives from being reported as confirmed vulnerabilities.
+        """
         return {
-            "is_valid": True,
-            "confidence": 0.5,
-            "reasoning": "Jarwis heuristic verification applied, manual review recommended",
+            "is_valid": False,  # DO NOT assume valid without verification
+            "confidence": 0.0,
+            "reasoning": "UNVERIFIED: AI verification failed or unavailable - manual review required",
             "adjusted_severity": finding.get('severity', 'medium'),
-            "recommendation": "Manual verification recommended"
+            "recommendation": "MANUAL VERIFICATION REQUIRED - finding not confirmed",
+            "needs_manual_review": True,
+            "verification_status": "failed"
         }
     
     async def batch_verify_findings(self, findings: List) -> List[Dict]:

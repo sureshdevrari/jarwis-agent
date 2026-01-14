@@ -118,19 +118,40 @@ class StaticAnalyzer:
         self._check_tools()
     
     def _check_tools(self):
-        """Check which analysis tools are available"""
-        tools = ['apktool', 'jadx', 'aapt', 'unzip', 'strings']
+        """Check which analysis tools are available on the system"""
+        import platform as sys_platform
+        is_windows = sys_platform.system() == 'Windows'
         
-        for tool in tools:
-            try:
-                result = subprocess.run(
-                    [tool, '--version'] if tool != 'unzip' else [tool, '-v'],
-                    capture_output=True,
-                    timeout=5
-                )
-                self._tools_available[tool] = result.returncode == 0
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                self._tools_available[tool] = False
+        # Tools to check - on Windows we look for .exe or .bat versions
+        tools = {
+            'apktool': ['apktool', 'apktool.bat', 'apktool.exe'],
+            'jadx': ['jadx', 'jadx.bat', 'jadx.exe'],
+            'aapt': ['aapt', 'aapt.exe', 'aapt2.exe'],
+            'unzip': ['unzip', 'unzip.exe'],  # Windows has built-in Expand-Archive
+            'strings': ['strings', 'strings.exe'],
+        }
+        
+        for tool_name, variants in tools.items():
+            found = False
+            for variant in variants:
+                try:
+                    # Use 'where' on Windows, 'which' on Unix
+                    check_cmd = ['where', variant] if is_windows else ['which', variant]
+                    result = subprocess.run(
+                        check_cmd,
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        found = True
+                        break
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    continue
+            
+            self._tools_available[tool_name] = found
+        
+        # On Windows, we always have Python's zipfile which can replace unzip
+        self._tools_available['python_zip'] = True
         
         logger.info(f"Static analysis tools available: {self._tools_available}")
     
@@ -151,10 +172,103 @@ class StaticAnalyzer:
         
         if ext == '.apk':
             return await self._analyze_apk(file_path)
+        elif ext == '.xapk':
+            # XAPK is a split APK format - extract base APK first
+            return await self._analyze_xapk(file_path)
         elif ext == '.ipa':
             return await self._analyze_ipa(file_path)
         else:
-            raise ValueError(f"Unsupported file type: {ext}. Supported: .apk, .ipa")
+            raise ValueError(f"Unsupported file type: {ext}. Supported: .apk, .xapk, .ipa")
+    
+    async def _analyze_xapk(self, xapk_path: Path) -> tuple[AppMetadata, List[StaticAnalysisResult]]:
+        """
+        Analyze XAPK file (split APK bundle format).
+        
+        XAPK contains:
+        - manifest.json with app metadata
+        - base APK file
+        - Split APKs for different architectures/configurations
+        """
+        logger.info(f"Analyzing XAPK: {xapk_path}")
+        
+        # Create temp directory for extraction
+        xapk_temp_dir = tempfile.mkdtemp(prefix="jarwis_xapk_")
+        base_apk_path = None
+        xapk_manifest = {}
+        
+        try:
+            # Extract XAPK (it's a zip file)
+            with zipfile.ZipFile(xapk_path, 'r') as zip_ref:
+                zip_ref.extractall(xapk_temp_dir)
+            
+            xapk_extract = Path(xapk_temp_dir)
+            
+            # Find base APK - check for manifest.json first
+            manifest_json = xapk_extract / "manifest.json"
+            if manifest_json.exists():
+                try:
+                    with open(manifest_json, 'r', encoding='utf-8') as f:
+                        xapk_manifest = json.load(f)
+                    logger.info(f"XAPK manifest: package={xapk_manifest.get('package_name')}, version={xapk_manifest.get('version_name')}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse XAPK manifest: {e}")
+            
+            # Look for base APK (usually named base.apk or {package}.apk)
+            apk_files = list(xapk_extract.glob("*.apk"))
+            
+            # Prioritize base.apk or the largest APK
+            for apk in apk_files:
+                if apk.name.lower() in ['base.apk', 'base-master.apk']:
+                    base_apk_path = apk
+                    break
+            
+            if not base_apk_path and apk_files:
+                # Use the largest APK as base
+                base_apk_path = max(apk_files, key=lambda p: p.stat().st_size)
+            
+            if not base_apk_path:
+                raise ValueError("No APK file found in XAPK bundle")
+            
+            logger.info(f"Using base APK: {base_apk_path.name}")
+            
+            # Analyze the base APK
+            metadata, findings = await self._analyze_apk(base_apk_path)
+            
+            # Override with XAPK manifest data (more accurate)
+            if xapk_manifest:
+                if xapk_manifest.get('package_name'):
+                    metadata.package_name = xapk_manifest.get('package_name')
+                if xapk_manifest.get('version_name'):
+                    metadata.version_name = xapk_manifest.get('version_name')
+                if xapk_manifest.get('version_code'):
+                    metadata.version_code = str(xapk_manifest.get('version_code'))
+                if xapk_manifest.get('min_sdk_version'):
+                    metadata.min_sdk = str(xapk_manifest.get('min_sdk_version'))
+                if xapk_manifest.get('target_sdk_version'):
+                    metadata.target_sdk = str(xapk_manifest.get('target_sdk_version'))
+                # Extract permissions from XAPK manifest
+                if xapk_manifest.get('permissions'):
+                    for perm in xapk_manifest.get('permissions', []):
+                        if perm not in metadata.permissions:
+                            metadata.permissions.append(perm)
+            
+            # Add XAPK-specific info
+            findings.append(StaticAnalysisResult(
+                id=f"xapk_bundle_{xapk_path.stem}",
+                category="info",
+                severity="info",
+                title="Split APK Bundle Detected",
+                description=f"Application is distributed as XAPK (split APK bundle) with {len(apk_files)} APK components.",
+                file_path=str(xapk_path),
+                evidence=f"APK components: {', '.join(a.name for a in apk_files)}"
+            ))
+            
+            return metadata, findings
+            
+        finally:
+            # Cleanup temp directory
+            import shutil
+            shutil.rmtree(xapk_temp_dir, ignore_errors=True)
     
     async def _analyze_apk(self, apk_path: Path) -> tuple[AppMetadata, List[StaticAnalysisResult]]:
         """Analyze Android APK file"""
@@ -301,12 +415,24 @@ class StaticAnalyzer:
                         recommendation="Set android:debuggable to false in production builds."
                     ))
             
-            # Fallback: extract and parse binary manifest
+            # Fallback: extract and parse binary manifest using pure Python
             else:
-                with zipfile.ZipFile(apk_path, 'r') as zf:
-                    if 'AndroidManifest.xml' in zf.namelist():
-                        # Binary XML - would need androguard to parse properly
-                        pass
+                logger.info("aapt not available, using pure Python manifest parsing")
+                manifest_data = await self._parse_binary_manifest(apk_path, metadata)
+                if manifest_data:
+                    # Check for debuggable
+                    if manifest_data.get('debuggable'):
+                        metadata.is_debuggable = True
+                        findings.append(StaticAnalysisResult(
+                            id="M7-DEBUG-001",
+                            category="M7",
+                            severity="high",
+                            title="Application is Debuggable",
+                            description="The android:debuggable flag is set to true.",
+                            file_path="AndroidManifest.xml",
+                            evidence="android:debuggable=true",
+                            recommendation="Set android:debuggable to false in production builds."
+                        ))
                         
         except Exception as e:
             logger.error(f"Error parsing Android manifest: {e}")
@@ -327,6 +453,76 @@ class StaticAnalyzer:
         
         return findings
     
+    async def _parse_binary_manifest(self, apk_path: Path, metadata: AppMetadata) -> dict:
+        """
+        Parse binary AndroidManifest.xml without external tools.
+        Uses basic string scanning since full binary XML parsing requires androguard.
+        """
+        result = {}
+        
+        try:
+            with zipfile.ZipFile(apk_path, 'r') as zf:
+                # Try to extract strings from classes.dex for package info
+                if 'classes.dex' in zf.namelist():
+                    dex_data = zf.read('classes.dex')
+                    # Simple string extraction from DEX
+                    # Look for package name patterns
+                    dex_str = dex_data.decode('latin-1', errors='ignore')
+                    
+                    # Find package name (usually follows pattern Lcom/example/app;)
+                    pkg_matches = re.findall(r'L([a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)+);', dex_str)
+                    if pkg_matches:
+                        # Get most common package prefix
+                        pkg_counts = {}
+                        for m in pkg_matches:
+                            parts = m.split('/')
+                            if len(parts) >= 2:
+                                pkg = '.'.join(parts[:3]) if len(parts) >= 3 else '.'.join(parts[:2])
+                                pkg_counts[pkg] = pkg_counts.get(pkg, 0) + 1
+                        
+                        if pkg_counts:
+                            best_pkg = max(pkg_counts, key=pkg_counts.get)
+                            metadata.package_name = best_pkg
+                            logger.info(f"Inferred package name: {best_pkg}")
+                
+                # Try to find version info from resources.arsc
+                if 'resources.arsc' in zf.namelist():
+                    res_data = zf.read('resources.arsc')
+                    res_str = res_data.decode('latin-1', errors='ignore')
+                    
+                    # Look for version patterns
+                    version_match = re.search(r'(\d+\.\d+\.\d+(?:\.\d+)?)', res_str)
+                    if version_match:
+                        metadata.version_name = version_match.group(1)
+                
+                # Check AndroidManifest.xml for permissions (binary but strings are readable)
+                if 'AndroidManifest.xml' in zf.namelist():
+                    manifest_data = zf.read('AndroidManifest.xml')
+                    manifest_str = manifest_data.decode('latin-1', errors='ignore')
+                    
+                    # Find permissions
+                    perm_matches = re.findall(r'(android\.permission\.[A-Z_]+)', manifest_str)
+                    for perm in set(perm_matches):
+                        if perm not in metadata.permissions:
+                            metadata.permissions.append(perm)
+                    
+                    # Check for debuggable
+                    if b'debuggable' in manifest_data:
+                        # This is a rough check - binary encoding varies
+                        result['debuggable'] = True
+                    
+                    # Check for backup allowed  
+                    if b'allowBackup' in manifest_data:
+                        result['allowBackup'] = True
+                        metadata.allows_backup = True
+                        
+            logger.info(f"Binary manifest parse: pkg={metadata.package_name}, perms={len(metadata.permissions)}")
+            
+        except Exception as e:
+            logger.warning(f"Error in binary manifest parsing: {e}")
+        
+        return result
+
     async def _parse_info_plist(self, app_dir: Path, metadata: AppMetadata) -> List[StaticAnalysisResult]:
         """Parse iOS Info.plist"""
         findings = []

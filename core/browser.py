@@ -586,14 +586,23 @@ class BrowserController:
                         '--disable-blink-features=AutomationControlled',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
-                        '--no-sandbox'
+                        '--no-sandbox',
+                        '--ignore-certificate-errors',  # Accept MITM proxy certificates
+                        '--ignore-certificate-errors-spki-list',  # Suppress cert pinning
+                        '--disable-features=IsolateOrigins,site-per-process',  # Better MITM compatibility
                     ]
                 )
-                context = browser.new_context(
-                    viewport={'width': 1920, 'height': 1080},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    ignore_https_errors=True
-                )
+                # Configure proxy for MITM capture if available
+                context_options = {
+                    'viewport': {'width': 1920, 'height': 1080},
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'ignore_https_errors': True
+                }
+                # Add proxy configuration if available (critical for MITM traffic capture)
+                if self.proxy_host and self.proxy_host.strip() and self.proxy_port and self.proxy_port > 0:
+                    context_options['proxy'] = {'server': f'http://{self.proxy_host}:{self.proxy_port}'}
+                    logger.info(f"Windows sync mode: Using proxy {self.proxy_host}:{self.proxy_port}")
+                context = browser.new_context(**context_options)
                 # Create page for Windows
                 page = context.new_page()
                 return pw, browser, context, page
@@ -607,16 +616,27 @@ class BrowserController:
             
             # Set up request/response interception for Windows (sync wrapper)
             def setup_interception_sync():
-                # Capture responses for traffic log
+                # Capture responses for traffic log - including body for vulnerability detection
                 def on_response(response):
                     try:
+                        # Capture response body for vulnerability detection (SQL errors, XSS reflection, etc.)
+                        body = ''
+                        content_type = response.headers.get('content-type', '')
+                        # Only capture body for text-based responses (HTML, JSON, XML, text)
+                        if any(ct in content_type.lower() for ct in ['text/', 'json', 'xml', 'javascript']):
+                            try:
+                                body = response.text()[:100000]  # Limit to 100KB
+                            except Exception:
+                                pass
+                        
                         self._captured_traffic.append({
                             'type': 'response',
                             'url': response.url,
                             'method': response.request.method,
                             'status': response.status,
                             'headers': dict(response.headers),
-                            'request_headers': dict(response.request.headers)
+                            'request_headers': dict(response.request.headers),
+                            'body': body  # Include body for vulnerability detection
                         })
                     except Exception as e:
                         logger.debug(f"Error capturing response: {e}")
@@ -640,7 +660,10 @@ class BrowserController:
             args=[
                 '--disable-blink-features=AutomationControlled',
                 '--disable-dev-shm-usage',
-                '--no-sandbox'
+                '--no-sandbox',
+                '--ignore-certificate-errors',  # Accept MITM proxy certificates
+                '--ignore-certificate-errors-spki-list',  # Suppress cert pinning
+                '--disable-features=IsolateOrigins,site-per-process',  # Better MITM compatibility
             ],
             timeout=60000  # 60 second timeout for browser launch
         )
@@ -768,15 +791,39 @@ class BrowserController:
                 pass
     
     def _capture_response(self, response):
-        """Capture response headers"""
+        """Capture response headers and body for vulnerability detection"""
         try:
+            # Capture response body for vulnerability detection (SQL errors, XSS reflection, etc.)
+            body = ''
+            content_type = response.headers.get('content-type', '')
+            # Only capture body for text-based responses (HTML, JSON, XML, text)
+            if any(ct in content_type.lower() for ct in ['text/', 'json', 'xml', 'javascript']):
+                try:
+                    # Use asyncio to get body in sync context
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Schedule body capture - will be captured async
+                        async def get_body():
+                            try:
+                                return await response.text()
+                            except:
+                                return ''
+                        body_future = asyncio.ensure_future(get_body())
+                        # Store future for later resolution if needed
+                    else:
+                        body = loop.run_until_complete(response.text())[:100000]
+                except Exception:
+                    pass
+            
             self._captured_traffic.append({
                 'timestamp': datetime.now().isoformat(),
                 'type': 'response',
                 'url': response.url,
                 'status': response.status,
                 'status_text': response.status_text,
-                'headers': dict(response.headers)
+                'headers': dict(response.headers),
+                'body': body  # Include body for vulnerability detection
             })
         except Exception as e:
             logger.debug(f"Error capturing response: {e}")
@@ -949,6 +996,10 @@ class BrowserController:
                             'params': {},
                             'has_upload': False
                         })
+                
+                # CRITICAL: Submit discovered forms to capture POST traffic via MITM
+                # This is essential for discovering dynamic endpoints and attack surfaces
+                await self._submit_discovered_forms(forms, url)
                 
                 # Add discovered links to queue for BFS traversal
                 for link in links:
@@ -1217,6 +1268,182 @@ class BrowserController:
         else:
             return await self.page.evaluate(js_code)
     
+    async def _submit_discovered_forms(self, forms: List[Dict], current_url: str, max_forms_per_page: int = 5):
+        """
+        Submit discovered forms to capture POST/dynamic traffic via MITM proxy.
+        
+        This is CRITICAL for discovering attack surfaces that only appear after form submission:
+        - Login panels (submit to see authenticated areas)
+        - Search forms (submit to see results endpoints)
+        - Contact forms (capture POST parameters)
+        - Registration forms (discover validation endpoints)
+        
+        Args:
+            forms: List of form dicts from _extract_forms()
+            current_url: Current page URL for navigation back
+            max_forms_per_page: Limit forms per page to avoid crawl explosion
+        """
+        from .form_filler import FormFiller, FormData, FormField, FormExtractor
+        
+        if not forms:
+            return
+        
+        form_filler = FormFiller()
+        submitted_count = 0
+        
+        # Track original URL to navigate back after form submissions
+        original_url = current_url
+        
+        for form_dict in forms[:max_forms_per_page]:  # Limit forms per page
+            try:
+                # Skip forms with dangerous actions
+                action_url = form_dict.get('url', '')
+                dangerous_patterns = [
+                    'logout', 'signout', 'log-out', 'sign-out',
+                    'delete', 'remove', 'unsubscribe', 'cancel',
+                    'deactivate', 'disable', 'terminate', 'destroy',
+                    'payment', 'checkout', 'purchase', 'order'
+                ]
+                
+                if any(pattern in action_url.lower() for pattern in dangerous_patterns):
+                    logger.debug(f"Skipping dangerous form action: {action_url}")
+                    continue
+                
+                # Skip file upload forms (handled separately)
+                if form_dict.get('has_upload'):
+                    logger.debug(f"Skipping file upload form: {action_url}")
+                    continue
+                
+                # Get detailed form info using FormExtractor
+                try:
+                    detailed_forms = await FormExtractor.extract_forms(self.page)
+                    matching_form = None
+                    for df in detailed_forms:
+                        if df.action == action_url or (not df.action and action_url == current_url):
+                            matching_form = df
+                            break
+                    
+                    if not matching_form:
+                        # Create FormData from basic form_dict
+                        fields = []
+                        for param_name, param_type in form_dict.get('params', {}).items():
+                            fields.append(FormField(
+                                name=param_name,
+                                field_type=param_type,
+                                selector=f'[name="{param_name}"]',
+                                required=False
+                            ))
+                        matching_form = FormData(
+                            action=action_url,
+                            method=form_dict.get('method', 'POST'),
+                            fields=fields
+                        )
+                except Exception as e:
+                    logger.debug(f"Error extracting detailed form: {e}")
+                    continue
+                
+                # Check if form should be submitted
+                if not form_filler.should_submit_form(matching_form):
+                    logger.debug(f"FormFiller says skip form: {action_url}")
+                    continue
+                
+                # Detect form type for logging
+                form_type = form_filler.detect_form_type(matching_form)
+                logger.info(f"Submitting {form_type} form: {action_url} [{matching_form.method}]")
+                
+                # Generate field values
+                field_values = form_filler.fill_form(matching_form)
+                
+                # Fill all form fields
+                for selector, value in field_values.items():
+                    try:
+                        if self._is_windows:
+                            await self._run_sync(self.page.fill, selector, value)
+                        else:
+                            await self.page.fill(selector, value)
+                        logger.debug(f"Filled {selector} = {value[:20]}..." if len(value) > 20 else f"Filled {selector} = {value}")
+                    except Exception as e:
+                        logger.debug(f"Could not fill {selector}: {e}")
+                
+                # Submit the form
+                try:
+                    # Try clicking submit button first
+                    if matching_form.submit_selector:
+                        if self._is_windows:
+                            await self._run_sync(self.page.click, matching_form.submit_selector)
+                        else:
+                            await self.page.click(matching_form.submit_selector)
+                    else:
+                        # Try common submit patterns
+                        submit_selectors = [
+                            'form button[type="submit"]',
+                            'form input[type="submit"]',
+                            'form button:not([type])',
+                            'form [class*="submit" i]',
+                            'button:has-text("Submit")',
+                            'button:has-text("Search")',
+                            'button:has-text("Send")',
+                            'button:has-text("Login")',
+                            'button:has-text("Sign")',
+                        ]
+                        
+                        submitted = False
+                        for submit_sel in submit_selectors:
+                            try:
+                                element = await self._page_query_selector(submit_sel)
+                                if element and await self._element_is_visible(element):
+                                    await self._element_click(element)
+                                    submitted = True
+                                    break
+                            except:
+                                continue
+                        
+                        # If no button found, try pressing Enter on last field
+                        if not submitted and field_values:
+                            try:
+                                last_selector = list(field_values.keys())[-1]
+                                if self._is_windows:
+                                    await self._run_sync(self.page.press, last_selector, 'Enter')
+                                else:
+                                    await self.page.press(last_selector, 'Enter')
+                            except:
+                                pass
+                    
+                    # Wait for form submission and any JS processing
+                    await asyncio.sleep(1.0)
+                    
+                    submitted_count += 1
+                    logger.info(f"Form submitted successfully ({submitted_count}/{max_forms_per_page})")
+                    
+                    # Capture any new endpoints from the response page
+                    try:
+                        new_forms = await self._extract_forms()
+                        for nf in new_forms:
+                            if nf not in self._endpoints:
+                                self._endpoints.append(nf)
+                    except:
+                        pass
+                    
+                except Exception as e:
+                    logger.debug(f"Form submission failed: {e}")
+                
+                # Navigate back to continue crawling
+                try:
+                    if self._is_windows:
+                        await self._run_sync(self.page.goto, original_url, wait_until='domcontentloaded', timeout=10000)
+                    else:
+                        await self.page.goto(original_url, wait_until='domcontentloaded', timeout=10000)
+                    await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.debug(f"Could not navigate back: {e}")
+                    break  # Stop form submission for this page if we can't navigate back
+                    
+            except Exception as e:
+                logger.debug(f"Error processing form: {e}")
+        
+        if submitted_count > 0:
+            logger.info(f"Submitted {submitted_count} forms on {current_url}")
+    
     def _is_in_scope(self, url: str, scope: Dict) -> bool:
         """Check if URL is within defined scope"""
         includes = scope.get('include', [])
@@ -1268,33 +1495,34 @@ class BrowserController:
         Handle common popups, modals, location selectors, and cookie banners.
         This is crucial for e-commerce sites that require location selection.
         Strategy: First try to INTERACT with popups (select something), then try to CLOSE them.
+        
+        Now supports Windows mode using sync wrappers for Playwright operations.
         """
-        # On Windows, skip popup handling for now due to threading issues
-        if self._is_windows:
-            logger.debug("Popup handling skipped on Windows (sync API threading)")
-            return
-            
         try:
             # Brief wait for popups to appear
             await asyncio.sleep(0.5)
             
             # Log current page state for debugging
-            page_title = await self._page_title()
-            logger.info(f"Handling popups on page: {page_title}")
+            try:
+                page_title = await self._page_title()
+                logger.info(f"Handling popups on page: {page_title}")
+            except:
+                pass
             
-            # 1. Handle cookie consent banners first
-            await self._dismiss_cookie_banners()
-            await asyncio.sleep(0.5)
+            # 1. Handle cookie consent banners first (works on Windows via simplified approach)
+            await self._dismiss_cookie_banners_safe()
+            await asyncio.sleep(0.3)
             
             # 2. Handle location/city/area selector popups (CRITICAL for e-commerce)
-            # This is the main issue - we need to SELECT something, not just close
-            location_handled = await self._handle_location_selector_interactive()
+            # On Windows, use simplified popup handling that works with sync API
+            if self._is_windows:
+                await self._handle_popups_windows_safe()
+            else:
+                location_handled = await self._handle_location_selector_interactive()
+                if not location_handled:
+                    await self._handle_location_selector()
             
-            # 3. If location popup still exists, try more aggressive methods
-            if not location_handled:
-                await self._handle_location_selector()
-            
-            # 4. Handle any remaining generic modals
+            # 3. Handle any remaining generic modals
             await self._dismiss_generic_modals()
             
             # 5. Handle newsletter/subscription popups
@@ -1399,42 +1627,161 @@ class BrowserController:
             logger.debug(f"Interactive location handler: {e}")
             return False
     
-    async def _find_blocking_overlay(self):
-        """Check if there's a blocking modal/popup overlay"""
-        # On Windows, skip overlay detection due to threading issues
-        if self._is_windows:
-            return None
+    async def _handle_popups_windows_safe(self):
+        """
+        Windows-safe popup handling that uses sync wrappers.
+        Simplified approach that works with the ThreadPoolExecutor-based Playwright.
+        """
+        try:
+            # Use JavaScript to find and click common popup close elements
+            js_dismiss_popups = '''() => {
+                let dismissed = 0;
+                
+                // Common close button patterns
+                const closeSelectors = [
+                    // Cookie banners
+                    'button[id*="cookie" i][id*="accept" i]',
+                    'button[class*="cookie" i][class*="accept" i]',
+                    '#onetrust-accept-btn-handler',
+                    '.cc-btn.cc-dismiss',
+                    
+                    // Generic close buttons
+                    '[class*="modal" i] [class*="close" i]',
+                    '[class*="popup" i] [class*="close" i]',
+                    '[class*="modal" i] button[aria-label*="close" i]',
+                    '[role="dialog"] button[aria-label*="close" i]',
+                    
+                    // X buttons
+                    '.close-button',
+                    '.btn-close',
+                    '[data-dismiss="modal"]',
+                    
+                    // Accept/OK buttons (prioritized)
+                    'button:not([disabled])',
+                ];
+                
+                // Try accept buttons first
+                const acceptPatterns = ['accept', 'ok', 'got it', 'agree', 'continue', 'skip'];
+                document.querySelectorAll('button, a.btn, [role="button"]').forEach(el => {
+                    const text = (el.innerText || '').toLowerCase().trim();
+                    if (acceptPatterns.some(p => text.includes(p)) && el.offsetParent !== null) {
+                        try {
+                            el.click();
+                            dismissed++;
+                        } catch(e) {}
+                    }
+                });
+                
+                // Then try close buttons on modals
+                closeSelectors.forEach(sel => {
+                    try {
+                        const el = document.querySelector(sel);
+                        if (el && el.offsetParent !== null) {
+                            el.click();
+                            dismissed++;
+                        }
+                    } catch(e) {}
+                });
+                
+                return dismissed;
+            }'''
             
-        overlay_selectors = [
-            '[class*="modal" i][class*="open" i]',
-            '[class*="modal" i][class*="show" i]',
-            '[class*="modal" i][class*="active" i]',
-            '[class*="popup" i][class*="open" i]',
-            '[class*="popup" i][class*="show" i]',
-            '[class*="popup" i][class*="visible" i]',
-            '[class*="overlay" i][class*="open" i]',
-            '[class*="dialog" i][class*="open" i]',
-            '[role="dialog"][aria-modal="true"]',
-            '[role="dialog"]:not([aria-hidden="true"])',
-            '.modal.show',
-            '.modal.in',
-            '.popup.active',
-            '[class*="backdrop" i][class*="show" i]',
-            # Specific common patterns
-            '[class*="location" i][class*="modal" i]',
-            '[class*="city" i][class*="popup" i]',
-            '[class*="pincode" i][class*="modal" i]',
-            '[id*="location" i][id*="modal" i]',
-        ]
+            dismissed = await self._page_evaluate(js_dismiss_popups)
+            if dismissed > 0:
+                logger.info(f"Windows popup handler dismissed {dismissed} element(s)")
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            logger.debug(f"Windows popup handler error: {e}")
+    
+    async def _dismiss_cookie_banners_safe(self):
+        """Dismiss cookie consent banners - safe for both Windows and non-Windows"""
+        try:
+            # Use JavaScript approach which works on both platforms
+            js_dismiss_cookies = '''() => {
+                const acceptPatterns = [
+                    'accept all', 'accept cookies', 'i accept', 'got it', 
+                    'ok', 'agree', 'allow all', 'allow cookies', 'accept'
+                ];
+                
+                let found = false;
+                document.querySelectorAll('button, a, [role="button"]').forEach(el => {
+                    if (found) return;
+                    const text = (el.innerText || '').toLowerCase().trim();
+                    if (acceptPatterns.some(p => text.includes(p)) && el.offsetParent !== null) {
+                        // Check if likely a cookie button (near cookie-related text)
+                        const parent = el.closest('[class*="cookie" i], [class*="consent" i], [class*="gdpr" i], [id*="cookie" i]');
+                        if (parent || text.includes('cookie')) {
+                            try {
+                                el.click();
+                                found = true;
+                            } catch(e) {}
+                        }
+                    }
+                });
+                
+                // Also try common cookie banner selectors
+                const cookieSelectors = [
+                    '#onetrust-accept-btn-handler',
+                    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                    '.cc-btn.cc-dismiss',
+                    '[data-testid="cookie-policy-manage-dialog-accept-button"]',
+                ];
+                
+                if (!found) {
+                    for (const sel of cookieSelectors) {
+                        const el = document.querySelector(sel);
+                        if (el && el.offsetParent !== null) {
+                            el.click();
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                
+                return found;
+            }'''
+            
+            result = await self._page_evaluate(js_dismiss_cookies)
+            if result:
+                logger.debug("Cookie banner dismissed")
+                
+        except Exception as e:
+            logger.debug(f"Cookie banner handling: {e}")
+    
+    async def _find_blocking_overlay(self):
+        """Check if there's a blocking modal/popup overlay - works on Windows via JS"""
+        # Use JavaScript approach which works on both platforms
+        js_find_overlay = '''() => {
+            const overlaySelectors = [
+                '[class*="modal" i][class*="open" i]',
+                '[class*="modal" i][class*="show" i]',
+                '[class*="modal" i][class*="active" i]',
+                '[class*="popup" i][class*="open" i]',
+                '[class*="popup" i][class*="show" i]',
+                '[class*="popup" i][class*="visible" i]',
+                '[class*="overlay" i][class*="open" i]',
+                '[role="dialog"][aria-modal="true"]',
+                '[role="dialog"]:not([aria-hidden="true"])',
+                '.modal.show',
+                '.modal.in',
+                '.popup.active',
+            ];
+            
+            for (const sel of overlaySelectors) {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    return true;
+                }
+            }
+            return false;
+        }'''
         
-        for selector in overlay_selectors:
-            try:
-                element = await self.page.query_selector(selector)
-                if element and await element.is_visible():
-                    return element
-            except:
-                continue
-        return None
+        try:
+            has_overlay = await self._page_evaluate(js_find_overlay)
+            return has_overlay
+        except:
+            return False
     
     async def _click_confirm_in_modal(self):
         """Click confirm/submit/apply buttons inside a modal"""
@@ -2023,6 +2370,496 @@ class BrowserController:
                 await asyncio.sleep(0.3)
         except:
             pass
+
+    async def dismiss_all_popups(self):
+        """
+        Comprehensive popup/overlay dismissal for login flow.
+        Works on both Windows and non-Windows platforms using JavaScript.
+        Call this before attempting login form detection.
+        """
+        logger.debug("Dismissing all popups and overlays before login...")
+        
+        # JavaScript-based approach that works on both platforms
+        js_dismiss_all = '''() => {
+            let dismissed = 0;
+            
+            // 1. Cookie banners - accept or dismiss
+            const cookiePatterns = [
+                'accept all', 'accept cookies', 'i accept', 'got it', 
+                'ok', 'agree', 'allow all', 'allow cookies', 'accept',
+                'continue', 'dismiss', 'close'
+            ];
+            
+            const cookieContainers = document.querySelectorAll(
+                '[class*="cookie" i], [class*="consent" i], [class*="gdpr" i], ' +
+                '[id*="cookie" i], [id*="consent" i], [class*="privacy" i]'
+            );
+            
+            cookieContainers.forEach(container => {
+                const buttons = container.querySelectorAll('button, a, [role="button"]');
+                buttons.forEach(btn => {
+                    const text = (btn.innerText || '').toLowerCase().trim();
+                    if (cookiePatterns.some(p => text.includes(p)) && btn.offsetParent !== null) {
+                        try { btn.click(); dismissed++; } catch(e) {}
+                    }
+                });
+            });
+            
+            // 2. Known cookie banner selectors
+            const knownCookieSelectors = [
+                '#onetrust-accept-btn-handler',
+                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                '.cc-btn.cc-dismiss',
+                '[data-testid="cookie-policy-manage-dialog-accept-button"]',
+                '#cookie-accept',
+                '.cookie-accept',
+                '#accept-cookies',
+                '.accept-cookies-btn',
+            ];
+            
+            knownCookieSelectors.forEach(sel => {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    try { el.click(); dismissed++; } catch(e) {}
+                }
+            });
+            
+            // 3. Generic modal close buttons
+            const closeSelectors = [
+                '[class*="modal" i] [class*="close" i]',
+                '[class*="popup" i] [class*="close" i]',
+                '[class*="overlay" i] [class*="close" i]',
+                '[role="dialog"] [aria-label*="close" i]',
+                '[role="dialog"] [class*="close" i]',
+                '.modal .close',
+                '.modal-close',
+                '.popup-close',
+                '[data-dismiss="modal"]',
+                'button[aria-label="Close"]',
+                'button[aria-label="close"]',
+                '.close-button',
+                '.dialog-close',
+                '.btn-close',
+                // Material UI / Angular
+                'button.close-dialog',
+                'mat-dialog-container button.close',
+                '.cdk-overlay-pane button[mat-icon-button]',
+            ];
+            
+            closeSelectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (el.offsetParent !== null) {
+                        try { el.click(); dismissed++; } catch(e) {}
+                    }
+                });
+            });
+            
+            // 4. Click backdrop to close modals
+            const backdropSelectors = [
+                '.modal-backdrop',
+                '.cdk-overlay-backdrop',
+                '.overlay-backdrop',
+                '[class*="backdrop" i]',
+            ];
+            
+            backdropSelectors.forEach(sel => {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    try { el.click(); dismissed++; } catch(e) {}
+                }
+            });
+            
+            // 5. Newsletter/subscription popups
+            const newsletterCloseSelectors = [
+                '[class*="newsletter" i] [class*="close" i]',
+                '[class*="subscribe" i] [class*="close" i]',
+                '[class*="signup" i][class*="popup" i] [class*="close" i]',
+                '[class*="promo" i] [class*="close" i]',
+            ];
+            
+            newsletterCloseSelectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (el.offsetParent !== null) {
+                        try { el.click(); dismissed++; } catch(e) {}
+                    }
+                });
+            });
+            
+            // 6. Welcome/onboarding dialogs
+            const welcomeSelectors = [
+                '[class*="welcome" i] [class*="close" i]',
+                '[class*="welcome" i] button:last-child',
+                '[class*="onboarding" i] [class*="skip" i]',
+                '[class*="tour" i] [class*="skip" i]',
+                '[class*="intro" i] [class*="close" i]',
+            ];
+            
+            welcomeSelectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (el.offsetParent !== null) {
+                        try { el.click(); dismissed++; } catch(e) {}
+                    }
+                });
+            });
+            
+            return dismissed;
+        }'''
+        
+        try:
+            dismissed = await self._page_evaluate(js_dismiss_all)
+            if dismissed > 0:
+                logger.info(f"Dismissed {dismissed} popup/overlay element(s)")
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.debug(f"Popup dismissal error: {e}")
+        
+        # Also try pressing Escape key
+        try:
+            await self._page_press('body', 'Escape')
+            await asyncio.sleep(0.2)
+        except:
+            pass
+
+    async def is_login_form_visible(self) -> bool:
+        """
+        Check if a login form is currently visible on the page.
+        Returns True if a password field is visible (main indicator of login form).
+        """
+        js_check_login_form = '''() => {
+            // Password field is the primary indicator of a login form
+            const passwordSelectors = [
+                'input[type="password"]',
+                'input[name*="pass" i]',
+                'input[id*="pass" i]',
+                'input[autocomplete="current-password"]',
+                'input[autocomplete="new-password"]',
+            ];
+            
+            for (const sel of passwordSelectors) {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    // Check if actually visible (not hidden)
+                    const style = window.getComputedStyle(el);
+                    if (style.display !== 'none' && 
+                        style.visibility !== 'hidden' && 
+                        style.opacity !== '0') {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }'''
+        
+        try:
+            is_visible = await self._page_evaluate(js_check_login_form)
+            return bool(is_visible)
+        except Exception as e:
+            logger.debug(f"Login form visibility check error: {e}")
+            return False
+
+    async def discover_and_click_login_trigger(self) -> bool:
+        """
+        Find and click login buttons/links to reveal the login form.
+        Use this when the login form is not immediately visible on the page
+        (common in SPAs where landing page == login page).
+        
+        Returns True if a login trigger was found and clicked.
+        """
+        logger.info("Searching for login trigger elements...")
+        
+        # JavaScript to find login-related clickable elements
+        js_find_login_triggers = '''() => {
+            const triggers = [];
+            
+            // Text patterns that indicate login buttons/links
+            const loginTextPatterns = [
+                'log in', 'login', 'sign in', 'signin', 'sign-in',
+                'account', 'my account', 'member login', 'user login',
+                'already have an account', 'existing user', 'returning customer'
+            ];
+            
+            // Elements to check: links, buttons, divs with click handlers
+            const clickableSelectors = [
+                'a', 'button', '[role="button"]', '[onclick]',
+                '[class*="login" i]', '[class*="signin" i]',
+                '[id*="login" i]', '[id*="signin" i]',
+                '[data-action*="login" i]', '[data-action*="signin" i]',
+            ];
+            
+            const allClickables = document.querySelectorAll(clickableSelectors.join(', '));
+            
+            allClickables.forEach(el => {
+                // Skip if not visible
+                if (el.offsetParent === null) return;
+                
+                const text = (el.innerText || el.textContent || '').toLowerCase().trim();
+                const href = (el.getAttribute('href') || '').toLowerCase();
+                const className = (el.className || '').toLowerCase();
+                const id = (el.id || '').toLowerCase();
+                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                
+                let score = 0;
+                let matchReason = [];
+                
+                // Check text content
+                for (const pattern of loginTextPatterns) {
+                    if (text.includes(pattern)) {
+                        score += 10;
+                        matchReason.push('text:' + pattern);
+                    }
+                }
+                
+                // Check href
+                if (href.includes('login') || href.includes('signin') || href.includes('sign-in')) {
+                    score += 8;
+                    matchReason.push('href');
+                }
+                
+                // Check class/id
+                if (className.includes('login') || className.includes('signin')) {
+                    score += 5;
+                    matchReason.push('class');
+                }
+                if (id.includes('login') || id.includes('signin')) {
+                    score += 5;
+                    matchReason.push('id');
+                }
+                
+                // Check aria-label
+                if (ariaLabel.includes('login') || ariaLabel.includes('sign in')) {
+                    score += 7;
+                    matchReason.push('aria');
+                }
+                
+                // Penalize if it looks like a registration/signup button
+                if (text.includes('register') || text.includes('sign up') || 
+                    text.includes('signup') || text.includes('create account') ||
+                    text.includes('new account') || text.includes('join')) {
+                    score -= 15;
+                }
+                
+                // Penalize if it's in a footer (less likely to be main login)
+                if (el.closest('footer') || el.closest('[class*="footer" i]')) {
+                    score -= 3;
+                }
+                
+                // Boost if in header/nav (more likely to be main login)
+                if (el.closest('header') || el.closest('nav') || 
+                    el.closest('[class*="header" i]') || el.closest('[class*="nav" i]')) {
+                    score += 3;
+                }
+                
+                if (score > 0) {
+                    // Build a selector for this element
+                    let selector = '';
+                    if (el.id) {
+                        selector = '#' + CSS.escape(el.id);
+                    } else if (el.className && typeof el.className === 'string') {
+                        const classes = el.className.split(/\\s+/).filter(c => c).slice(0, 2);
+                        if (classes.length > 0) {
+                            selector = el.tagName.toLowerCase() + '.' + classes.map(c => CSS.escape(c)).join('.');
+                        }
+                    }
+                    if (!selector) {
+                        selector = el.tagName.toLowerCase();
+                        if (text.length < 30) {
+                            selector += ':has-text("' + text.substring(0, 20) + '")';
+                        }
+                    }
+                    
+                    triggers.push({
+                        selector: selector,
+                        text: text.substring(0, 50),
+                        score: score,
+                        reason: matchReason.join(', ')
+                    });
+                }
+            });
+            
+            // Sort by score descending
+            triggers.sort((a, b) => b.score - a.score);
+            
+            return triggers.slice(0, 10); // Return top 10 candidates
+        }'''
+        
+        try:
+            triggers = await self._page_evaluate(js_find_login_triggers)
+            
+            if not triggers:
+                logger.debug("No login triggers found on page")
+                return False
+            
+            logger.info(f"Found {len(triggers)} potential login trigger(s)")
+            
+            # Try clicking the highest-scored trigger
+            for trigger in triggers:
+                logger.debug(f"Trying login trigger: {trigger.get('text', '')[:30]} (score: {trigger.get('score')}, reason: {trigger.get('reason')})")
+                
+                try:
+                    # Try to click by selector
+                    selector = trigger.get('selector', '')
+                    if selector:
+                        await self._page_click(selector, timeout=3000)
+                        await asyncio.sleep(1)  # Wait for form to appear
+                        
+                        # Check if login form is now visible
+                        if await self.is_login_form_visible():
+                            logger.info(f"Login form revealed after clicking: {trigger.get('text', '')[:30]}")
+                            return True
+                        
+                        # Check if we navigated to a different page
+                        # (some sites redirect to login page instead of showing modal)
+                        await asyncio.sleep(0.5)
+                        if await self.is_login_form_visible():
+                            logger.info("Login form visible after navigation")
+                            return True
+                            
+                except Exception as e:
+                    logger.debug(f"Failed to click trigger '{trigger.get('selector')}': {e}")
+                    continue
+            
+            logger.warning("Clicked login triggers but no login form appeared")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Login trigger discovery failed: {e}")
+            return False
+
+    async def find_login_form_elements(self) -> Dict[str, Optional[str]]:
+        """
+        Dynamically discover login form elements (username, password, submit).
+        Returns a dict with selectors for each element found.
+        
+        Use this when the user hasn't provided explicit selectors.
+        """
+        js_find_login_elements = '''() => {
+            const result = {
+                username_field: null,
+                password_field: null,
+                submit_button: null,
+                form: null,
+                debug_info: []
+            };
+            
+            // Find password field first (most reliable indicator)
+            const passwordSelectors = [
+                'input[type="password"]',
+                'input[name*="pass" i]',
+                'input[autocomplete="current-password"]',
+            ];
+            
+            for (const sel of passwordSelectors) {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    result.password_field = sel;
+                    result.debug_info.push('Password: ' + sel);
+                    
+                    // Look for form containing this password field
+                    const form = el.closest('form');
+                    if (form) {
+                        result.form = form.id ? '#' + form.id : 
+                            (form.name ? 'form[name="' + form.name + '"]' : 'form');
+                    }
+                    break;
+                }
+            }
+            
+            if (!result.password_field) {
+                result.debug_info.push('No password field found');
+                return result;
+            }
+            
+            // Find username/email field
+            const usernameSelectors = [
+                'input[type="email"]',
+                'input[name*="email" i]',
+                'input[name*="user" i]',
+                'input[name*="login" i]',
+                'input[autocomplete="email"]',
+                'input[autocomplete="username"]',
+                'input[type="text"][name]',
+                'input[type="text"][id]',
+            ];
+            
+            // Get password field element for proximity check
+            const passwordEl = document.querySelector(result.password_field);
+            const form = passwordEl ? passwordEl.closest('form') : null;
+            
+            for (const sel of usernameSelectors) {
+                const elements = form ? 
+                    form.querySelectorAll(sel) : 
+                    document.querySelectorAll(sel);
+                    
+                for (const el of elements) {
+                    if (el && el.offsetParent !== null && el.type !== 'password') {
+                        // Prefer elements before password field in DOM
+                        if (!passwordEl || 
+                            el.compareDocumentPosition(passwordEl) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                            result.username_field = el.id ? '#' + el.id : 
+                                (el.name ? 'input[name="' + el.name + '"]' : sel);
+                            result.debug_info.push('Username: ' + result.username_field);
+                            break;
+                        }
+                    }
+                }
+                if (result.username_field) break;
+            }
+            
+            // Find submit button
+            const submitSelectors = [
+                'button[type="submit"]',
+                'input[type="submit"]',
+                'button:has-text("Log in")',
+                'button:has-text("Login")',
+                'button:has-text("Sign in")',
+                'button:has-text("Submit")',
+                'button:has-text("Continue")',
+                '[role="button"]:has-text("Log in")',
+                '[role="button"]:has-text("Sign in")',
+            ];
+            
+            const searchIn = form || document;
+            
+            for (const sel of submitSelectors) {
+                try {
+                    const el = searchIn.querySelector(sel);
+                    if (el && el.offsetParent !== null) {
+                        result.submit_button = el.id ? '#' + el.id : sel;
+                        result.debug_info.push('Submit: ' + result.submit_button);
+                        break;
+                    }
+                } catch (e) {
+                    // :has-text is Playwright-specific, skip in browser
+                }
+            }
+            
+            // Fallback: find any button in form
+            if (!result.submit_button && form) {
+                const btn = form.querySelector('button') || 
+                           form.querySelector('input[type="submit"]');
+                if (btn && btn.offsetParent !== null) {
+                    result.submit_button = btn.id ? '#' + btn.id : 
+                        (btn.type === 'submit' ? 'button[type="submit"]' : 'button');
+                    result.debug_info.push('Submit (fallback): ' + result.submit_button);
+                }
+            }
+            
+            return result;
+        }'''
+        
+        try:
+            result = await self._page_evaluate(js_find_login_elements)
+            logger.debug(f"Login form discovery: {result.get('debug_info', [])}")
+            return result
+        except Exception as e:
+            logger.error(f"Login form element discovery failed: {e}")
+            return {
+                'username_field': None,
+                'password_field': None,
+                'submit_button': None,
+                'form': None,
+                'debug_info': [f'Error: {e}']
+            }
 
     def set_scan_context(self, scan_id: str, two_factor_config: Optional[Dict] = None):
         """Set scan context for 2FA handling

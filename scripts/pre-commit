@@ -44,6 +44,37 @@ else
     echo "⏭️  No contract changes detected"
 fi
 
+# Check if architecture-related files were modified
+ARCH_CHANGED=false
+if echo "$CHANGED_FILES" | grep -qE "(api/routes/|attacks/|core/__init__|attacks/__init__)"; then
+    ARCH_CHANGED=true
+fi
+
+if [ "$ARCH_CHANGED" = true ]; then
+    echo "📐 Architecture files changed, regenerating documentation..."
+    
+    # Run architecture docs generator
+    python scripts/generate_architecture_docs.py
+    
+    # Check if generation was successful
+    if [ $? -eq 0 ]; then
+        echo "✅ Architecture docs generated successfully"
+        
+        # Check if generated files changed
+        if git diff --quiet docs/generated/*.md 2>/dev/null; then
+            echo "ℹ️  No changes to generated docs"
+        else
+            # Add generated files to commit
+            git add docs/generated/*.md
+            echo "✅ Added generated docs to commit"
+        fi
+    else
+        echo "⚠️  Failed to generate architecture docs (non-blocking)"
+    fi
+else
+    echo "⏭️  No architecture changes detected"
+fi
+
 # Optional: Run quick validation
 if command -v python &> /dev/null; then
     echo "🔍 Running quick validation..."
