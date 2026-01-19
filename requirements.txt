@@ -1,0 +1,15 @@
+# Jarwis Agent Dependencies
+# Core
+websockets>=12.0
+aiohttp>=3.9.0
+pyyaml>=6.0
+cryptography>=41.0
+certifi>=2023.0
+
+# Network scanning
+psutil>=5.9.0
+
+# Optional - for full functionality
+# frida>=16.0.0  # Mobile dynamic analysis
+# mitmproxy>=10.0  # Traffic interception
+# scapy>=2.5.0  # Network analysis

@@ -1,0 +1,50 @@
+[Unit]
+Description=Jarwis Security Testing Agent
+Documentation=https://jarwis.io/docs/agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Executable
+ExecStart=/usr/bin/jarwis-agent --service --config /etc/jarwis/agent.conf
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Working directory
+WorkingDirectory=/var/lib/jarwis
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Environment
+Environment=JARWIS_CONFIG_DIR=/etc/jarwis
+Environment=JARWIS_DATA_DIR=/var/lib/jarwis
+Environment=JARWIS_LOG_DIR=/var/log/jarwis
+
+# Logging
+StandardOutput=append:/var/log/jarwis/agent.log
+StandardError=append:/var/log/jarwis/agent.error.log
+
+# Security hardening
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/jarwis /var/log/jarwis /tmp
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Timeouts
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

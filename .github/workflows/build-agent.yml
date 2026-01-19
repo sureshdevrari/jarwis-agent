@@ -1,0 +1,184 @@
+# Jarwis Agent - Multi-Platform Build
+name: Build Agent Installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+env:
+  PYTHON_VERSION: '3.11'
+  VERSION: ${{ github.event.inputs.version || '1.0.0' }}
+
+jobs:
+  # ===== WINDOWS =====
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+          
+      - name: Build EXE
+        run: |
+          pyinstaller installer/jarwis-agent.spec --clean --noconfirm
+          dir dist
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/jarwis-agent.exe
+
+  # ===== MACOS =====
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+          
+      - name: Build binary
+        run: |
+          pyinstaller installer/jarwis-agent.spec --clean --noconfirm
+          ls -la dist/
+          
+      - name: Create DMG
+        run: |
+          mkdir -p dmg-contents
+          cp dist/jarwis-agent dmg-contents/
+          echo "Jarwis Agent - Copy to /usr/local/bin" > dmg-contents/README.txt
+          hdiutil create -volname "Jarwis Agent" -srcfolder dmg-contents -ov -format UDZO dist/jarwis-agent.dmg
+          ls -la dist/
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            dist/jarwis-agent
+            dist/jarwis-agent.dmg
+
+  # ===== LINUX =====
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rpm
+          sudo gem install fpm --no-document
+          
+      - name: Build binary
+        run: |
+          pyinstaller installer/jarwis-agent.spec --clean --noconfirm
+          chmod +x dist/jarwis-agent
+          ls -la dist/
+          
+      - name: Create packages
+        run: |
+          VERSION="${{ env.VERSION }}"
+          mkdir -p pkg-root/usr/bin
+          mkdir -p pkg-root/lib/systemd/system
+          mkdir -p pkg-root/etc/jarwis
+          
+          cp dist/jarwis-agent pkg-root/usr/bin/
+          cp installer/linux/jarwis-agent.service pkg-root/lib/systemd/system/
+          cp config/config.yaml pkg-root/etc/jarwis/
+          chmod 755 pkg-root/usr/bin/jarwis-agent
+          
+          # DEB
+          fpm -s dir -t deb \
+            --name jarwis-agent \
+            --version $VERSION \
+            --architecture amd64 \
+            --maintainer "Jarwis <support@jarwis.io>" \
+            --description "Jarwis Security Agent" \
+            -C pkg-root \
+            --package dist/jarwis-agent_${VERSION}_amd64.deb \
+            .
+          
+          # RPM
+          fpm -s dir -t rpm \
+            --name jarwis-agent \
+            --version $VERSION \
+            --architecture x86_64 \
+            --maintainer "Jarwis <support@jarwis.io>" \
+            --description "Jarwis Security Agent" \
+            -C pkg-root \
+            --package dist/jarwis-agent-${VERSION}-1.x86_64.rpm \
+            .
+          
+          ls -la dist/
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/jarwis-agent
+            dist/*.deb
+            dist/*.rpm
+
+  # ===== RELEASE =====
+  release:
+    name: Create Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: List files
+        run: find artifacts -type f
+        
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Jarwis Agent ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/windows-exe/*
+            artifacts/macos-dmg/*
+            artifacts/linux-packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

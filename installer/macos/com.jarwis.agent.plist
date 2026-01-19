@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Jarwis Agent - macOS LaunchDaemon Configuration
+  
+  Location: /Library/LaunchDaemons/com.jarwis.agent.plist
+  
+  Controls:
+    sudo launchctl load /Library/LaunchDaemons/com.jarwis.agent.plist
+    sudo launchctl unload /Library/LaunchDaemons/com.jarwis.agent.plist
+    sudo launchctl start com.jarwis.agent
+    sudo launchctl stop com.jarwis.agent
+-->
+<plist version="1.0">
+<dict>
+    <!-- Service identifier -->
+    <key>Label</key>
+    <string>com.jarwis.agent</string>
+    
+    <!-- Executable path and arguments -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/jarwis-agent</string>
+        <string>--service</string>
+        <string>--config</string>
+        <string>/usr/local/etc/jarwis/config.yaml</string>
+    </array>
+    
+    <!-- Run at system startup -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep running (restart if crashes) -->
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Restart on crash -->
+        <key>SuccessfulExit</key>
+        <false/>
+        <!-- Don't run if network is unavailable -->
+        <key>NetworkState</key>
+        <true/>
+    </dict>
+    
+    <!-- Throttle restarts (min 10 seconds between launches) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/usr/local/var/jarwis</string>
+    
+    <!-- Log files -->
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/jarwis-agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/jarwis-agent.error.log</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>JARWIS_CONFIG_DIR</key>
+        <string>/usr/local/etc/jarwis</string>
+        <key>JARWIS_DATA_DIR</key>
+        <string>/usr/local/var/jarwis</string>
+    </dict>
+    
+    <!-- Resource limits -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>4096</integer>
+    </dict>
+    
+    <!-- Process type - background agent -->
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <!-- Low priority (nice value) -->
+    <key>Nice</key>
+    <integer>5</integer>
+    
+    <!-- Session type -->
+    <key>LimitLoadToSessionType</key>
+    <string>System</string>
+</dict>
+</plist>

