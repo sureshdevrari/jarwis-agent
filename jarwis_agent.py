@@ -1,348 +1,392 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-Jarwis Universal Security Agent - CLI Entry Point
+Jarwis Universal Security Agent - Standalone
 
-Standalone agent that runs on client machine to enable ALL security testing types:
-- Web Application Security (OWASP Top 10, API, Auth)
-- Mobile Security (Static & Dynamic Analysis)
-- Network Security (Port Scanning, Vuln Assessment)
-- Cloud Security (AWS, Azure, GCP, Kubernetes)
-- SAST (Static Application Security Testing)
-
-The agent is REQUIRED for all scan types to ensure security and compliance.
-
-Usage:
-    python jarwis_agent.py --server wss://jarwis.io/api/agent/ws/<token>
-    
-    # With custom options:
-    python jarwis_agent.py --server <url> --data-dir ~/.jarwis-agent
-    
-    # Check capabilities:
-    python jarwis_agent.py --check
+Connects to Jarwis server and executes security testing commands.
 """
 
 import argparse
 import asyncio
+import json
 import logging
 import os
+import platform
+import socket
+import subprocess
 import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-# Add parent directory for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import aiohttp
+import websockets
+import yaml
 
-from core.universal_agent import UniversalJarwisAgent, AgentConfig, UniversalAgentCapabilities
+
+class JarwisAgent:
+    """Standalone Jarwis Security Agent"""
+    
+    def __init__(self, server_url: str, data_dir: Optional[str] = None):
+        self.server_url = server_url
+        self.data_dir = Path(data_dir) if data_dir else self._default_data_dir()
+        self.agent_id = self._get_or_create_agent_id()
+        self.ws = None
+        self.running = False
+        self.logger = logging.getLogger('JarwisAgent')
+        
+    def _default_data_dir(self) -> Path:
+        if platform.system() == 'Windows':
+            return Path(os.environ.get('APPDATA', '')) / 'jarwis-agent'
+        elif platform.system() == 'Darwin':
+            return Path.home() / 'Library' / 'Application Support' / 'jarwis-agent'
+        else:
+            return Path.home() / '.jarwis-agent'
+    
+    def _get_or_create_agent_id(self) -> str:
+        id_file = self.data_dir / 'agent_id'
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        
+        if id_file.exists():
+            return id_file.read_text().strip()
+        
+        agent_id = str(uuid.uuid4())
+        id_file.write_text(agent_id)
+        return agent_id
+    
+    def get_system_info(self) -> Dict[str, Any]:
+        """Gather system information"""
+        try:
+            import psutil
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            cpu_count = psutil.cpu_count()
+        except ImportError:
+            memory = type('obj', (object,), {'total': 0, 'available': 0})()
+            disk = type('obj', (object,), {'total': 0, 'free': 0})()
+            cpu_count = os.cpu_count() or 1
+        
+        return {
+            'agent_id': self.agent_id,
+            'agent_version': '1.0.0',
+            'hostname': socket.gethostname(),
+            'platform': platform.system(),
+            'platform_version': platform.version(),
+            'architecture': platform.machine(),
+            'python_version': platform.python_version(),
+            'cpu_count': cpu_count,
+            'memory_total_gb': round(memory.total / (1024**3), 2),
+            'memory_available_gb': round(memory.available / (1024**3), 2),
+            'disk_total_gb': round(disk.total / (1024**3), 2),
+            'disk_free_gb': round(disk.free / (1024**3), 2),
+            'capabilities': self.get_capabilities(),
+        }
+    
+    def get_capabilities(self) -> Dict[str, bool]:
+        """Check available capabilities"""
+        caps = {
+            'web_scanning': True,
+            'network_scanning': True,
+            'mobile_static': False,
+            'mobile_dynamic': False,
+            'traffic_intercept': False,
+        }
+        
+        # Check for optional tools
+        try:
+            import frida
+            caps['mobile_dynamic'] = True
+        except ImportError:
+            pass
+        
+        try:
+            from mitmproxy import options
+            caps['traffic_intercept'] = True
+        except ImportError:
+            pass
+        
+        # Check for common tools
+        tools = ['nmap', 'nikto', 'sqlmap', 'nuclei', 'adb']
+        for tool in tools:
+            try:
+                result = subprocess.run(
+                    [tool, '--version'] if tool != 'adb' else [tool, 'version'],
+                    capture_output=True, timeout=5
+                )
+                caps[f'tool_{tool}'] = result.returncode == 0
+            except:
+                caps[f'tool_{tool}'] = False
+        
+        return caps
+    
+    async def connect(self):
+        """Connect to Jarwis server"""
+        self.logger.info(f"Connecting to {self.server_url}")
+        
+        try:
+            self.ws = await websockets.connect(
+                self.server_url,
+                ping_interval=30,
+                ping_timeout=10,
+            )
+            self.running = True
+            
+            # Send registration
+            await self.send({
+                'type': 'register',
+                'data': self.get_system_info(),
+            })
+            
+            self.logger.info("Connected and registered successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Connection failed: {e}")
+            return False
+    
+    async def send(self, message: Dict[str, Any]):
+        """Send message to server"""
+        if self.ws:
+            await self.ws.send(json.dumps(message))
+    
+    async def handle_message(self, message: str):
+        """Handle incoming message from server"""
+        try:
+            data = json.loads(message)
+            msg_type = data.get('type', '')
+            
+            if msg_type == 'ping':
+                await self.send({'type': 'pong'})
+                
+            elif msg_type == 'command':
+                result = await self.execute_command(data.get('command', {}))
+                await self.send({
+                    'type': 'result',
+                    'command_id': data.get('command_id'),
+                    'result': result,
+                })
+                
+            elif msg_type == 'status':
+                await self.send({
+                    'type': 'status_response',
+                    'data': self.get_system_info(),
+                })
+                
+            else:
+                self.logger.debug(f"Unknown message type: {msg_type}")
+                
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON: {e}")
+    
+    async def execute_command(self, command: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a command from the server"""
+        cmd_type = command.get('type', '')
+        self.logger.info(f"Executing command: {cmd_type}")
+        
+        try:
+            if cmd_type == 'shell':
+                return await self._run_shell(command.get('cmd', ''))
+            elif cmd_type == 'http_request':
+                return await self._http_request(command)
+            elif cmd_type == 'scan_ports':
+                return await self._scan_ports(command)
+            elif cmd_type == 'file_read':
+                return self._read_file(command.get('path', ''))
+            elif cmd_type == 'check_capabilities':
+                return {'capabilities': self.get_capabilities()}
+            else:
+                return {'error': f'Unknown command type: {cmd_type}'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+    
+    async def _run_shell(self, cmd: str) -> Dict[str, Any]:
+        """Run a shell command"""
+        # Security: Only allow specific commands
+        allowed_prefixes = ['nmap', 'nikto', 'sqlmap', 'nuclei', 'curl', 'wget', 'ping', 'traceroute']
+        cmd_lower = cmd.lower().strip()
+        
+        if not any(cmd_lower.startswith(p) for p in allowed_prefixes):
+            return {'error': 'Command not allowed', 'allowed': allowed_prefixes}
+        
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+            
+            return {
+                'stdout': stdout.decode('utf-8', errors='replace'),
+                'stderr': stderr.decode('utf-8', errors='replace'),
+                'returncode': proc.returncode,
+            }
+        except asyncio.TimeoutError:
+            return {'error': 'Command timed out'}
+    
+    async def _http_request(self, command: Dict[str, Any]) -> Dict[str, Any]:
+        """Make an HTTP request"""
+        async with aiohttp.ClientSession() as session:
+            method = command.get('method', 'GET').upper()
+            url = command.get('url', '')
+            headers = command.get('headers', {})
+            data = command.get('data')
+            
+            async with session.request(method, url, headers=headers, data=data, ssl=False) as resp:
+                return {
+                    'status': resp.status,
+                    'headers': dict(resp.headers),
+                    'body': await resp.text(),
+                }
+    
+    async def _scan_ports(self, command: Dict[str, Any]) -> Dict[str, Any]:
+        """Basic port scanning"""
+        target = command.get('target', '')
+        ports = command.get('ports', [80, 443, 22, 21, 25, 3306, 5432])
+        
+        results = []
+        for port in ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex((target, port))
+                results.append({
+                    'port': port,
+                    'open': result == 0,
+                })
+                sock.close()
+            except:
+                results.append({'port': port, 'open': False, 'error': True})
+        
+        return {'target': target, 'ports': results}
+    
+    def _read_file(self, path: str) -> Dict[str, Any]:
+        """Read a file (limited to agent data directory)"""
+        file_path = Path(path)
+        
+        # Security: Only allow reading from agent data directory
+        try:
+            file_path.resolve().relative_to(self.data_dir.resolve())
+        except ValueError:
+            return {'error': 'Access denied - path outside data directory'}
+        
+        if not file_path.exists():
+            return {'error': 'File not found'}
+        
+        return {'content': file_path.read_text()}
+    
+    async def run(self):
+        """Main run loop"""
+        retry_delay = 5
+        max_retry_delay = 60
+        
+        while True:
+            if await self.connect():
+                retry_delay = 5  # Reset on successful connection
+                
+                try:
+                    async for message in self.ws:
+                        await self.handle_message(message)
+                except websockets.ConnectionClosed:
+                    self.logger.warning("Connection closed")
+                except Exception as e:
+                    self.logger.error(f"Error: {e}")
+            
+            self.logger.info(f"Reconnecting in {retry_delay}s...")
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
+    
+    def stop(self):
+        """Stop the agent"""
+        self.running = False
+        if self.ws:
+            asyncio.create_task(self.ws.close())
 
 
 def setup_logging(verbose: bool = False):
-    """Configure logging"""
     level = logging.DEBUG if verbose else logging.INFO
-    
     logging.basicConfig(
         level=level,
         format='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
-    # Reduce noise from libraries
     logging.getLogger('websockets').setLevel(logging.WARNING)
-    logging.getLogger('asyncio').setLevel(logging.WARNING)
 
 
-def print_banner():
-    """Print agent banner"""
-    banner = """
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║       ██╗ █████╗ ██████╗ ██╗    ██╗██╗███████╗              ║
-    ║       ██║██╔══██╗██╔══██╗██║    ██║██║██╔════╝              ║
-    ║       ██║███████║██████╔╝██║ █╗ ██║██║███████╗              ║
-    ║  ██   ██║██╔══██║██╔══██╗██║███╗██║██║╚════██║              ║
-    ║  ╚█████╔╝██║  ██║██║  ██║╚███╔███╔╝██║███████║              ║
-    ║   ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝╚══════╝              ║
-    ║                                                              ║
-    ║            Universal Security Testing Agent                  ║
-    ║                      Version 2.0.0                           ║
-    ║                                                              ║
-    ║   Supports: Web | Mobile | Network | Cloud | SAST            ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-    """
-    print(banner)
+def check_capabilities():
+    """Print available capabilities"""
+    agent = JarwisAgent('ws://localhost', None)
+    info = agent.get_system_info()
+    
+    print("\n=== Jarwis Agent System Info ===")
+    print(f"Agent ID: {info['agent_id']}")
+    print(f"Hostname: {info['hostname']}")
+    print(f"Platform: {info['platform']} {info['platform_version']}")
+    print(f"Architecture: {info['architecture']}")
+    print(f"Python: {info['python_version']}")
+    print(f"CPU Cores: {info['cpu_count']}")
+    print(f"Memory: {info['memory_available_gb']:.1f} / {info['memory_total_gb']:.1f} GB")
+    print(f"Disk: {info['disk_free_gb']:.1f} / {info['disk_total_gb']:.1f} GB")
+    
+    print("\n=== Capabilities ===")
+    for cap, available in info['capabilities'].items():
+        status = "" if available else ""
+        print(f"  {status} {cap}")
+    print()
 
 
-async def check_prerequisites() -> dict:
-    """Check system prerequisites using UniversalAgentCapabilities"""
-    caps = UniversalAgentCapabilities()
-    return await caps.detect_all()
-
-
-async def run_setup(install_emulator: bool = False):
-    """Run interactive setup"""
-    print("\n🔧 Running Jarwis Universal Agent Setup...\n")
-    
-    # Check prerequisites using capabilities detection
-    caps = await check_prerequisites()
-    
-    print("=" * 60)
-    print("System Information:")
-    print("=" * 60)
-    system = caps.get("system", {})
-    print(f"  OS: {system.get('os', 'Unknown')} {system.get('os_version', '')[:30]}")
-    print(f"  Architecture: {system.get('architecture', 'Unknown')}")
-    print(f"  Python: {system.get('python_version', 'Unknown')}")
-    print(f"  CPU Cores: {system.get('cpu_count', 'Unknown')}")
-    print(f"  Memory: {system.get('memory_available_gb', '?')}/{system.get('memory_total_gb', '?')} GB")
-    
-    print("\n" + "=" * 60)
-    print("Capabilities by Scan Type:")
-    print("=" * 60)
-    
-    # Web capabilities
-    web = caps.get("web", {})
-    print(f"\n📱 WEB APPLICATION TESTING:")
-    print(f"  {'✓' if web.get('available') else '✗'} HTTP Client: Available")
-    print(f"  {'✓' if web.get('browser_automation') else '✗'} Browser Automation (Playwright)")
-    print(f"  {'✓' if web.get('mitmproxy') else '✗'} MITM Proxy")
-    
-    # Mobile capabilities
-    mobile = caps.get("mobile", {})
-    print(f"\n📱 MOBILE SECURITY TESTING:")
-    print(f"  {'✓' if mobile.get('static_available') else '✗'} Static Analysis")
-    print(f"  {'✓' if mobile.get('adb') else '✗'} ADB: {mobile.get('adb_version', 'Not found')[:40] if mobile.get('adb_version') else 'Not found'}")
-    print(f"  {'✓' if mobile.get('frida') else '✗'} Frida: {mobile.get('frida_version', 'Not found')}")
-    print(f"  {'✓' if mobile.get('dynamic_available') else '✗'} Dynamic Analysis Ready")
-    if mobile.get('connected_devices'):
-        print(f"    Connected devices: {', '.join(mobile['connected_devices'])}")
-    
-    # Network capabilities
-    network = caps.get("network", {})
-    print(f"\n🌐 NETWORK SECURITY TESTING:")
-    print(f"  {'✓' if network.get('available') else '✗'} Port Scanning")
-    print(f"  {'✓' if network.get('nmap') else '✗'} Nmap")
-    print(f"  {'✓' if network.get('raw_sockets') else '✗'} Raw Sockets (SYN scan)")
-    if network.get('local_interfaces'):
-        print(f"    Network interfaces: {len(network['local_interfaces'])}")
-    
-    # Cloud capabilities
-    cloud = caps.get("cloud", {})
-    print(f"\n☁️  CLOUD SECURITY TESTING:")
-    print(f"  {'✓' if cloud.get('aws_available') else '✗'} AWS (CLI: {'✓' if cloud.get('aws_cli') else '✗'}, Configured: {'✓' if cloud.get('aws_configured') else '✗'})")
-    print(f"  {'✓' if cloud.get('azure_available') else '✗'} Azure (CLI: {'✓' if cloud.get('azure_cli') else '✗'}, Configured: {'✓' if cloud.get('azure_configured') else '✗'})")
-    print(f"  {'✓' if cloud.get('gcp_available') else '✗'} GCP (CLI: {'✓' if cloud.get('gcloud_cli') else '✗'}, Configured: {'✓' if cloud.get('gcp_configured') else '✗'})")
-    print(f"  {'✓' if cloud.get('k8s_available') else '✗'} Kubernetes (kubectl: {'✓' if cloud.get('kubectl') else '✗'})")
-    if cloud.get('k8s_context'):
-        print(f"    K8s Context: {cloud['k8s_context']}")
-    
-    # SAST capabilities
-    sast = caps.get("sast", {})
-    print(f"\n🔍 SAST (Static Analysis):")
-    print(f"  {'✓' if sast.get('available') else '✗'} Pattern Matching")
-    print(f"  {'✓' if sast.get('semgrep') else '✗'} Semgrep: {sast.get('semgrep_version', 'Not found')}")
-    print(f"  {'✓' if sast.get('bandit') else '✗'} Bandit (Python)")
-    print(f"  {'✓' if sast.get('eslint') else '✗'} ESLint (JavaScript)")
-    
-    print("\n" + "=" * 60)
-    print("Supported Scan Types:")
-    print("=" * 60)
-    scan_types = caps.get("scan_types", [])
-    if scan_types:
-        for st in scan_types:
-            print(f"  ✓ {st}")
-    else:
-        print("  ⚠️  No scan types fully configured")
-    
-    # Installation suggestions
-    print("\n" + "=" * 60)
-    print("Setup Recommendations:")
-    print("=" * 60)
-    
-    suggestions = []
-    if not web.get('browser_automation'):
-        suggestions.append("Install Playwright: pip install playwright && playwright install")
-    if not mobile.get('frida'):
-        suggestions.append("Install Frida: pip install frida frida-tools")
-    if not mobile.get('adb'):
-        suggestions.append("Install Android SDK: Download from developer.android.com")
-    if not network.get('nmap'):
-        suggestions.append("Install Nmap: https://nmap.org/download.html")
-    if not sast.get('semgrep'):
-        suggestions.append("Install Semgrep: pip install semgrep")
-    if not cloud.get('aws_cli'):
-        suggestions.append("Install AWS CLI: https://aws.amazon.com/cli/")
-    
-    if suggestions:
-        for s in suggestions:
-            print(f"  • {s}")
-    else:
-        print("  ✅ All recommended tools are installed!")
-    
-    print("\n✅ Setup check complete!")
-    print("\nTo start the agent, run:")
-    print("  python jarwis_agent.py --server <your-server-url>")
-    print("\nGet your connection URL from: https://jarwis.io/agent/setup")
-
-
-async def main():
-    """Main entry point"""
+def main():
     parser = argparse.ArgumentParser(
-        description="Jarwis Universal Security Testing Agent",
+        description='Jarwis Universal Security Agent',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog='''
 Examples:
-  Connect to server:
-    python jarwis_agent.py --server wss://jarwis.io/api/agent/ws/<token>
-    
-  Run capability check:
-    python jarwis_agent.py --check
-    
-  Run setup with recommendations:
-    python jarwis_agent.py --setup
-
-Supported Scan Types:
-  - Web Application Security (OWASP Top 10, API, Auth)
-  - Mobile Security (Static & Dynamic Analysis)
-  - Network Security (Port Scanning, Vuln Assessment)
-  - Cloud Security (AWS, Azure, GCP, Kubernetes)
-  - SAST (Static Application Security Testing)
-        """
+  jarwis-agent --server wss://jarwis.io/agent/ws/TOKEN
+  jarwis-agent --check
+  jarwis-agent --server wss://localhost:8000/agent/ws/TOKEN -v
+'''
     )
-    
-    parser.add_argument(
-        "--server", "-s",
-        help="Jarwis server WebSocket URL (wss://...)"
-    )
-    parser.add_argument(
-        "--token", "-t",
-        help="Authentication token (if not in server URL)"
-    )
-    parser.add_argument(
-        "--agent-id",
-        help="Custom agent ID (auto-generated if not provided)"
-    )
-    parser.add_argument(
-        "--agent-name",
-        help="Custom agent name (hostname used if not provided)"
-    )
-    parser.add_argument(
-        "--data-dir",
-        help="Data directory for agent files (default: ~/.jarwis/agent)"
-    )
-    parser.add_argument(
-        "--setup",
-        action="store_true",
-        help="Run interactive setup and capability check"
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="Check capabilities only"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser.add_argument('--server', '-s', help='Jarwis server WebSocket URL')
+    parser.add_argument('--data-dir', '-d', help='Data directory for agent state')
+    parser.add_argument('--check', '-c', action='store_true', help='Check system capabilities')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    parser.add_argument('--version', action='version', version='Jarwis Agent 1.0.0')
     
     args = parser.parse_args()
     
-    print_banner()
     setup_logging(args.verbose)
     
-    # Check only
     if args.check:
-        caps = await check_prerequisites()
-        print("\n📊 Agent Capabilities Summary")
-        print("=" * 60)
-        
-        scan_types = caps.get("scan_types", [])
-        print(f"\nSupported scan types: {len(scan_types)}")
-        for st in scan_types:
-            print(f"  ✓ {st}")
-        
-        if not scan_types:
-            print("  ⚠️  Run --setup for recommendations")
-            return 1
-        
-        print("\n✅ Agent is ready!")
-        return 0
+        check_capabilities()
+        return
     
-    # Run setup
-    if args.setup:
-        await run_setup()
-        return 0
-    
-    # Validate server URL
     if not args.server:
-        print("\n❌ Error: --server URL is required")
-        print("   Get your connection URL from: https://jarwis.io/agent/setup")
-        print("\n   Or run setup first: python jarwis_agent.py --setup")
-        return 1
-    
-    # Extract token from URL if needed
-    token = args.token
-    if not token and "/ws/" in args.server:
-        token = args.server.split("/ws/")[-1]
-    
-    # Create config
-    config = AgentConfig(
-        server_url=args.server,
-        auth_token=token,
-        agent_id=args.agent_id or "",
-        agent_name=args.agent_name or "",
-        data_dir=args.data_dir or ""
-    )
-    
-    # Check capabilities
-    caps = await check_prerequisites()
-    scan_types = caps.get("scan_types", [])
-    
-    if not scan_types:
-        print("\n⚠️  No scan types available!")
-        print("   Run --setup to see what's missing")
-    else:
-        print(f"\n✅ Available scan types: {', '.join(scan_types)}")
-    
-    # Create and run agent
-    print(f"\n🚀 Starting Jarwis Universal Agent...")
-    print(f"   Server: {args.server.split('/ws/')[0]}/ws/***")
-    print(f"   Agent ID: {config.agent_id}")
-    print(f"   Agent Name: {config.agent_name}")
-    print()
-    
-    agent = UniversalJarwisAgent(config=config)
-    
-    try:
-        # Connect to server
-        connected = await agent.connect()
-        if not connected:
-            print("\n❌ Failed to connect to server")
-            print("   Check your token and server URL")
-            return 1
-        
-        print("✅ Connected to Jarwis server!")
-        print("   Waiting for scan commands...\n")
-        print("   Press Ctrl+C to stop\n")
-        
-        # Run main loop
-        await agent.run_forever()
-        
-    except KeyboardInterrupt:
-        print("\n\n⏹️  Shutting down agent...")
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        return 1
-    finally:
-        await agent.disconnect()
-    
-    print("👋 Agent stopped")
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        exit_code = asyncio.run(main())
-        sys.exit(exit_code)
-    except KeyboardInterrupt:
-        print("\nInterrupted")
+        parser.print_help()
+        print("\nError: --server is required unless using --check")
         sys.exit(1)
+    
+    agent = JarwisAgent(args.server, args.data_dir)
+    
+    print(f"""
+
+              JARWIS UNIVERSAL SECURITY AGENT              
+                       Version 1.0.0                       
+
+    
+Agent ID: {agent.agent_id}
+Server:   {args.server}
+Data Dir: {agent.data_dir}
+    
+Connecting...
+""")
+    
+    try:
+        asyncio.run(agent.run())
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        agent.stop()
+
+
+if __name__ == '__main__':
+    main()
