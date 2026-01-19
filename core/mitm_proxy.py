@@ -78,7 +78,6 @@ class JarwisMITMProxy:
         self._callbacks: List[Callable] = []
         self._process = None
         self._cert_dir = Path.home() / ".jarwis" / "certs"
-        self._mitm_script_path = Path(__file__).parent / "mitm_addon.py"
         
         # Callbacks for request/response capture
         self._on_request = on_request
@@ -96,6 +95,9 @@ class JarwisMITMProxy:
         # Port manager integration
         self._port_manager = None
         self._port_allocated = False
+        
+        # MITM addon script path - use temp/ to avoid triggering uvicorn --reload
+        self._mitm_script_path = Path(__file__).parent.parent / "temp" / "mitm_addon.py"
         
     @property
     def ca_cert_path(self) -> Path:

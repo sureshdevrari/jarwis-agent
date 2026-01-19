@@ -76,15 +76,22 @@ class EmulatorManager:
     def __init__(self, jarwis_home: Optional[str] = None):
         self.jarwis_home = Path(jarwis_home or os.path.expanduser("~/.jarwis"))
         
+        # Detect if running in WSL
+        self.is_wsl = self._detect_wsl()
+        
         # SDK Root priority:
         # 1. ANDROID_SDK_ROOT or ANDROID_HOME environment variable
         # 2. C:\Android\Sdk on Windows (common installation path)
-        # 3. ~/.jarwis/android-sdk (Jarwis default)
+        # 3. /mnt/c/Android/Sdk on WSL (Windows SDK from WSL)
+        # 4. ~/.jarwis/android-sdk (Jarwis default)
         sdk_from_env = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
         if sdk_from_env and Path(sdk_from_env).exists():
             self.sdk_root = Path(sdk_from_env)
         elif platform.system() == "Windows" and Path("C:/Android/Sdk").exists():
             self.sdk_root = Path("C:/Android/Sdk")
+        elif self.is_wsl and Path("/mnt/c/Android/Sdk").exists():
+            # WSL: Use Windows SDK through /mnt/c
+            self.sdk_root = Path("/mnt/c/Android/Sdk")
         else:
             self.sdk_root = self.jarwis_home / "android-sdk"
         
@@ -94,6 +101,9 @@ class EmulatorManager:
             self.avd_home = Path(avd_from_env)
         elif platform.system() == "Windows" and Path("C:/Android/avd").exists():
             self.avd_home = Path("C:/Android/avd")
+        elif self.is_wsl and Path("/mnt/c/Android/avd").exists():
+            # WSL: Use Windows AVD through /mnt/c
+            self.avd_home = Path("/mnt/c/Android/avd")
         else:
             self.avd_home = self.jarwis_home / "avd"
             
@@ -105,20 +115,36 @@ class EmulatorManager:
             dir_path.mkdir(parents=True, exist_ok=True)
         
         # Log SDK path for debugging
-        console.print(f"[info] Using Android SDK: {self.sdk_root}", style="cyan")
+        console.print(f"[info] Using Android SDK: {self.sdk_root} (WSL: {self.is_wsl})", style="cyan")
         
         # SDK tools paths
         self.cmdline_tools = self.sdk_root / "cmdline-tools" / "latest" / "bin"
         self.platform_tools = self.sdk_root / "platform-tools"
         self.emulator_path = self.sdk_root / "emulator"
         
-        # Executables
+        # Executables - on WSL we use .exe since we're calling Windows binaries
         self.is_windows = platform.system() == "Windows"
-        self.exe_ext = ".exe" if self.is_windows else ""
-        self.bat_ext = ".bat" if self.is_windows else ""
+        self.exe_ext = ".exe" if (self.is_windows or self.is_wsl) else ""
+        self.bat_ext = ".bat" if self.is_windows else ""  # WSL can run .exe but not .bat directly
         
         self.config = EmulatorConfig()
         self.status = EmulatorStatus()
+    
+    def _detect_wsl(self) -> bool:
+        """Detect if running inside WSL (Windows Subsystem for Linux)"""
+        try:
+            # Check for WSL-specific indicators
+            if os.path.exists("/proc/version"):
+                with open("/proc/version", "r") as f:
+                    version = f.read().lower()
+                    if "microsoft" in version or "wsl" in version:
+                        return True
+            # Also check for /mnt/c which is WSL's mount of Windows C: drive
+            if os.path.exists("/mnt/c/Windows"):
+                return True
+        except:
+            pass
+        return False
         
     def _get_adb_path(self) -> str:
         """Get path to adb executable"""
@@ -130,6 +156,9 @@ class EmulatorManager:
     
     def _get_sdkmanager_path(self) -> str:
         """Get path to sdkmanager"""
+        # On WSL, use .bat through cmd.exe or use the jar directly
+        if self.is_wsl:
+            return str(self.cmdline_tools / "sdkmanager")
         return str(self.cmdline_tools / f"sdkmanager{self.bat_ext}")
     
     def _get_avdmanager_path(self) -> str:
@@ -165,10 +194,12 @@ class EmulatorManager:
     
     def is_sdk_installed(self) -> bool:
         """Check if Android SDK is installed"""
-        return (
-            self.cmdline_tools.exists() and
-            (self.cmdline_tools / f"sdkmanager{self.bat_ext}").exists()
-        )
+        if not self.cmdline_tools.exists():
+            return False
+        # Check for sdkmanager - on Windows it's .bat, on WSL we check for .bat too
+        sdkmanager_bat = self.cmdline_tools / "sdkmanager.bat"
+        sdkmanager_sh = self.cmdline_tools / "sdkmanager"
+        return sdkmanager_bat.exists() or sdkmanager_sh.exists()
     
     def is_emulator_installed(self) -> bool:
         """Check if emulator is installed"""

@@ -18,6 +18,7 @@ import {
   Menu,
   ScanLine,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 
 const navItems = [
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/billing", label: "Billing", icon: BarChart3 },
   { href: "/dashboard/cloud-scan", label: "Cloud Scans", icon: Cloud },
+  { href: "/dashboard/agent-setup", label: "Agent Setup", icon: Download },
   { href: "/dashboard/jarwis-chatbot", label: "Jarwis AGI", icon: Bot },
 ];
 

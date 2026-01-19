@@ -54,6 +54,7 @@ const menu = [
   {
     section: "SETTINGS",
     items: [
+      { text: "Agent Setup", icon: "📥", path: "/dashboard/agent-setup" },
       { text: "Account Settings", icon: "⚙️", path: "/dashboard/settings" },
     ]
   },

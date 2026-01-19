@@ -450,9 +450,14 @@ class MobileScanService:
             username=config.get("username", ""),
             password=config.get("password", ""),
             phone=config.get("phone", ""),
+            login_api_url=config.get("login_api_url", ""),  # User-provided login URL
+            continue_on_auth_failure=config.get("continue_on_auth_failure", True),
             # 2FA config
             two_factor_enabled=config.get("two_factor_enabled", False),
             two_factor_type=config.get("two_factor_type", "sms"),
+            # Emulator behavior
+            keep_emulator_on_failure=config.get("keep_emulator_on_failure", True),
+            keep_emulator_on_complete=config.get("keep_emulator_on_complete", True),
         )
         
         # Create orchestrator

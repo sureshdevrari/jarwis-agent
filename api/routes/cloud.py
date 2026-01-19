@@ -25,6 +25,9 @@ from database.subscription import (
 )
 from database import crud
 
+# Agent requirement enforcement
+from core.universal_agent_server import require_agent_connection, get_agent_for_user
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scan/cloud", tags=["Cloud Security Scans"])
@@ -297,8 +300,29 @@ async def start_cloud_scan(
         await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     # ==============================================
     
-    # Validate credentials based on provider
+    # ========== AGENT REQUIREMENT CHECK ==========
+    # Cloud scans require a connected Jarwis Agent for security
+    # Credentials are passed securely through agent, never stored on server
+    # Developer accounts bypass this check for testing
     provider = scan_request.provider.lower()
+    agent_id = None
+    if not is_dev_account:
+        # Map provider to scan type
+        cloud_scan_type_map = {
+            "aws": "cloud_aws",
+            "azure": "cloud_azure",
+            "gcp": "cloud_gcp",
+            "kubernetes": "cloud_kubernetes",
+            "k8s": "cloud_kubernetes"
+        }
+        cloud_scan_type = cloud_scan_type_map.get(provider, f"cloud_{provider}")
+        await require_agent_connection(current_user.id, cloud_scan_type)
+        # Get agent_id for tracking which agent runs this scan
+        agent_info = get_agent_for_user(current_user.id, cloud_scan_type)
+        agent_id = agent_info.get("agent_id")
+    # =============================================
+    
+    # Validate credentials based on provider
     credentials = scan_request.credentials
     auth_mode = None
     
@@ -436,7 +460,8 @@ async def start_cloud_scan(
     background_tasks.add_task(
         run_cloud_scan,
         scan_id=scan_id,
-        user_id=current_user.id
+        user_id=current_user.id,
+        agent_id=agent_id  # Pass agent_id for distributed execution
     )
     
     return CloudScanResponse(

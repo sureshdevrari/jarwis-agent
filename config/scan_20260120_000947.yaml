@@ -1,0 +1,38 @@
+ai:
+  api_key: '4'
+  enabled: true
+  model: gemini-2.5-flash
+  provider: gemini
+auth:
+  credentials:
+    password: ''
+    username: ''
+  enabled: false
+  selectors:
+    login_url: /login
+    password_field: ''
+    submit_button: ''
+    success_indicator: ''
+    username_field: ''
+  type: form
+output:
+  directory: ./reports
+  formats:
+  - html
+  - json
+scan:
+  modules:
+  - injection
+  - xss
+  - sensitive_data
+  - misconfig
+  - upload
+  - api
+  - idor
+  - csrf
+  - privesc
+  rate_limit: 10
+  timeout: 30
+target:
+  scope: ''
+  url: https://example.com

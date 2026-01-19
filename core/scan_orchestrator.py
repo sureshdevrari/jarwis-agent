@@ -730,13 +730,13 @@ class WebAttackOrchestrator:
         logger.info(f"[{self.scan_id}] Starting MITM proxy on port {self.proxy_port}...")
         
         try:
-            # Start mitmproxy with our addon
+            # Start mitmproxy with our addon (in temp/ to avoid triggering uvicorn --reload)
             cmd = [
                 sys.executable, "-m", "mitmproxy",
                 "--mode", "regular",
                 "--listen-port", str(self.proxy_port),
                 "--set", "ssl_insecure=true",
-                "-s", "core/mitm_addon.py"
+                "-s", "temp/mitm_addon.py"
             ]
             
             self._mitm_process = subprocess.Popen(

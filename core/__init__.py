@@ -91,6 +91,18 @@ from .mobile_attack_engine import (
     MobileVulnerability
 )
 
+# NEW: Universal Agent (handles ALL scan types)
+from .universal_agent import (
+    UniversalJarwisAgent,
+    AgentConfig,
+    UniversalAgentCapabilities,
+    ScanType as AgentScanType,
+    AgentStatus,
+    MessageType as AgentMessageType,
+    AttackRequest as AgentAttackRequest,
+    AttackResult as AgentAttackResult,
+)
+
 __all__ = [
     # Version
     "__version__",
@@ -143,5 +155,15 @@ __all__ = [
     "CSRFAttack",
     "CORSAttack",
     "PathTraversalAttack",
+    
+    # Universal Agent (ALL scan types)
+    "UniversalJarwisAgent",
+    "AgentConfig",
+    "UniversalAgentCapabilities",
+    "AgentScanType",
+    "AgentStatus",
+    "AgentMessageType",
+    "AgentAttackRequest",
+    "AgentAttackResult",
 ]
 

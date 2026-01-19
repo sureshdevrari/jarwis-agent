@@ -10,12 +10,32 @@ import logging
 import re
 import json
 import sys
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Any, TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+
+# Lazy import playwright to avoid DLL loading issues at startup
+# This allows the server to start even if playwright has issues
+_playwright_module = None
+
+def _get_playwright():
+    """Lazy load playwright module"""
+    global _playwright_module
+    if _playwright_module is None:
+        from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+        _playwright_module = {
+            'async_playwright': async_playwright,
+            'Browser': Browser,
+            'BrowserContext': BrowserContext,
+            'Page': Page
+        }
+    return _playwright_module
+
+# Type hints for IDE support
+if TYPE_CHECKING:
+    from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
 # Fix for Windows asyncio subprocess (Playwright compatibility)
 if sys.platform == 'win32':
@@ -648,7 +668,8 @@ class BrowserController:
             return
         
         # Original async implementation for non-Windows
-        self.playwright = await async_playwright().start()
+        pw = _get_playwright()
+        self.playwright = await pw['async_playwright']().start()
         
         # Start MITM proxy if requested
         if enable_mitm_https or self.use_mitm:

@@ -1,0 +1,51 @@
+#!/bin/bash
+# ===========================================================================
+# Jarwis Agent - macOS Post-Install Script
+# ===========================================================================
+#
+# Runs after the PKG installation completes.
+# Creates necessary directories and starts the agent service.
+#
+# ===========================================================================
+
+set -e
+
+echo "Jarwis Agent: Running post-install..."
+
+# Create directories
+mkdir -p /usr/local/var/jarwis
+mkdir -p /usr/local/var/log
+mkdir -p /usr/local/etc/jarwis
+
+# Set permissions
+chmod 755 /usr/local/bin/jarwis-agent
+chmod 755 /usr/local/var/jarwis
+chmod 644 /Library/LaunchDaemons/com.jarwis.agent.plist
+
+# Create default config if not exists
+if [ ! -f /usr/local/etc/jarwis/agent.conf ]; then
+    cat > /usr/local/etc/jarwis/agent.conf << EOF
+# Jarwis Agent Configuration
+# 
+# Edit this file or use: jarwis-agent --configure
+
+SERVER_URL=wss://jarwis.io/ws/agent
+ACTIVATION_KEY=
+LOG_LEVEL=INFO
+MITM_PORT=8082
+EOF
+fi
+
+# Load the LaunchDaemon (but don't start yet - need activation)
+launchctl load /Library/LaunchDaemons/com.jarwis.agent.plist 2>/dev/null || true
+
+echo "Jarwis Agent: Installation complete!"
+echo ""
+echo "To activate the agent, run:"
+echo "  sudo jarwis-agent --activate YOUR_ACTIVATION_KEY"
+echo ""
+echo "Or configure manually:"
+echo "  sudo nano /usr/local/etc/jarwis/agent.conf"
+echo "  sudo launchctl start com.jarwis.agent"
+
+exit 0

@@ -230,6 +230,58 @@ class AuthService:
         
         return True
 
+    @staticmethod
+    async def create_agent_token(user_id: int) -> str:
+        """
+        Create a short-lived token for mobile agent connection.
+        
+        Token is valid for 30 minutes and contains user_id + agent marker.
+        """
+        from database.auth import create_access_token
+        
+        # Create token with 30-minute expiry and agent type marker
+        token = create_access_token(
+            user_id=str(user_id),
+            expires_delta=timedelta(minutes=30),
+            additional_claims={"type": "agent"}
+        )
+        
+        logger.info(f"Agent token created for user {user_id}")
+        
+        return token
+
+    @staticmethod
+    async def get_user_from_token(token: str) -> Optional[User]:
+        """
+        Validate token and return user.
+        Used for WebSocket authentication where we can't use normal Depends.
+        """
+        from jose import JWTError, jwt
+        from database.auth import auth_settings
+        from database.connection import get_async_db
+        from database.auth import get_user_by_id
+        
+        try:
+            payload = jwt.decode(
+                token, 
+                auth_settings.SECRET_KEY, 
+                algorithms=[auth_settings.ALGORITHM]
+            )
+            user_id_str = payload.get("sub")
+            if not user_id_str:
+                return None
+            
+            user_id = int(user_id_str)
+            
+            # Get user from database
+            async for db in get_async_db():
+                user = await get_user_by_id(db, user_id)
+                return user
+                
+        except (JWTError, ValueError) as e:
+            logger.warning(f"Token validation failed: {e}")
+            return None
+
 
 # Global instance
 auth_service = AuthService()

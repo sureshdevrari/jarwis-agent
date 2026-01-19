@@ -34,6 +34,9 @@ from services.network_service import (
 )
 from services.agent_service import AgentService
 
+# Agent requirement enforcement
+from core.universal_agent_server import require_agent_connection, get_agent_for_user, universal_agent_manager
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/network", tags=["Network Security Scans"])
@@ -115,6 +118,14 @@ async def start_network_scan(
         logger.info(f"🔧 DEVELOPER ACCOUNT: {current_user.email} - bypassing restrictions for network scan")
     # ==============================================
     
+    # ========== AGENT REQUIREMENT CHECK ==========
+    # ALL network scans require a connected Jarwis Agent
+    # Network scanning must run from the user's network for accuracy
+    # Developer accounts bypass this check for testing
+    if not is_dev_account:
+        await require_agent_connection(current_user.id, "network")
+    # =============================================
+    
     try:
         # Validate targets
         is_valid, error_msg, host_count = NetworkScanService.validate_targets(
@@ -123,28 +134,36 @@ async def start_network_scan(
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # Check for private IPs (developer accounts can scan private IPs without agent)
+        # Check for private IPs - inform user about agent requirement
         has_private = False
         for target in scan_request.targets.split(','):
             if NetworkScanService.is_private_target(target.strip()):
                 has_private = True
                 break
         
-        # Developer accounts can scan private IPs directly without an agent
-        if has_private and not scan_request.use_agent and not is_dev_account:
-            raise HTTPException(
-                status_code=400,
-                detail="Private IP ranges require a Jarwis Agent. "
-                       "Deploy an agent in your network and set use_agent=true."
-            )
+        # Verify agent is connected for network scanning (already checked above for non-dev)
+        if not is_dev_account:
+            # Get the connected agent
+            agent_info = get_agent_for_user(current_user.id, "network")
+            if agent_info["has_agent"]:
+                # Auto-assign agent if not specified
+                if not scan_request.agent_id:
+                    scan_request.agent_id = agent_info["agent_id"]
+                    scan_request.use_agent = True
         
-        # Validate agent if specified
+        # Validate agent if specified (for explicit agent selection)
         if scan_request.use_agent and scan_request.agent_id:
-            agent_exists = await AgentService.verify_agent_ownership(
-                db, current_user.id, scan_request.agent_id
-            )
-            if not agent_exists:
-                raise HTTPException(status_code=404, detail="Agent not found or access denied")
+            # Check if it's a universal agent connection
+            user_agents = universal_agent_manager.get_user_agents(current_user.id)
+            agent_connected = any(a["agent_id"] == scan_request.agent_id for a in user_agents)
+            
+            if not agent_connected:
+                # Fall back to legacy agent service check
+                agent_exists = await AgentService.verify_agent_ownership(
+                    db, current_user.id, scan_request.agent_id
+                )
+                if not agent_exists:
+                    raise HTTPException(status_code=404, detail="Agent not found or access denied")
         
         # Convert request to service config
         config = NetworkScanConfig(

@@ -24,7 +24,11 @@ from database.connection import get_db
 from database.dependencies import get_current_user
 from database.models import User, ScanHistory, SCMConnection
 from shared.api_endpoints import APIEndpoints
+from shared.constants import is_developer_account
 from services.sast_service import SASTService
+
+# Agent requirement enforcement
+from core.universal_agent_server import require_agent_connection, get_agent_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -125,12 +129,28 @@ async def start_sast_scan(
     
     Requires Professional or Enterprise subscription.
     """
+    # Check if developer account (bypass certain checks)
+    is_dev_account = is_developer_account(current_user.email)
+    
     # Check subscription
-    if not current_user.has_cloud_scanning and current_user.plan not in ['professional', 'enterprise']:
-        raise HTTPException(
-            status_code=403,
-            detail="SAST scanning requires Professional or Enterprise subscription"
-        )
+    if not is_dev_account:
+        if not current_user.has_cloud_scanning and current_user.plan not in ['professional', 'enterprise']:
+            raise HTTPException(
+                status_code=403,
+                detail="SAST scanning requires Professional or Enterprise subscription"
+            )
+    
+    # ========== AGENT REQUIREMENT CHECK ==========
+    # SAST scans require a connected Jarwis Agent for security
+    # Source code is analyzed locally on agent, reducing data exposure
+    # Developer accounts bypass this check for testing
+    agent_id = None
+    if not is_dev_account:
+        await require_agent_connection(current_user.id, "sast")
+        # Get agent_id for tracking which agent runs this scan
+        agent_info = get_agent_for_user(current_user.id, "sast")
+        agent_id = agent_info.get("agent_id")
+    # =============================================
     
     # Get access token (OAuth connection or provided PAT)
     access_token = request.access_token
@@ -167,6 +187,7 @@ async def start_sast_scan(
             exclude_paths=request.exclude_paths,
             notes=request.notes,
             background_tasks=background_tasks,
+            agent_id=agent_id,  # Pass agent_id for distributed execution
         )
         
         return SASTScanResponse(

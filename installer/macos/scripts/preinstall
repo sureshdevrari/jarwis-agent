@@ -1,0 +1,30 @@
+#!/bin/bash
+# ===========================================================================
+# Jarwis Agent - macOS Pre-Install Script
+# ===========================================================================
+#
+# Runs before the PKG installation.
+# Stops existing agent if running and backs up config.
+#
+# ===========================================================================
+
+set -e
+
+echo "Jarwis Agent: Running pre-install..."
+
+# Stop existing agent if running
+if launchctl list | grep -q "com.jarwis.agent"; then
+    echo "Stopping existing Jarwis Agent..."
+    launchctl stop com.jarwis.agent 2>/dev/null || true
+    launchctl unload /Library/LaunchDaemons/com.jarwis.agent.plist 2>/dev/null || true
+fi
+
+# Backup existing config
+if [ -f /usr/local/etc/jarwis/agent.conf ]; then
+    echo "Backing up existing configuration..."
+    cp /usr/local/etc/jarwis/agent.conf /usr/local/etc/jarwis/agent.conf.bak
+fi
+
+echo "Jarwis Agent: Pre-install complete"
+
+exit 0

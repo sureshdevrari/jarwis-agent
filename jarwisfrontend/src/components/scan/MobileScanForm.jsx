@@ -1,16 +1,24 @@
 // MobileScanForm - Dedicated mobile scan configuration form
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Lock, Eye, EyeOff, User, Phone, ChevronDown, ChevronUp, Shield, Key, Mail, AlertTriangle, Upload, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Smartphone, Lock, Eye, EyeOff, User, Phone, ChevronDown, ChevronUp, Shield, Key, Mail, AlertTriangle, Upload, CheckCircle, XCircle, Loader2, Play, Square, Wifi, MonitorSmartphone, Plus } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { mobileScanAPI } from "../../services/api";
+import { mobileScanAPI, mobileAgentAPI } from "../../services/api";
 import { getInputClass, getLabelClass, getCancelButtonClass } from "./scanFormStyles";
+import { AgentStatusCard } from "../mobile";
 
-const MobileScanForm = () => {
+const MobileScanForm = ({ onSetupAgent }) => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
   const { canPerformAction, checkActionAllowed, refreshSubscription } = useSubscription();
+
+  // Scan mode: 'local' (server emulator) or 'remote' (client agent)
+  const [scanMode, setScanMode] = useState('local');
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsError, setAgentsError] = useState(null);
 
   const [mobileForm, setMobileForm] = useState({
     appFile: null,
@@ -43,6 +51,13 @@ const MobileScanForm = () => {
     error: null,
   });
 
+  // Emulator control state
+  const [emulatorState, setEmulatorState] = useState({
+    starting: false,
+    stopping: false,
+    error: null,
+  });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showAuthSection, setShowAuthSection] = useState(false);
   const [show2FAWarning, setShow2FAWarning] = useState(false);
@@ -53,6 +68,92 @@ const MobileScanForm = () => {
   const inputClass = getInputClass(isDarkMode);
   const labelClass = getLabelClass(isDarkMode);
   const cancelButtonClass = getCancelButtonClass(isDarkMode);
+
+  // Fetch available agents on mount and when scan mode changes to remote
+  useEffect(() => {
+    if (scanMode === 'remote') {
+      fetchAgents();
+    }
+  }, [scanMode]);
+
+  const fetchAgents = async () => {
+    setAgentsLoading(true);
+    setAgentsError(null);
+    try {
+      const data = await mobileAgentAPI.listAgents();
+      setAgents(data || []);
+      // Auto-select first agent if available
+      if (data && data.length > 0 && !selectedAgent) {
+        setSelectedAgent(data[0]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch agents:', err);
+      setAgentsError(err.message || 'Failed to fetch agents');
+    } finally {
+      setAgentsLoading(false);
+    }
+  };
+
+  // Handle starting the emulator
+  const handleStartEmulator = async () => {
+    setEmulatorState({ starting: true, stopping: false, error: null });
+    
+    try {
+      const result = await mobileScanAPI.startEmulator(false);
+      
+      if (result.success) {
+        // Update device status in upload state
+        setUploadState(prev => ({
+          ...prev,
+          deviceStatus: {
+            ...prev.deviceStatus,
+            connected: true,
+            device_id: result.device_id,
+            auto_started: true,
+          },
+          message: result.message,
+        }));
+        setEmulatorState({ starting: false, stopping: false, error: null });
+      } else {
+        setEmulatorState({ starting: false, stopping: false, error: result.message });
+      }
+    } catch (err) {
+      console.error("Emulator start error:", err);
+      setEmulatorState({
+        starting: false,
+        stopping: false,
+        error: err.response?.data?.message || err.message || 'Failed to start emulator',
+      });
+    }
+  };
+
+  // Handle stopping the emulator
+  const handleStopEmulator = async () => {
+    setEmulatorState({ starting: false, stopping: true, error: null });
+    
+    try {
+      const result = await mobileScanAPI.stopEmulator();
+      
+      if (result.success) {
+        setUploadState(prev => ({
+          ...prev,
+          deviceStatus: {
+            ...prev.deviceStatus,
+            connected: false,
+            device_id: '',
+          },
+        }));
+      }
+      setEmulatorState({ starting: false, stopping: false, error: null });
+    } catch (err) {
+      console.error("Emulator stop error:", err);
+      setEmulatorState({
+        starting: false,
+        stopping: false,
+        error: err.response?.data?.message || err.message || 'Failed to stop emulator',
+      });
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
@@ -126,9 +227,19 @@ const MobileScanForm = () => {
         }
       }
       
-      // Must have either uploaded file or file selected
-      if (!uploadState.fileId && !mobileForm.appFile) {
-        throw new Error("Please select and upload an APK or IPA file");
+      // Validation based on scan mode
+      if (scanMode === 'remote') {
+        if (!selectedAgent) {
+          throw new Error("Please select a connected agent for remote testing");
+        }
+        if (!mobileForm.appFile) {
+          throw new Error("Please select an APK or IPA file");
+        }
+      } else {
+        // Local mode - must have either uploaded file or file selected
+        if (!uploadState.fileId && !mobileForm.appFile) {
+          throw new Error("Please select and upload an APK or IPA file");
+        }
       }
 
       const config = {
@@ -146,11 +257,21 @@ const MobileScanForm = () => {
         // 2FA config
         two_factor_enabled: mobileForm.twoFactorEnabled,
         two_factor_type: mobileForm.twoFactorType,
+        // Remote agent config
+        scan_mode: scanMode,
+        agent_id: scanMode === 'remote' ? selectedAgent?.agent_id : null,
       };
 
       let response;
-      if (uploadState.fileId) {
-        // Use the two-step flow with file_id
+      
+      if (scanMode === 'remote') {
+        // Remote agent mode - send file and config to agent
+        const formData = new FormData();
+        formData.append('file', mobileForm.appFile);
+        formData.append('config', JSON.stringify(config));
+        response = await mobileAgentAPI.startScan(selectedAgent.agent_id, formData);
+      } else if (uploadState.fileId) {
+        // Local mode - use the two-step flow with file_id
         response = await mobileScanAPI.startScanWithFileId(uploadState.fileId, config);
       } else {
         // Fallback to direct upload (shouldn't happen with new UI)
@@ -160,7 +281,7 @@ const MobileScanForm = () => {
       if (response.scan_id) {
         refreshSubscription();
         navigate("/dashboard/scanning", {
-          state: { scanId: response.scan_id, scanType: "mobile" },
+          state: { scanId: response.scan_id, scanType: "mobile", agentId: scanMode === 'remote' ? selectedAgent?.agent_id : null },
         });
       } else {
         throw new Error(response.error || "Failed to start mobile scan");
@@ -186,6 +307,149 @@ const MobileScanForm = () => {
       {error && (
         <div className="p-4 mb-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400">
           {error}
+        </div>
+      )}
+
+      {/* Scan Mode Selector */}
+      <div className="space-y-4">
+        <label className={labelClass}>Scan Mode</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Local Mode */}
+          <button
+            type="button"
+            onClick={() => setScanMode('local')}
+            className={`p-4 rounded-xl border-2 transition-all text-left ${
+              scanMode === 'local'
+                ? isDarkMode
+                  ? 'border-purple-500 bg-purple-500/20'
+                  : 'border-purple-500 bg-purple-50'
+                : isDarkMode
+                  ? 'border-slate-600 hover:border-slate-500'
+                  : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <MonitorSmartphone className={`w-6 h-6 ${
+                scanMode === 'local'
+                  ? isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                  : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`} />
+              <span className={`font-semibold ${
+                scanMode === 'local'
+                  ? isDarkMode ? 'text-purple-300' : 'text-purple-700'
+                  : isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Server Emulator
+              </span>
+            </div>
+            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Use Jarwis server's emulator for testing. Best for static analysis and quick scans.
+            </p>
+          </button>
+
+          {/* Remote Agent Mode */}
+          <button
+            type="button"
+            onClick={() => setScanMode('remote')}
+            className={`p-4 rounded-xl border-2 transition-all text-left ${
+              scanMode === 'remote'
+                ? isDarkMode
+                  ? 'border-purple-500 bg-purple-500/20'
+                  : 'border-purple-500 bg-purple-50'
+                : isDarkMode
+                  ? 'border-slate-600 hover:border-slate-500'
+                  : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Wifi className={`w-6 h-6 ${
+                scanMode === 'remote'
+                  ? isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                  : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`} />
+              <span className={`font-semibold ${
+                scanMode === 'remote'
+                  ? isDarkMode ? 'text-purple-300' : 'text-purple-700'
+                  : isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Remote Agent
+              </span>
+            </div>
+            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Use your own machine with emulator. Full dynamic testing with your hardware.
+            </p>
+          </button>
+        </div>
+      </div>
+
+      {/* Remote Agent Selector (only shown when remote mode is selected) */}
+      {scanMode === 'remote' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className={labelClass}>Connected Agents</label>
+            <button
+              type="button"
+              onClick={fetchAgents}
+              disabled={agentsLoading}
+              className={`flex items-center gap-1 text-sm ${
+                isDarkMode ? 'text-purple-400 hover:text-purple-300' : 'text-purple-600 hover:text-purple-700'
+              }`}
+            >
+              <Loader2 className={`w-4 h-4 ${agentsLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {agentsError && (
+            <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-50 text-red-700'}`}>
+              <AlertTriangle className="w-4 h-4 inline mr-2" />
+              {agentsError}
+            </div>
+          )}
+
+          {agentsLoading ? (
+            <div className={`flex items-center justify-center p-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              Loading agents...
+            </div>
+          ) : agents.length > 0 ? (
+            <div className="space-y-3">
+              {agents.map((agent) => (
+                <AgentStatusCard
+                  key={agent.agent_id}
+                  agent={agent}
+                  isSelected={selectedAgent?.agent_id === agent.agent_id}
+                  onSelect={(a) => setSelectedAgent(a)}
+                  onDisconnect={(id) => {
+                    setAgents(agents.filter(a => a.agent_id !== id));
+                    if (selectedAgent?.agent_id === id) {
+                      setSelectedAgent(null);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className={`p-6 rounded-xl border-2 border-dashed text-center ${
+              isDarkMode ? 'border-slate-600 bg-slate-800/50' : 'border-gray-300 bg-gray-50'
+            }`}>
+              <Wifi className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+              <p className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                No agents connected
+              </p>
+              <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Set up a mobile agent on your machine to enable remote testing.
+              </p>
+              <button
+                type="button"
+                onClick={onSetupAgent}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Setup Agent
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -313,6 +577,57 @@ const MobileScanForm = () => {
                         ? `Device: ${uploadState.deviceStatus.device_id}` 
                         : 'No device connected'}
                     </span>
+                    
+                    {/* Emulator control buttons */}
+                    {!uploadState.deviceStatus.connected && uploadState.deviceStatus.sdk_installed && (
+                      <button
+                        type="button"
+                        onClick={handleStartEmulator}
+                        disabled={emulatorState.starting}
+                        className={`ml-2 flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                          emulatorState.starting
+                            ? 'bg-gray-500 cursor-wait text-white'
+                            : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white'
+                        }`}
+                      >
+                        {emulatorState.starting ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Starting...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3" />
+                            Start Emulator
+                          </>
+                        )}
+                      </button>
+                    )}
+                    
+                    {uploadState.deviceStatus.connected && (
+                      <button
+                        type="button"
+                        onClick={handleStopEmulator}
+                        disabled={emulatorState.stopping}
+                        className={`ml-2 flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                          emulatorState.stopping
+                            ? 'bg-gray-500 cursor-wait text-white'
+                            : 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white'
+                        }`}
+                      >
+                        {emulatorState.stopping ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Stopping...
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-3 h-3" />
+                            Stop
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                   
                   {uploadState.installationStatus && (
@@ -334,10 +649,31 @@ const MobileScanForm = () => {
                   )}
                 </div>
                 
-                {!uploadState.deviceStatus.connected && (
-                  <p className={`mt-2 text-xs ${isDarkMode ? 'text-amber-400/80' : 'text-amber-600'}`}>
-                    ⚠️ Start an emulator or connect a device for full dynamic testing. Static analysis will still work.
+                {/* Emulator error message */}
+                {emulatorState.error && (
+                  <p className={`mt-2 text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    ❌ {emulatorState.error}
                   </p>
+                )}
+                
+                {/* Emulator starting info */}
+                {emulatorState.starting && (
+                  <p className={`mt-2 text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                    🚀 Starting emulator... This may take 30-60 seconds.
+                  </p>
+                )}
+                
+                {!uploadState.deviceStatus.connected && !emulatorState.starting && (
+                  <div className={`mt-2 p-2 rounded-lg ${isDarkMode ? 'bg-amber-900/30' : 'bg-amber-50'}`}>
+                    <p className={`text-xs ${isDarkMode ? 'text-amber-400/80' : 'text-amber-600'}`}>
+                      ⚠️ No emulator/device detected. Dynamic testing (runtime analysis, traffic interception) requires a running emulator.
+                    </p>
+                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {uploadState.deviceStatus.sdk_installed 
+                        ? '💡 Click "Start Emulator" above to launch automatically.'
+                        : '💡 Run SETUP_ANDROID_EMULATOR.bat to install the Android SDK first.'}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -709,13 +1045,18 @@ const MobileScanForm = () => {
       <div className="flex gap-4 pt-4">
         <button
           type="submit"
-          disabled={isSubmitting || uploadState.status !== 'success'}
+          disabled={isSubmitting || (scanMode === 'local' && uploadState.status !== 'success') || (scanMode === 'remote' && !selectedAgent)}
           className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-xl hover:from-purple-500 hover:to-purple-400 disabled:opacity-50 transition-all duration-300 font-semibold"
         >
           {isSubmitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               Starting...
+            </>
+          ) : scanMode === 'remote' ? (
+            <>
+              <Wifi className="w-4 h-4" />
+              Start Remote Scan
             </>
           ) : (
             <>
@@ -733,10 +1074,17 @@ const MobileScanForm = () => {
         </button>
       </div>
       
-      {/* Help text if file not uploaded yet */}
-      {mobileForm.appFile && uploadState.status === 'idle' && (
+      {/* Help text if file not uploaded yet (local mode only) */}
+      {scanMode === 'local' && mobileForm.appFile && uploadState.status === 'idle' && (
         <p className={`text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
           👆 Click "Upload App" to upload the file before starting the scan
+        </p>
+      )}
+      
+      {/* Help text for remote mode without agent */}
+      {scanMode === 'remote' && !selectedAgent && agents.length === 0 && (
+        <p className={`text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+          👆 Set up and connect an agent on your machine to enable remote testing
         </p>
       )}
     </form>

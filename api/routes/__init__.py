@@ -18,12 +18,30 @@ from api.routes.scan_otp import router as scan_otp_router
 from api.routes.scan_manual_auth import router as scan_manual_auth_router  # Social login / manual auth
 from api.routes.domains import router as domains_router
 from api.routes.mobile import router as mobile_router  # Mobile app security scanning
+try:
+    from api.routes.mobile_agent import router as mobile_agent_router  # Mobile agent WebSocket + REST
+except Exception as e:
+    print(f"[ERROR] Failed to load mobile_agent router: {e}")
+    import traceback
+    traceback.print_exc()
+    # Create dummy router
+    mobile_agent_router = APIRouter(prefix="/api/mobile-agent", tags=["Mobile Agent"])
 from api.routes.cloud import router as cloud_router  # Cloud security scanning
 from api.routes.dashboard import router as dashboard_router  # Unified dashboard endpoints
 from api.routes.health import router as health_router  # System health checks and scanner validation
 from api.routes.sast import router as sast_router  # SAST / Source code review scanning
 from api.routes.websocket_routes import router as websocket_router  # Real-time WebSocket updates
 from api.routes.ai_chat import router as ai_chat_router  # Jarwis AI chat (no LLM required)
+from api.routes.agent_downloads import router as agent_downloads_router  # Agent installer downloads
+
+# Try to import universal agent router
+try:
+    from api.routes.universal_agent import router as universal_agent_router
+except Exception as e:
+    print(f"[ERROR] Failed to load universal_agent router: {e}")
+    import traceback
+    traceback.print_exc()
+    universal_agent_router = APIRouter(prefix="/api/agent", tags=["Universal Agent"])
 
 # Try to import admin router if it exists
 try:
@@ -50,12 +68,15 @@ api_router.include_router(scan_otp_router)  # For target website 2FA OTP handlin
 api_router.include_router(scan_manual_auth_router)  # For social login / manual auth
 api_router.include_router(domains_router)  # Domain verification for credential-based scans
 api_router.include_router(mobile_router)  # Mobile app security scanning
+api_router.include_router(mobile_agent_router)  # Mobile agent WebSocket + REST
 api_router.include_router(cloud_router)  # Cloud security scanning
 api_router.include_router(dashboard_router)  # Unified dashboard endpoints
 api_router.include_router(health_router)  # System health checks and scanner validation
 api_router.include_router(sast_router)  # SAST / Source code review scanning
 api_router.include_router(websocket_router)  # Real-time WebSocket updates
 api_router.include_router(ai_chat_router)  # Jarwis AI chat (no LLM required)
+api_router.include_router(agent_downloads_router)  # Agent installer downloads
+api_router.include_router(universal_agent_router)  # Universal agent WebSocket + REST (ALL scan types)
 
 if admin_router:
     api_router.include_router(admin_router)
@@ -77,5 +98,7 @@ __all__ = [
     "mobile_router",
     "cloud_router",
     "sast_router",
-    "health_router"
+    "health_router",
+    "agent_downloads_router",
+    "universal_agent_router",
 ]

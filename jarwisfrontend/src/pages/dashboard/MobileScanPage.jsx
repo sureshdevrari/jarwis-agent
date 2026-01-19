@@ -1,11 +1,14 @@
 // MobileScanPage - Dedicated page for mobile app scanning
-import { Smartphone, Lock, Info } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Smartphone, Lock, Info, Wifi, Plus } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import MiftyJarwisLayout from "../../components/layout/MiftyJarwisLayout";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import MobileScanForm from "../../components/scan/MobileScanForm";
+import { mobileAgentAPI } from "../../services/api";
+import { AgentStatusCard } from "../../components/mobile";
 
 // Subscription limit warning banner
 const SubscriptionLimitBanner = ({ usage, isDarkMode, onUpgrade }) => {
@@ -44,11 +47,37 @@ const SubscriptionLimitBanner = ({ usage, isDarkMode, onUpgrade }) => {
 
 const MobileScanPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode } = useTheme();
   const { getAllUsageStats, canPerformAction } = useSubscription();
 
+  // State from navigation (when coming back from agent setup)
+  const [connectedAgents, setConnectedAgents] = useState([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+
   // Check if user has access to mobile scanning
   const hasMobileAccess = canPerformAction("useMobileAppTesting");
+
+  // Fetch connected agents on mount
+  useEffect(() => {
+    fetchConnectedAgents();
+  }, []);
+
+  const fetchConnectedAgents = async () => {
+    setAgentsLoading(true);
+    try {
+      const agents = await mobileAgentAPI.listAgents();
+      setConnectedAgents(agents || []);
+    } catch (err) {
+      console.error('Failed to fetch agents:', err);
+    } finally {
+      setAgentsLoading(false);
+    }
+  };
+
+  const handleSetupAgent = () => {
+    navigate("/dashboard/scan/mobile/agent-setup");
+  };
 
   if (!hasMobileAccess) {
     return (
@@ -114,9 +143,34 @@ const MobileScanPage = () => {
           </div>
         </div>
 
+        {/* Connected Agents Banner (if any) */}
+        {connectedAgents.length > 0 && (
+          <div className={`p-4 rounded-xl border ${isDarkMode ? "border-green-500/30 bg-green-500/10" : "border-green-200 bg-green-50"}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Wifi className={`w-5 h-5 ${isDarkMode ? "text-green-400" : "text-green-600"}`} />
+                <span className={isDarkMode ? "text-green-300" : "text-green-700"}>
+                  <strong>{connectedAgents.length}</strong> Remote Agent{connectedAgents.length > 1 ? 's' : ''} Connected
+                </span>
+              </div>
+              <button
+                onClick={handleSetupAgent}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium ${
+                  isDarkMode
+                    ? "bg-green-500/20 text-green-300 hover:bg-green-500/30"
+                    : "bg-green-100 text-green-700 hover:bg-green-200"
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                Add Agent
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <div className={isDarkMode ? "function-card-dark p-6" : "function-card-light p-6"}>
-          <MobileScanForm />
+          <MobileScanForm onSetupAgent={handleSetupAgent} />
         </div>
 
         {/* Security Info */}
@@ -150,6 +204,41 @@ const MobileScanPage = () => {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Remote Agent Info Card */}
+        <div className={isDarkMode ? "function-card-dark p-6" : "function-card-light p-6"}>
+          <h3 className={isDarkMode ? "text-xl font-semibold text-white mb-4" : "text-xl font-semibold text-gray-900 mb-4"}>
+            Remote Agent Testing
+          </h3>
+          <p className={`mb-4 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+            Run mobile security tests using your own machine's emulator for better performance and full hardware access.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`p-4 rounded-xl ${isDarkMode ? "bg-slate-700/50" : "bg-gray-50"}`}>
+              <h4 className={`font-medium mb-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                🖥️ Local Emulator
+              </h4>
+              <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                Use your machine's Android emulator with Frida for SSL bypass and traffic interception.
+              </p>
+            </div>
+            <div className={`p-4 rounded-xl ${isDarkMode ? "bg-slate-700/50" : "bg-gray-50"}`}>
+              <h4 className={`font-medium mb-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                🔒 Secure Connection
+              </h4>
+              <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                Traffic is relayed via secure WebSocket - no VPN or port forwarding required.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleSetupAgent}
+            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Setup Remote Agent
+          </button>
         </div>
       </div>
     </MiftyJarwisLayout>

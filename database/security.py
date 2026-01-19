@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 class SecurityConfig:
     """Security configuration constants"""
     # Brute force protection thresholds
-    SOFT_BLOCK_ATTEMPTS: int = 5  # Failed attempts for soft block
+    SOFT_BLOCK_ATTEMPTS: int = 10  # Failed attempts for soft block (increased from 5)
     SOFT_BLOCK_WINDOW_SECONDS: int = 300  # 5 minutes window
-    SOFT_BLOCK_DURATION_SECONDS: int = 900  # 15 minutes block
+    SOFT_BLOCK_DURATION_SECONDS: int = 600  # 10 minutes block (reduced from 15)
     
-    HARD_BLOCK_ATTEMPTS: int = 20  # Failed attempts for hard block
+    HARD_BLOCK_ATTEMPTS: int = 30  # Failed attempts for hard block (increased from 20)
     HARD_BLOCK_WINDOW_SECONDS: int = 60  # 1 minute window
-    HARD_BLOCK_DURATION_SECONDS: int = 3600  # 1 hour block
+    HARD_BLOCK_DURATION_SECONDS: int = 1800  # 30 minutes block (reduced from 1 hour)
     
     # Rate limiting (requests per minute per tier)
     RATE_LIMITS: Dict[str, int] = field(default_factory=lambda: {

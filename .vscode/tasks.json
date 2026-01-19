@@ -48,7 +48,16 @@
     {
       "label": "Start Backend Only",
       "type": "shell",
-      "command": "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd D:\\jarwis-ai-pentest; .\\.venv\\Scripts\\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload' -WindowStyle Normal",
+      "command": "wsl -d Ubuntu -e bash -c 'cd /mnt/d/jarwis-ai-pentest && source .venv-wsl/bin/activate && nohup python -m uvicorn api.server:app --host 0.0.0.0 --port 8000 > logs/backend_wsl.log 2>&1 & echo Backend started with PID $!'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Start Backend Only (Dev Mode)",
+      "type": "shell",
+      "command": "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'wsl -d Ubuntu -e bash -c \"cd /mnt/d/jarwis-ai-pentest && source .venv-wsl/bin/activate && python -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload\"' -WindowStyle Normal",
       "problemMatcher": [],
       "presentation": {
         "reveal": "silent"

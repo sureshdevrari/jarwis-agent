@@ -183,13 +183,21 @@ class ADBDeviceManager:
         except:
             pass
         
-        # Check common locations
+        # Check common locations - prioritize user/agent configured paths
         common_paths = [
+            # Agent-configured SDK path (highest priority)
+            Path(os.environ.get("JARWIS_ANDROID_SDK", "")) / "platform-tools" / "adb",
+            # Standard SDK environment variables
             Path.home() / ".jarwis" / "android-sdk" / "platform-tools" / "adb",
             Path(os.environ.get("ANDROID_HOME", "")) / "platform-tools" / "adb",
             Path(os.environ.get("ANDROID_SDK_ROOT", "")) / "platform-tools" / "adb",
+            # Windows default paths
             Path("C:/Android/sdk/platform-tools/adb.exe"),
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / "adb.exe",
+            # macOS/Linux paths
             Path("/usr/local/android-sdk/platform-tools/adb"),
+            Path.home() / "Library" / "Android" / "sdk" / "platform-tools" / "adb",
+            Path.home() / "Android" / "Sdk" / "platform-tools" / "adb",
         ]
         
         for path in common_paths:

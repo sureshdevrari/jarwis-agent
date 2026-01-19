@@ -1,0 +1,467 @@
+# ===========================================================================
+# Jarwis Agent - CI/CD Build Pipeline
+# ===========================================================================
+#
+# Builds and releases native installers for Windows, macOS, and Linux.
+# 
+# Triggers:
+#   - Push to 'release/*' branches
+#   - Manual dispatch
+#   - Tags matching 'v*'
+#
+# Required Secrets:
+#   Windows (Azure Trusted Signing):
+#     - AZURE_CLIENT_ID
+#     - AZURE_CLIENT_SECRET
+#     - AZURE_TENANT_ID
+#     - AZURE_SIGNING_ACCOUNT
+#     - AZURE_SIGNING_PROFILE
+#
+#   macOS (Apple Developer):
+#     - APPLE_CERTIFICATE_P12
+#     - APPLE_CERTIFICATE_PASSWORD
+#     - APPLE_INSTALLER_CERTIFICATE_P12
+#     - APPLE_INSTALLER_CERTIFICATE_PASSWORD
+#     - APPLE_TEAM_ID
+#     - APPLE_ID
+#     - APPLE_APP_PASSWORD
+#
+#   Release:
+#     - GITHUB_TOKEN (automatic)
+#
+# ===========================================================================
+
+name: Build Agent Installers
+
+on:
+  push:
+    branches:
+      - release/*
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: false
+        default: ''
+      sign:
+        description: 'Sign the installers'
+        type: boolean
+        required: false
+        default: true
+
+env:
+  PYTHON_VERSION: '3.11'
+  VERSION: ${{ github.event.inputs.version || '1.0.0' }}
+
+jobs:
+  # ===========================================================================
+  # Windows Build
+  # ===========================================================================
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller installer/jarwis-agent.spec `
+            --distpath dist/windows `
+            --workpath dist/windows/build `
+            --clean --noconfirm
+            
+      - name: Install Azure CLI
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile AzureCLI.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
+          
+      - name: Sign executable with Azure Trusted Signing
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          az login --service-principal `
+            -u $env:AZURE_CLIENT_ID `
+            -p $env:AZURE_CLIENT_SECRET `
+            --tenant $env:AZURE_TENANT_ID
+            
+          az trustedsigning sign `
+            --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
+            --certificate-profile ${{ secrets.AZURE_SIGNING_PROFILE }} `
+            --endpoint https://eus.codesigning.azure.net `
+            --files "dist/windows/jarwis-agent.exe" `
+            --description "Jarwis Security Agent" `
+            --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
+            --timestamp-digest SHA256
+            
+      - name: Install WiX Toolset
+        run: |
+          dotnet tool install --global wix
+          
+      - name: Build MSI installer
+        run: |
+          cd dist/windows
+          
+          # Copy required files
+          Copy-Item "../../config/config.yaml" .
+          "Jarwis Security Agent" | Out-File -Encoding utf8 LICENSE.txt
+          "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
+          
+          # Build MSI
+          wix build "../../installer/windows/jarwis-agent.wxs" `
+            -d SourceDir="." `
+            -o jarwis-agent.msi
+            
+      - name: Sign MSI installer
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          az trustedsigning sign `
+            --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
+            --certificate-profile ${{ secrets.AZURE_SIGNING_PROFILE }} `
+            --endpoint https://eus.codesigning.azure.net `
+            --files "dist/windows/jarwis-agent.msi" `
+            --description "Jarwis Security Agent Installer" `
+            --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
+            --timestamp-digest SHA256
+            
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/windows/jarwis-agent.exe
+            dist/windows/jarwis-agent.msi
+          retention-days: 30
+
+  # ===========================================================================
+  # macOS Build
+  # ===========================================================================
+  build-macos:
+    name: Build macOS Installer
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller installer/jarwis-agent.spec \
+            --distpath dist/macos \
+            --workpath dist/macos/build \
+            --clean --noconfirm
+            
+      - name: Import signing certificates
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE_P12: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12 }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          
+          # Import application certificate
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > /tmp/app_cert.p12
+          security import /tmp/app_cert.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+            
+          # Import installer certificate
+          echo "$APPLE_INSTALLER_CERTIFICATE_P12" | base64 --decode > /tmp/installer_cert.p12
+          security import /tmp/installer_cert.p12 -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          
+          # Allow codesign to access keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          
+          rm /tmp/app_cert.p12 /tmp/installer_cert.p12
+          
+      - name: Sign executable
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          codesign --force --options runtime \
+            --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
+            --entitlements installer/macos/entitlements.plist \
+            --timestamp \
+            dist/macos/jarwis-agent
+            
+      - name: Build PKG installer
+        run: |
+          chmod +x installer/macos/build.sh
+          
+          # Create package structure
+          PKG_ROOT="dist/macos/pkg-root"
+          mkdir -p "$PKG_ROOT/usr/local/bin"
+          mkdir -p "$PKG_ROOT/Library/LaunchDaemons"
+          mkdir -p "$PKG_ROOT/usr/local/etc/jarwis"
+          
+          cp dist/macos/jarwis-agent "$PKG_ROOT/usr/local/bin/"
+          cp installer/macos/com.jarwis.agent.plist "$PKG_ROOT/Library/LaunchDaemons/"
+          cp config/config.yaml "$PKG_ROOT/usr/local/etc/jarwis/"
+          
+          chmod 755 "$PKG_ROOT/usr/local/bin/jarwis-agent"
+          chmod +x installer/macos/scripts/postinstall
+          chmod +x installer/macos/scripts/preinstall
+          
+          # Build component package
+          pkgbuild \
+            --root "$PKG_ROOT" \
+            --identifier "com.jarwis.agent" \
+            --version "${{ env.VERSION }}" \
+            --scripts "installer/macos/scripts" \
+            --install-location "/" \
+            "dist/macos/jarwis-agent-component.pkg"
+            
+          # Build product package
+          productbuild \
+            --package "dist/macos/jarwis-agent-component.pkg" \
+            "dist/macos/jarwis-agent.pkg"
+            
+      - name: Sign PKG installer
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          productsign \
+            --sign "Developer ID Installer: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
+            --timestamp \
+            dist/macos/jarwis-agent.pkg \
+            dist/macos/jarwis-agent-signed.pkg
+            
+          mv dist/macos/jarwis-agent-signed.pkg dist/macos/jarwis-agent.pkg
+          
+      - name: Notarize PKG
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/macos/jarwis-agent.pkg \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+            
+          xcrun stapler staple dist/macos/jarwis-agent.pkg
+          
+      - name: Create DMG
+        run: |
+          mkdir -p dist/macos/dmg-contents
+          cp dist/macos/jarwis-agent.pkg dist/macos/dmg-contents/
+          cp README.md dist/macos/dmg-contents/README.txt
+          
+          hdiutil create \
+            -volname "Jarwis Agent ${{ env.VERSION }}" \
+            -srcfolder dist/macos/dmg-contents \
+            -ov \
+            -format UDZO \
+            dist/macos/jarwis-agent.dmg
+            
+      - name: Sign DMG
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          codesign --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
+            dist/macos/jarwis-agent.dmg
+            
+          xcrun notarytool submit dist/macos/jarwis-agent.dmg \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}" \
+            --wait
+            
+          xcrun stapler staple dist/macos/jarwis-agent.dmg
+          
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: |
+            dist/macos/jarwis-agent.pkg
+            dist/macos/jarwis-agent.dmg
+          retention-days: 30
+
+  # ===========================================================================
+  # Linux Build
+  # ===========================================================================
+  build-linux:
+    name: Build Linux Installer
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+          
+          # Install fpm for package building
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rubygems rpm
+          sudo gem install --no-document fpm
+          
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller installer/jarwis-agent.spec \
+            --distpath dist/linux \
+            --workpath dist/linux/build \
+            --clean --noconfirm
+            
+      - name: Build DEB package
+        run: |
+          PKG_ROOT="dist/linux/pkg-root"
+          mkdir -p "$PKG_ROOT/usr/bin"
+          mkdir -p "$PKG_ROOT/etc/jarwis"
+          mkdir -p "$PKG_ROOT/lib/systemd/system"
+          mkdir -p "$PKG_ROOT/var/log/jarwis"
+          mkdir -p "$PKG_ROOT/var/lib/jarwis"
+          
+          cp dist/linux/jarwis-agent "$PKG_ROOT/usr/bin/"
+          cp installer/linux/jarwis-agent.service "$PKG_ROOT/lib/systemd/system/"
+          cp config/config.yaml "$PKG_ROOT/etc/jarwis/"
+          
+          chmod 755 "$PKG_ROOT/usr/bin/jarwis-agent"
+          chmod +x installer/linux/postinstall.sh
+          chmod +x installer/linux/preremove.sh
+          chmod +x installer/linux/postremove.sh
+          
+          fpm -s dir -t deb \
+            --name "jarwis-agent" \
+            --version "${{ env.VERSION }}" \
+            --architecture "amd64" \
+            --maintainer "Jarwis Security <support@jarwis.io>" \
+            --vendor "Jarwis Security" \
+            --description "Jarwis Security Testing Agent" \
+            --url "https://jarwis.io" \
+            --license "Proprietary" \
+            --depends "libc6" \
+            --config-files "/etc/jarwis/config.yaml" \
+            --after-install "installer/linux/postinstall.sh" \
+            --before-remove "installer/linux/preremove.sh" \
+            --after-remove "installer/linux/postremove.sh" \
+            -C "$PKG_ROOT" \
+            --package "dist/linux/jarwis-agent_${{ env.VERSION }}_amd64.deb" \
+            .
+            
+      - name: Build RPM package
+        run: |
+          fpm -s dir -t rpm \
+            --name "jarwis-agent" \
+            --version "${{ env.VERSION }}" \
+            --architecture "x86_64" \
+            --maintainer "Jarwis Security <support@jarwis.io>" \
+            --vendor "Jarwis Security" \
+            --description "Jarwis Security Testing Agent" \
+            --url "https://jarwis.io" \
+            --license "Proprietary" \
+            --depends "glibc" \
+            --config-files "/etc/jarwis/config.yaml" \
+            --after-install "installer/linux/postinstall.sh" \
+            --before-remove "installer/linux/preremove.sh" \
+            --after-remove "installer/linux/postremove.sh" \
+            -C "dist/linux/pkg-root" \
+            --package "dist/linux/jarwis-agent-${{ env.VERSION }}-1.x86_64.rpm" \
+            .
+            
+      - name: Create tarball
+        run: |
+          tar -czf "dist/linux/jarwis-agent-${{ env.VERSION }}-linux-x86_64.tar.gz" \
+            -C "dist/linux/pkg-root" \
+            usr/bin/jarwis-agent \
+            etc/jarwis \
+            lib/systemd/system/jarwis-agent.service
+            
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: |
+            dist/linux/jarwis-agent_*_amd64.deb
+            dist/linux/jarwis-agent-*-1.x86_64.rpm
+            dist/linux/jarwis-agent-*-linux-x86_64.tar.gz
+          retention-days: 30
+
+  # ===========================================================================
+  # Create Release
+  # ===========================================================================
+  release:
+    name: Create Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: List artifacts
+        run: find artifacts -type f
+        
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Jarwis Agent ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/windows-installer/*
+            artifacts/macos-installer/*
+            artifacts/linux-installer/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload to release server
+        run: |
+          echo "Would upload to https://releases.jarwis.io/agent/${{ github.ref_name }}/"
+          # Add actual upload commands here (S3, Azure Blob, etc.)

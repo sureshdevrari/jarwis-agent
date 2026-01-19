@@ -605,12 +605,18 @@ class DeepCodeScanner:
         except:
             pass
         
-        # Check common locations
+        # Check common locations - prioritize user/agent configured paths
         common_paths = [
+            # Agent-configured tool path (highest priority)
+            Path(os.environ.get("JARWIS_TOOLS_PATH", "")) / tool_name,
+            # User home paths
             Path.home() / ".jarwis" / "tools" / tool_name,
             Path.home() / ".jarwis" / "tools" / f"{tool_name}.bat",
-            Path(f"/usr/local/bin/{tool_name}"),
-            Path(f"/opt/{tool_name}/bin/{tool_name}"),
+            # System paths (platform-specific)
+            Path(f"/usr/local/bin/{tool_name}") if os.name != "nt" else Path(f"C:/Tools/{tool_name}/{tool_name}.exe"),
+            Path(f"/opt/{tool_name}/bin/{tool_name}") if os.name != "nt" else Path(f"C:/Program Files/{tool_name}/{tool_name}.exe"),
+            # Homebrew on macOS
+            Path("/opt/homebrew/bin") / tool_name,
         ]
         
         for path in common_paths:

@@ -27,6 +27,7 @@ class ScanStatus(str, Enum):
     STOPPED = "stopped"
     CANCELLED = "cancelled"
     STALLED = "stalled"  # Scan appears stuck (no updates for extended period)
+    AGENT_DISCONNECTED = "agent_disconnected"  # Agent lost connection mid-scan
 
 
 # Valid state transitions - defines what transitions are allowed from each state
@@ -44,6 +45,7 @@ VALID_TRANSITIONS = {
         ScanStatus.STALLED,  # Auto-transition when scan appears stuck
         ScanStatus.WAITING_FOR_MANUAL_AUTH,
         ScanStatus.WAITING_FOR_OTP,
+        ScanStatus.AGENT_DISCONNECTED,  # Agent disconnected mid-scan
     ],
     ScanStatus.PAUSED: [
         ScanStatus.RUNNING,
@@ -70,6 +72,10 @@ VALID_TRANSITIONS = {
     ScanStatus.CANCELLED: [],  # Terminal state
     ScanStatus.STALLED: [
         ScanStatus.QUEUED,  # Can retry stalled scans
+        ScanStatus.ERROR,   # Can mark as failed
+    ],
+    ScanStatus.AGENT_DISCONNECTED: [
+        ScanStatus.QUEUED,  # Can resume when agent reconnects
         ScanStatus.ERROR,   # Can mark as failed
     ],
 }

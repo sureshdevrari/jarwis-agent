@@ -137,12 +137,12 @@ class TokenLimits:
 @dataclass
 class RateLimits:
     """Rate limits per endpoint category (requests/minute)"""
-    AUTH_LOGIN = 5          # Brute force protection
-    AUTH_REGISTER = 3       # Prevent spam
-    SCAN_START = 10         # Scan rate
-    CHAT_MESSAGE = 30       # Chat rate
-    GENERAL_API = 60        # General API calls
-    ADMIN_API = 100         # Admin operations
+    AUTH_LOGIN = 20         # Login attempts (brute force protection via failed attempt tracking)
+    AUTH_REGISTER = 10      # Registration rate
+    SCAN_START = 20         # Scan rate
+    CHAT_MESSAGE = 60       # Chat rate
+    GENERAL_API = 120       # General API calls
+    ADMIN_API = 200         # Admin operations
 
 
 # ==================== PLAN FEATURES ====================

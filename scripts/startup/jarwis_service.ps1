@@ -8,7 +8,8 @@ param(
     [string]$Action = 'start',
     
     [switch]$BackendOnly,
-    [switch]$FrontendOnly
+    [switch]$FrontendOnly,
+    [switch]$DevMode  # Enable --reload for development (causes restarts on file changes)
 )
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -101,7 +102,12 @@ function Stop-AllServices {
     Stop-ServiceOnPort -Port $BACKEND_PORT -ServiceName "Backend"
     Stop-ServiceOnPort -Port $FRONTEND_PORT -ServiceName "Frontend"
     
-    # Kill any remaining python/node processes from jarwis (aggressive cleanup)
+    # Kill WSL Python/uvicorn processes for jarwis
+    Write-Status "  Stopping WSL backend processes..." "Yellow"
+    wsl -d Ubuntu -e bash -c "pkill -f 'uvicorn api.server:app' 2>/dev/null || true" 2>$null
+    wsl -d Ubuntu -e bash -c "pkill -f 'python.*jarwis' 2>/dev/null || true" 2>$null
+    
+    # Kill any remaining Windows python/node processes from jarwis (aggressive cleanup)
     Get-Process -Name python -ErrorAction SilentlyContinue | Where-Object {
         $_.Path -like "*jarwis*" -or $_.CommandLine -like "*jarwis*" -or $_.CommandLine -like "*uvicorn*"
     } | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -115,7 +121,7 @@ function Stop-AllServices {
 }
 
 function Start-Backend {
-    Write-Status "`n[STARTING BACKEND]" "Cyan"
+    Write-Status "`n[STARTING BACKEND (WSL)]" "Cyan"
     
     # Check if already running
     $existing = Get-PortProcess -Port $BACKEND_PORT
@@ -124,16 +130,25 @@ function Start-Backend {
         return
     }
     
-    # Start in new window
-    $backendCmd = "cd $PROJECT_ROOT; .\.venv\Scripts\python.exe -m uvicorn api.server:app --host 0.0.0.0 --port $BACKEND_PORT --reload"
-    $process = Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal -PassThru
+    # Build uvicorn command - only use --reload in dev mode (causes restarts on file changes)
+    $reloadFlag = ""
+    if ($DevMode) {
+        $reloadFlag = " --reload"
+        Write-Status "  [DEV MODE] Auto-reload enabled - server will restart on file changes" "Yellow"
+    }
+    
+    # Start backend in WSL Ubuntu with nohup for proper backgrounding
+    # Logs go to logs/backend_wsl.log for debugging
+    $logFile = "/mnt/d/jarwis-ai-pentest/logs/backend_wsl.log"
+    $wslCmd = "wsl -d Ubuntu -e bash -c 'cd /mnt/d/jarwis-ai-pentest && source .venv-wsl/bin/activate && nohup python -m uvicorn api.server:app --host 0.0.0.0 --port $BACKEND_PORT$reloadFlag > $logFile 2>&1 & echo `$! && sleep 1'"
+    $process = Start-Process powershell -ArgumentList "-Command", $wslCmd -WindowStyle Hidden -PassThru
     
     # Save PID
     $process.Id | Out-File -FilePath $BACKEND_PID_FILE -Force
     
     # Wait for startup
     Write-Status "  Waiting for backend to start..." "Gray"
-    $maxWait = 15
+    $maxWait = 20
     for ($i = 0; $i -lt $maxWait; $i++) {
         Start-Sleep -Seconds 1
         try {

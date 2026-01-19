@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Jarwis Agent - macOS Entitlements
+  
+  Required for notarization and Hardened Runtime.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Allow network connections (client) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Allow network connections (server - for local MITM proxy) -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    
+    <!-- Allow loading unsigned libraries (for Frida) -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    
+    <!-- Allow code injection (for Frida) -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    
+    <!-- Allow JIT (for Frida scripts) -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    
+    <!-- Allow debugging other processes (for Frida) -->
+    <key>com.apple.security.cs.debugger</key>
+    <true/>
+    
+    <!-- Allow reading keychain for SSL certificates -->
+    <key>com.apple.security.keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.jarwis.agent</string>
+    </array>
+    
+    <!-- File access - downloads folder -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    
+    <!-- File access - user selected files -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>

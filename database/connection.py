@@ -5,12 +5,7 @@ Async SQLAlchemy engine and session management with proper error handling
 
 import asyncio
 import logging
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from typing import AsyncGenerator, Optional
-
-from database.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,6 +13,34 @@ logger = logging.getLogger(__name__)
 # Database connection state
 _db_available: bool = False
 _connection_error: Optional[str] = None
+_greenlet_available: bool = True
+
+# Try to import async SQLAlchemy - may fail if greenlet is blocked
+try:
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+    from sqlalchemy.orm import declarative_base
+    from sqlalchemy.exc import SQLAlchemyError, OperationalError
+except ImportError as e:
+    if "greenlet" in str(e).lower():
+        logger.warning(f"Greenlet not available - async database disabled: {e}")
+        _greenlet_available = False
+        _db_available = False
+        _connection_error = "Greenlet DLL blocked by Application Control policy - database disabled"
+        # Create dummy types
+        AsyncSession = None
+        create_async_engine = None
+        async_sessionmaker = None
+        declarative_base = None
+        SQLAlchemyError = Exception
+        OperationalError = Exception
+    else:
+        raise
+
+# Only import settings if we have async support
+if _greenlet_available:
+    from database.config import settings
+else:
+    settings = None
 
 
 def is_db_available() -> bool:
@@ -31,54 +54,59 @@ def get_connection_error() -> Optional[str]:
 
 
 # Create async engine with appropriate settings for SQLite vs PostgreSQL
-engine_kwargs = {
-    "echo": False,  # Set to True for SQL query logging
-}
+engine = None
+AsyncSessionLocal = None
+Base = None
 
-# SQLite-specific settings for better concurrent access
-if settings.DB_TYPE == "sqlite":
-    # SQLite needs special handling for async concurrent access
-    engine_kwargs.update({
-        "connect_args": {
-            "timeout": 30,  # 30 second timeout for SQLite locks
-            "check_same_thread": False,  # Allow multi-threaded access
-        },
-        "pool_pre_ping": True,  # Check connection health before use
-    })
+if _greenlet_available and settings:
+    engine_kwargs = {
+        "echo": False,  # Set to True for SQL query logging
+    }
+
+    # SQLite-specific settings for better concurrent access
+    if settings.DB_TYPE == "sqlite":
+        # SQLite needs special handling for async concurrent access
+        engine_kwargs.update({
+            "connect_args": {
+                "timeout": 30,  # 30 second timeout for SQLite locks
+                "check_same_thread": False,  # Allow multi-threaded access
+            },
+            "pool_pre_ping": True,  # Check connection health before use
+        })
+    else:
+        # PostgreSQL pool settings
+        engine_kwargs.update({
+            "pool_size": settings.DB_POOL_SIZE,
+            "max_overflow": settings.DB_MAX_OVERFLOW,
+            "pool_timeout": settings.DB_POOL_TIMEOUT,
+            "pool_pre_ping": True,  # Automatically check connection health
+            "pool_recycle": 3600,   # Recycle connections after 1 hour
+        })
+
+    try:
+        engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+    except Exception as e:
+        logger.error(f"Failed to create database engine: {e}")
+        engine = None
+
+    # Create async session factory
+    if engine:
+        AsyncSessionLocal = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+
+    # Base class for models - imported from models.py to avoid circular imports
+    # This is re-exported for convenience
+    try:
+        from database.models import Base
+    except ImportError:
+        Base = declarative_base() if declarative_base else None
 else:
-    # PostgreSQL pool settings
-    engine_kwargs.update({
-        "pool_size": settings.DB_POOL_SIZE,
-        "max_overflow": settings.DB_MAX_OVERFLOW,
-        "pool_timeout": settings.DB_POOL_TIMEOUT,
-        "pool_pre_ping": True,  # Automatically check connection health
-        "pool_recycle": 3600,   # Recycle connections after 1 hour
-    })
-
-try:
-    engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
-except Exception as e:
-    logger.error(f"Failed to create database engine: {e}")
-    engine = None
-
-# Create async session factory
-if engine:
-    AsyncSessionLocal = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-else:
-    AsyncSessionLocal = None
-
-# Base class for models - imported from models.py to avoid circular imports
-# This is re-exported for convenience
-try:
-    from database.models import Base
-except ImportError:
-    Base = declarative_base()
+    logger.warning("Database disabled - greenlet not available")
 
 
 class DatabaseConnectionError(Exception):

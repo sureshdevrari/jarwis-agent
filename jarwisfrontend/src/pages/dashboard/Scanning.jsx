@@ -198,6 +198,9 @@ const Scanning = () => {
   
   // WebSocket connection state
   const [wsConnected, setWsConnected] = useState(false);
+  
+  // Agent disconnection state
+  const [agentDisconnected, setAgentDisconnected] = useState(false);
 
   // WebSocket integration for real-time scan updates
   const { isConnected: wsIsConnected, connectionState } = useScanWebSocket(scanId, {
@@ -565,6 +568,12 @@ const Scanning = () => {
             // Use error_message from backend if available, otherwise fall back to phase
             const errorMsg = statusData.error_message || statusData.phase || "Scan encountered an error";
             setError(errorMsg);
+          }
+          
+          // Handle agent disconnection
+          if (statusData.status === "agent_disconnected") {
+            setError("Agent connection lost. Please check your Jarwis Agent and resume the scan from your Scan History.");
+            setAgentDisconnected(true);
           }
           
           // Handle stalled state from backend (no activity for 2+ hours)
@@ -950,6 +959,57 @@ const Scanning = () => {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Agent Disconnection Banner */}
+      {agentDisconnected && (
+        <div
+          className={`
+            rounded-lg p-4 my-4 flex items-center justify-between
+            ${isDarkMode 
+              ? "bg-orange-900/30 border border-orange-700" 
+              : "bg-orange-50 border border-orange-200"
+            }
+          `}
+        >
+          <div className="flex items-center gap-3">
+            <Wifi 
+              className="w-5 h-5 text-orange-500"
+            />
+            <div>
+              <p className={`font-medium ${isDarkMode ? "text-orange-300" : "text-orange-800"}`}>
+                Agent Connection Lost
+              </p>
+              <p className={`text-sm ${isDarkMode ? "text-orange-400" : "text-orange-600"}`}>
+                Your Jarwis Agent disconnected during the scan. The scan has been paused and can be resumed once your agent reconnects.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/dashboard/agent")}
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors
+                ${isDarkMode
+                  ? "bg-orange-600 text-white hover:bg-orange-700"
+                  : "bg-orange-600 text-white hover:bg-orange-700"
+                }
+              `}
+            >
+              Setup Agent
+            </button>
+            <button
+              onClick={() => navigate("/dashboard/history")}
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors
+                ${isDarkMode
+                  ? "bg-gray-700 text-white hover:bg-gray-600"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }
+              `}
+            >
+              View History
+            </button>
+          </div>
         </div>
       )}
 

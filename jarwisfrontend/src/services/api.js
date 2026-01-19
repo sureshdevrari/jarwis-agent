@@ -771,10 +771,11 @@ export const scanAPI = {
 export const mobileScanAPI = {
   // Upload mobile app first (step 1 of two-step flow)
   // Returns file_id and app info for use in startScan
-  uploadApp: async (file, platform = 'android', onProgress = null) => {
+  uploadApp: async (file, platform = 'android', onProgress = null, autoStartEmulator = false) => {
     const formData = new FormData();
     formData.append('app_file', file);
     formData.append('platform', platform);
+    formData.append('auto_start_emulator', autoStartEmulator.toString());
     
     const config = {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -790,6 +791,26 @@ export const mobileScanAPI = {
     }
     
     const response = await api.post('/api/scan/mobile/upload', formData, config);
+    return response.data;
+  },
+
+  // Get emulator status
+  getEmulatorStatus: async () => {
+    const response = await api.get('/api/scan/mobile/emulator/status');
+    return response.data;
+  },
+
+  // Start emulator
+  startEmulator: async (headless = false) => {
+    const response = await api.post(`/api/scan/mobile/emulator/start?headless=${headless}`, {}, {
+      timeout: 120000, // 2 min timeout for emulator boot
+    });
+    return response.data;
+  },
+
+  // Stop emulator
+  stopEmulator: async () => {
+    const response = await api.post('/api/scan/mobile/emulator/stop');
     return response.data;
   },
 
@@ -1522,6 +1543,188 @@ export const domainAPI = {
   // Remove verified domain
   removeVerified: async (domain) => {
     const response = await api.delete(`/api/domains/verified/${encodeURIComponent(domain)}`);
+    return response.data;
+  },
+};
+
+// ============== Universal Agent API ==============
+// Unified agent API for ALL scan types (Web, Mobile, Network, Cloud, SAST)
+
+export const universalAgentAPI = {
+  // Get agent status - check if user has connected agents
+  getStatus: async () => {
+    const response = await api.get('/api/agent/status');
+    return response.data;
+  },
+
+  // List all connected agents
+  listAgents: async () => {
+    const response = await api.get('/api/agent/list');
+    return response.data;
+  },
+
+  // Check if agent supports a specific scan type
+  checkScanType: async (scanType) => {
+    const response = await api.get(`/api/agent/check/${scanType}`);
+    return response.data;
+  },
+
+  // Get connection token for agent setup
+  getToken: async () => {
+    const response = await api.get('/api/agent/token');
+    return response.data;
+  },
+
+  // Download agent installer
+  downloadAgent: async (platform, format) => {
+    // First check if the build exists, then trigger download
+    try {
+      const buildStatus = await api.get('/api/agent-downloads/build-status');
+      const platformStatus = buildStatus.data?.platforms?.[platform]?.[format];
+      
+      if (!platformStatus?.available) {
+        // Throw error with build instructions
+        const error = new Error('Agent installer not built');
+        error.response = {
+          data: {
+            detail: {
+              error: 'build_not_found',
+              message: `Agent installer for ${platform}/${format} has not been built yet.`,
+              build_command: platformStatus?.build_command || 'See installer/README.md',
+              platform: platform,
+            }
+          }
+        };
+        throw error;
+      }
+      
+      // Build exists - trigger download via window.open
+      const token = getAccessToken();
+      const downloadUrl = `/api/agent-downloads/download/${platform}/${format}`;
+      
+      // Create a hidden form to POST with auth header (or use a temporary download link)
+      // For simplicity, we'll add token as query param (backend should support this)
+      window.open(`${api.defaults.baseURL}${downloadUrl}?token=${token}`, '_blank');
+      return { success: true };
+      
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get build status (dev mode)
+  getBuildStatus: async () => {
+    const response = await api.get('/api/agent-downloads/build-status');
+    return response.data;
+  },
+
+  // Start scan on agent
+  startScan: async (scanId, scanType, agentId = null, config = {}) => {
+    const params = new URLSearchParams({ scan_type: scanType });
+    if (agentId) params.append('agent_id', agentId);
+    const response = await api.post(`/api/agent/scan/${scanId}/start?${params}`, config);
+    return response.data;
+  },
+
+  // Stop scan on agent
+  stopScan: async (scanId, agentId) => {
+    const response = await api.post(`/api/agent/scan/${scanId}/stop?agent_id=${agentId}`);
+    return response.data;
+  },
+
+  // Execute attack via agent
+  executeAttack: async (attackRequest, agentId = null) => {
+    const params = agentId ? `?agent_id=${agentId}` : '';
+    const response = await api.post(`/api/agent/attack${params}`, attackRequest);
+    return response.data;
+  },
+};
+
+// ============== Mobile Agent API ==============
+
+export const mobileAgentAPI = {
+  // List all connected agents for current user
+  listAgents: async () => {
+    const response = await api.get('/api/mobile-agent/agents');
+    return response.data;
+  },
+
+  // Get specific agent details
+  getAgent: async (agentId) => {
+    const response = await api.get(`/api/mobile-agent/agents/${agentId}`);
+    return response.data;
+  },
+
+  // Disconnect an agent
+  disconnectAgent: async (agentId) => {
+    const response = await api.post(`/api/mobile-agent/agents/${agentId}/disconnect`);
+    return response.data;
+  },
+
+  // Get setup instructions for a platform
+  getSetupInstructions: async (platform = 'windows') => {
+    const response = await api.get(`/api/mobile-agent/setup-instructions?platform=${platform}`);
+    return response.data;
+  },
+
+  // Get agent token for connection
+  getAgentToken: async () => {
+    const response = await api.post('/api/mobile-agent/token');
+    return response.data;
+  },
+
+  // Download agent package for specified platform
+  downloadAgent: async (platform = 'windows') => {
+    const response = await api.get(`/api/mobile-agent/download?platform=${platform}`, {
+      responseType: 'blob',
+    });
+    
+    // Create download link
+    const blob = new Blob([response.data], { type: 'application/zip' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Get filename from Content-Disposition header or generate one
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `jarwis-mobile-agent-${platform}.zip`;
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename=(.+)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/"/g, '');
+      }
+    }
+    
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    return { success: true, filename };
+  },
+
+  // Start scan using remote agent
+  startScan: async (agentId, config) => {
+    const response = await api.post(`/api/mobile-agent/agents/${agentId}/scan/start`, config);
+    return response.data;
+  },
+
+  // Stop scan on agent
+  stopScan: async (agentId, scanId) => {
+    const response = await api.post(`/api/mobile-agent/agents/${agentId}/scan/${scanId}/stop`);
+    return response.data;
+  },
+
+  // Get agent statistics
+  getStats: async () => {
+    const response = await api.get('/api/mobile-agent/stats');
+    return response.data;
+  },
+
+  // Check prerequisites on server
+  checkServerPrerequisites: async () => {
+    const response = await api.get('/api/mobile-agent/prerequisites');
     return response.data;
   },
 };

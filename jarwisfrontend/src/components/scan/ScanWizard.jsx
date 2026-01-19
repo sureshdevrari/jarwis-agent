@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "../../context/ThemeContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { useAuth } from "../../context/AuthContext";
+import { useAgent } from "../../context/AgentContext";
 import { scanAPI, domainAPI, domainVerificationAPI } from "../../services/api";
+import AgentRequiredModal from "../agent/AgentRequiredModal";
 import {
   Check,
   CheckCircle,
@@ -1117,6 +1119,10 @@ export default function ScanWizard({ scanType = "web" }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   
+  // Agent connection state from context
+  const { hasConnectedAgent, loading: agentChecking, agents, canPerformScan, getAgentForScanType } = useAgent();
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  
   const steps = SCAN_TYPE_STEPS[scanType] || SCAN_TYPE_STEPS.web;
   
   // Fetch verified domains on mount
@@ -1179,6 +1185,18 @@ export default function ScanWizard({ scanType = "web" }) {
     setError(null);
     
     try {
+      // ========== AGENT REQUIREMENT CHECK ==========
+      // All scans require a connected Jarwis Agent
+      if (!hasConnectedAgent()) {
+        setShowAgentModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Get the agent for this scan type
+      const agent = getAgentForScanType(scanType);
+      // =============================================
+      
       // Ensure URL is normalized with protocol before sending to backend
       const normalizedTargetUrl = normalizeUrl(formData.target_url);
       
@@ -1188,6 +1206,7 @@ export default function ScanWizard({ scanType = "web" }) {
         scan_name: formData.scan_name || `${scanType.toUpperCase()} Scan - ${new Date().toLocaleDateString()}`,
         rate_limit: formData.rate_limit || 10,
         scope: formData.scope || null,
+        agent_id: agent?.id || agent?.agent_id, // Include agent ID for all scans
       };
       
       // Check authorization for credential-based scans
@@ -1252,7 +1271,15 @@ export default function ScanWizard({ scanType = "web" }) {
       }
     } catch (err) {
       console.error("Failed to start scan:", err);
-      setError(err.message || "Failed to start scan. Please try again.");
+      
+      // Check if it's an agent requirement error from the backend
+      const errorMessage = err.response?.data?.detail || err.message || "";
+      if (err.response?.status === 403 && 
+          (errorMessage.includes("agent") || errorMessage.includes("Agent"))) {
+        setShowAgentModal(true);
+      } else {
+        setError(errorMessage || "Failed to start scan. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1387,6 +1414,15 @@ export default function ScanWizard({ scanType = "web" }) {
           </div>
         </div>
       )}
+      
+      {/* Agent Required Modal */}
+      <AgentRequiredModal
+        isOpen={showAgentModal}
+        onClose={() => setShowAgentModal(false)}
+        scanType={scanType}
+        title="Jarwis Agent Required"
+        message="To start this security scan, you need to install and connect the Jarwis Agent on your system. The agent executes tests locally for better security and access to internal resources."
+      />
     </div>
   );
 }

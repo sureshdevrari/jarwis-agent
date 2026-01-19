@@ -32,9 +32,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 
 def get_token_from_request(request: Request, header_token: Optional[str] = None) -> Optional[str]:
     """
-    Get JWT token from request, checking both:
+    Get JWT token from request, checking:
     1. HttpOnly cookie (preferred, more secure)
     2. Authorization header (fallback for API clients)
+    3. Query parameter 'token' (for file downloads initiated by window.open)
     
     Args:
         request: FastAPI request object
@@ -51,6 +52,12 @@ def get_token_from_request(request: Request, header_token: Optional[str] = None)
     # Priority 2: Authorization header (for API clients, mobile apps, etc.)
     if header_token:
         return header_token
+    
+    # Priority 3: Query parameter (for file downloads where headers can't be set)
+    # This is less secure but necessary for browser-initiated downloads
+    query_token = request.query_params.get("token")
+    if query_token:
+        return query_token
     
     return None
 

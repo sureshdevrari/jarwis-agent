@@ -40,6 +40,9 @@ from database import crud
 from database.security import InputValidator, SecurityStore
 from core.scope import ScopeManager
 
+# Agent requirement enforcement
+from core.universal_agent_server import require_agent_connection, get_agent_for_user
+
 # Import WebSocket broadcast functions for real-time updates
 from api.websocket import (
     broadcast_scan_progress,
@@ -483,6 +486,17 @@ async def create_scan(
         await enforce_subscription_limit(db, current_user, SubscriptionAction.START_SCAN)
     # ==============================================
     
+    # ========== AGENT REQUIREMENT CHECK ==========
+    # All scans require a connected Jarwis Agent for security
+    # Developer accounts bypass this check for testing
+    agent_id = None
+    if not is_dev_account:
+        await require_agent_connection(current_user.id, "web")
+        # Get agent_id for tracking which agent runs this scan
+        agent_info = get_agent_for_user(current_user.id, "web")
+        agent_id = agent_info.get("agent_id")
+    # =============================================
+    
     # ========== SSRF PROTECTION ==========
     # Validate target URL is safe to scan (not internal/private)
     # Developer accounts bypass SSRF protection to test internal services
@@ -702,6 +716,7 @@ async def create_scan(
         password=scan_data.password,
         scan_type=scan_data.scan_type,
         user_id=current_user.id,
+        agent_id=agent_id,  # Pass agent_id for distributed execution
         two_factor_config=two_factor_config,
         auth_config=auth_config,  # Pass auth method config
         attacks_config=scan_data.config.get("attacks") if scan_data.config else None  # Pass attacks config

@@ -249,6 +249,8 @@ class MobileScanConfig:
     use_emulator: bool = True
     headless: bool = False
     device_id: str = ""
+    keep_emulator_on_failure: bool = True  # Keep emulator running if scan fails
+    keep_emulator_on_complete: bool = True  # Keep emulator running after scan completes
     
     # Proxy/Traffic
     mitm_enabled: bool = True
@@ -266,6 +268,8 @@ class MobileScanConfig:
     username: str = ""
     password: str = ""
     phone: str = ""
+    login_api_url: str = ""  # User-provided login URL (optional, auto-discovered if empty)
+    continue_on_auth_failure: bool = True  # Continue with unauthenticated scan if auth fails
     
     # 2FA / OTP
     two_factor_enabled: bool = False
@@ -413,6 +417,8 @@ class MobilePenTestOrchestrator:
             "summary": {}
         }
         
+        scan_succeeded = False  # Track success for cleanup decision
+        
         try:
             self._log('start', f'[*]    Starting Mobile Pentest: {Path(self.config.app_path).name}')
             self._log('info', f'Platform: {self.context.platform.upper()}')
@@ -468,15 +474,24 @@ class MobilePenTestOrchestrator:
                 result["report_path"] = report_path
             
             result["status"] = "completed"
+            scan_succeeded = True
             
         except Exception as e:
             result["status"] = "failed"
             result["error"] = str(e)
             self._log('error', f'Scan failed: {e}')
             logger.exception(f"Mobile scan failed: {e}")
+            scan_succeeded = False
         
         finally:
-            await self._cleanup()
+            # Determine whether to keep emulator based on config and scan result
+            if scan_succeeded:
+                keep_emulator = self.config.keep_emulator_on_complete
+            else:
+                keep_emulator = self.config.keep_emulator_on_failure
+            
+            self._log('debug', f'Cleanup: keep_emulator={keep_emulator} (succeeded={scan_succeeded})')
+            await self._cleanup(keep_emulator=keep_emulator)
         
         # Final summary
         result["ended_at"] = datetime.now().isoformat()
@@ -1501,16 +1516,46 @@ class MobilePenTestOrchestrator:
             if auth_type in ["email_password", "username_password"]:
                 # Standard password authentication
                 self.context.auth_status = "authenticating"
-                handler = UsernamePasswordHandler()
+                
+                # Create handler with config
+                handler_config = {
+                    'app_package': getattr(self.config, 'app_package', ''),
+                    'device_id': self.config.device_id,
+                }
+                handler = UsernamePasswordHandler(handler_config)
+                
+                # Use user-provided login URL if available, otherwise auto-discover
+                login_url = self.config.login_api_url if self.config.login_api_url else None
+                
+                if login_url:
+                    self._log('info', f'Using user-provided login URL: {login_url}')
+                else:
+                    # Try to discover login API URL from captured traffic
+                    login_url = await self._discover_login_endpoint()
+                
+                if not login_url:
+                    self._log('warning', 'Login API endpoint not discovered from traffic')
+                    self._log('info', 'Continuing with UI-based authentication instead')
+                    # Fall back to manual/UI-based auth
+                    self.context.auth_status = "manual_required"
+                    return await self._handle_manual_auth()
+                
+                self._log('info', f'Attempting login via: {login_url}')
                 
                 session = await handler.login(
                     self.config.username,
-                    self.config.password
+                    self.config.password,
+                    login_api_url=login_url
                 )
                 
-                if session and session.status.value == 'authenticated':
+                # Close the handler's HTTP session
+                await handler.close()
+                
+                if session and session.status == AuthSessionStatus.AUTHENTICATED:
                     self.context.authenticated = True
-                    self.context.auth_tokens['session'] = session.token
+                    # Use access_token (correct attribute name)
+                    self.context.auth_tokens['session'] = session.access_token
+                    self.context.auth_tokens['refresh'] = session.refresh_token
                     self.context.auth_status = "authenticated"
                     self._log('success', '[!]   Password authentication successful')
                     
@@ -1521,9 +1566,8 @@ class MobilePenTestOrchestrator:
                     
                     return True
                 else:
-                    self.context.auth_status = "failed"
-                    self._log('error', 'Authentication failed')
-                    return False
+                    self._log('warning', 'API authentication failed, trying UI-based auth...')
+                    return await self._handle_manual_auth()
                     
             elif auth_type == "phone_otp":
                 # OTP flow - requires dashboard interaction
@@ -1539,14 +1583,24 @@ class MobilePenTestOrchestrator:
                 
             else:
                 self._log('warning', f'Unknown auth type: {auth_type}')
+                if self.config.continue_on_auth_failure:
+                    self._log('info', 'Continuing scan without authentication (continue_on_auth_failure=True)')
+                    return True
                 return False
                 
         except ImportError as e:
             self._log('error', f'Auth handler not available: {e}')
+            if self.config.continue_on_auth_failure:
+                self._log('info', 'Continuing scan without authentication')
+                return True
             return False
         except Exception as e:
-            self._log('error', f'Authentication failed: {e}')
+            self._log('error', f'Authentication error: {e}')
             self.context.auth_status = "failed"
+            if self.config.continue_on_auth_failure:
+                self._log('warning', 'Continuing scan without authentication (continue_on_auth_failure=True)')
+                return True
+            self._log('error', 'Stopping scan due to authentication failure (continue_on_auth_failure=False)')
             return False
     
     async def _handle_otp_auth(self) -> bool:
@@ -1699,6 +1753,68 @@ class MobilePenTestOrchestrator:
         self._log('warning', f'{provider.title()} authentication timed out')
         self.context.auth_status = "timeout"
         return False
+    
+    async def _discover_login_endpoint(self) -> Optional[str]:
+        """
+        Try to discover the login API endpoint from captured traffic.
+        Looks for common login patterns in intercepted requests.
+        """
+        try:
+            # Common login endpoint patterns
+            login_patterns = [
+                '/login', '/signin', '/auth', '/authenticate',
+                '/api/login', '/api/auth', '/api/signin',
+                '/api/v1/login', '/api/v1/auth', '/api/v2/login',
+                '/oauth/token', '/token', '/session',
+                '/user/login', '/users/login', '/account/login'
+            ]
+            
+            # Check captured requests from MITM proxy
+            if self.request_store:
+                requests = await self.request_store.get_all_requests()
+                
+                for req in requests:
+                    url = req.get('url', '')
+                    method = req.get('method', '').upper()
+                    
+                    # Only consider POST requests for login
+                    if method != 'POST':
+                        continue
+                    
+                    # Check if URL matches login patterns
+                    url_lower = url.lower()
+                    for pattern in login_patterns:
+                        if pattern in url_lower:
+                            self._log('info', f'Found potential login endpoint: {url}')
+                            return url
+            
+            # Check Frida bridge captured requests
+            if self.frida_bridge:
+                captured = self.frida_bridge.get_captured_requests()
+                for req in captured:
+                    url = req.get('url', '')
+                    method = req.get('method', '').upper()
+                    
+                    if method != 'POST':
+                        continue
+                    
+                    url_lower = url.lower()
+                    for pattern in login_patterns:
+                        if pattern in url_lower:
+                            self._log('info', f'Found potential login endpoint from Frida: {url}')
+                            return url
+            
+            # If we have app_base_url from config, construct common login URLs
+            base_url = getattr(self.config, 'app_base_url', None)
+            if base_url:
+                # Return a best-guess login URL
+                return f"{base_url.rstrip('/')}/api/login"
+            
+            return None
+            
+        except Exception as e:
+            self._log('warning', f'Error discovering login endpoint: {e}')
+            return None
     
     async def _handle_manual_auth(self) -> bool:
         """Handle fully manual authentication via dashboard"""
@@ -2186,10 +2302,13 @@ class MobilePenTestOrchestrator:
         
         return html
     
-    async def _cleanup(self):
+    async def _cleanup(self, keep_emulator: bool = False):
         """
         Cleanup ALL resources properly.
         Called in finally block of run() or when scan is stopped.
+        
+        Args:
+            keep_emulator: If True, don't stop the emulator (allows reuse)
         """
         self._log('info', 'Cleaning up mobile scan resources...')
         self._running = False
@@ -2266,16 +2385,18 @@ class MobilePenTestOrchestrator:
             except Exception as e:
                 logger.error(f"Request store cleanup error: {e}")
         
-        # 8. Stop Android emulator
-        if self.emulator:
+        # 8. Stop Android emulator (unless keep_emulator is True)
+        if self.emulator and not keep_emulator:
             try:
                 await self.emulator.stop_emulator()
                 self._log('debug', 'Android emulator stopped')
             except Exception as e:
                 logger.error(f"Emulator stop error: {e}")
+        elif self.emulator and keep_emulator:
+            self._log('info', 'Keeping emulator running for potential reuse')
         
-        # 9. Stop iOS simulator
-        if self.simulator:
+        # 9. Stop iOS simulator (unless keep_emulator is True)
+        if self.simulator and not keep_emulator:
             try:
                 if hasattr(self.simulator, 'stop'):
                     if asyncio.iscoroutinefunction(self.simulator.stop):
@@ -2285,6 +2406,8 @@ class MobilePenTestOrchestrator:
                 self._log('debug', 'iOS simulator stopped')
             except Exception as e:
                 logger.error(f"Simulator stop error: {e}")
+        elif self.simulator and keep_emulator:
+            self._log('info', 'Keeping iOS simulator running for potential reuse')
         
         # 7. Unregister from MobileProcessRegistry
         try:

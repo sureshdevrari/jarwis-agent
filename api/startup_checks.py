@@ -7,10 +7,20 @@ Prevents broken deployments from going live.
 
 import asyncio
 import logging
+import socket
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 logger = logging.getLogger(__name__)
+
+# Service ports to validate before startup
+SERVICE_PORTS = [
+    (8000, "Backend API"),
+    (3000, "Frontend"),
+    (8080, "MITM Proxy"),
+    (9999, "OOB Callback HTTP"),
+    (5353, "OOB Callback DNS"),
+]
 
 
 class StartupHealthCheck:
@@ -29,6 +39,7 @@ class StartupHealthCheck:
             "scanner_registry": StartupHealthCheck._check_scanners(),
             "file_system": StartupHealthCheck._check_file_system(),
             "contracts": StartupHealthCheck._check_contracts(),
+            "ports": StartupHealthCheck._check_service_ports(),
         }
         
         results = {}
@@ -46,6 +57,58 @@ class StartupHealthCheck:
                 logger.error(f"💥 {name} check crashed: {e}")
                 results[name] = False
         
+        return results
+    
+    @staticmethod
+    async def _check_service_ports() -> Tuple[bool, str]:
+        """Check if required service ports are available or in use by our services"""
+        conflicts = []
+        running_services = []
+        
+        for port, service_name in SERVICE_PORTS:
+            status = StartupHealthCheck._check_port_status(port)
+            if status == "in_use":
+                # Port 8000 being in use is expected (we're starting!)
+                if port == 8000:
+                    continue
+                # Check if it's our service or a conflict
+                conflicts.append(f"{service_name}:{port}")
+            elif status == "available":
+                # Port is free - service not running yet (expected during startup)
+                pass
+        
+        if conflicts:
+            return False, f"Port conflicts detected: {', '.join(conflicts)}"
+        
+        return True, "All service ports available"
+    
+    @staticmethod
+    def _check_port_status(port: int) -> str:
+        """Check if a port is in use or available"""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                result = s.connect_ex(('127.0.0.1', port))
+                if result == 0:
+                    return "in_use"
+                return "available"
+        except Exception:
+            return "available"
+    
+    @staticmethod
+    def check_all_services_running() -> Dict[str, dict]:
+        """
+        Check status of all services on their designated ports.
+        Returns dict with service status for health endpoint.
+        """
+        results = {}
+        for port, service_name in SERVICE_PORTS:
+            status = StartupHealthCheck._check_port_status(port)
+            results[service_name] = {
+                "port": port,
+                "status": "running" if status == "in_use" else "stopped",
+                "healthy": status == "in_use" if service_name == "Backend API" else True
+            }
         return results
     
     @staticmethod

@@ -55,6 +55,8 @@ import NewScan from "../pages/dashboard/NewScan";
 import ScanTypeSelector from "../pages/dashboard/ScanTypeSelector";
 import WebScanPage from "../pages/dashboard/WebScanPage";
 import MobileScanPage from "../pages/dashboard/MobileScanPage";
+import MobileAgentSetupPage from "../pages/dashboard/MobileAgentSetupPage";
+import AgentDownloadPage from "../components/agent/AgentDownloadPage";
 import NetworkScanPage from "../pages/dashboard/NetworkScanPage";
 import CloudScanPage from "../pages/dashboard/CloudScanPage";
 import SastScanPage from "../pages/dashboard/SastScanPage";
@@ -295,6 +297,22 @@ const router = createBrowserRouter([
       <ScanPageRoute>
         <MobileScanPage />
       </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/scan/mobile/agent-setup",
+    element: (
+      <ScanPageRoute>
+        <MobileAgentSetupPage />
+      </ScanPageRoute>
+    ),
+  },
+  {
+    path: "/dashboard/agent-setup",
+    element: (
+      <UserDashboardRoute>
+        <AgentDownloadPage />
+      </UserDashboardRoute>
     ),
   },
   {

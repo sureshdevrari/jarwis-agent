@@ -47,6 +47,7 @@ export const AuthProvider = ({ children }) => {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [timeoutReason, setTimeoutReason] = useState("inactive");
+  const [currentToken, setCurrentToken] = useState(() => getAccessToken());
   const refreshIntervalRef = useRef(null);
 
   // Handle session timeout - show modal with blur effect
@@ -55,6 +56,7 @@ export const AuthProvider = ({ children }) => {
     clearAuth();
     setUser(null);
     setUserDoc(null);
+    setCurrentToken(null);
     setSessionExpired(true);
     setTimeoutReason(reason);
     setShowTimeoutModal(true);
@@ -82,6 +84,7 @@ export const AuthProvider = ({ children }) => {
       if (shouldRefreshToken()) {
         try {
           await autoRefreshToken();
+          setCurrentToken(getAccessToken()); // Update state with new token
           console.log("Token refreshed successfully");
         } catch (error) {
           console.error("Token refresh failed:", error);
@@ -217,6 +220,7 @@ export const AuthProvider = ({ children }) => {
       setUser(profile);
       setUserDoc(profile);
       setSessionExpired(false);
+      setCurrentToken(getAccessToken()); // Update token state
       
       // Start token refresh interval
       startTokenRefreshInterval();
@@ -250,6 +254,7 @@ export const AuthProvider = ({ children }) => {
       setUser(profile);
       setUserDoc(profile);
       setSessionExpired(false);
+      setCurrentToken(getAccessToken()); // Update token state
       
       // Start token refresh interval
       startTokenRefreshInterval();
@@ -321,6 +326,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setUserDoc(null);
       setSessionExpired(false);
+      setCurrentToken(null); // Clear token state
       clearAuth();
     }
     return { message: "Logged out successfully!" };
@@ -524,7 +530,8 @@ export const AuthProvider = ({ children }) => {
     signup: signupWithEmail,
     
     // Token management
-    token: getAccessToken(),
+    token: currentToken,
+    refreshToken: () => setCurrentToken(getAccessToken()), // Force token refresh
   };
 
   return (
