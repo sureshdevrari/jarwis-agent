@@ -186,18 +186,22 @@ jobs:
           }
           Write-Host "All required files present" -ForegroundColor Green
 
-      - name: Build MSI installer (Enterprise)
-        continue-on-error: true
+      - name: Prepare installer files
         run: |
           cd dist/windows
-          
-          # Copy required files
+          # Copy required files for all installers
           Copy-Item "../../config/config.yaml" .
           Copy-Item "../../installer/LICENSE.rtf" ./license.rtf
           Copy-Item "../../installer/LICENSE.rtf" ./license.txt
           Copy-Item "../../installer/assets/bitmaps/wix_banner.bmp" ./banner.bmp
           Copy-Item "../../installer/assets/bitmaps/wix_dialog.bmp" ./dialog.bmp
           "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
+
+      - name: Build MSI installer (Enterprise)
+        continue-on-error: true
+        run: |
+          cd dist/windows
+          
           
           # Build MSI
 
@@ -515,9 +519,10 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
           
+          # Install Qt dependencies for PyQt6
           # Install fpm for package building
           sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev rubygems rpm
+          sudo apt-get install -y ruby ruby-dev rubygems rpm libxcb-cursor0 libxkbcommon0 libxcb1 libgl1
           sudo gem install --no-document fpm
           
       - name: Build executable with PyInstaller
