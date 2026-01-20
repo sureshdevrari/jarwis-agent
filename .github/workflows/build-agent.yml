@@ -130,13 +130,13 @@ jobs:
             installer/gui/post_install_config.py
             
       - name: Install Azure CLI
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.AZURE_CLIENT_ID != ''
         run: |
           Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile AzureCLI.msi
           Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
           
       - name: Sign executables with Azure Trusted Signing
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.AZURE_CLIENT_ID != ''
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -237,7 +237,7 @@ jobs:
             installer/gui/setup_wizard.py
           
       - name: Sign installers
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.AZURE_CLIENT_ID != ''
         run: |
           az trustedsigning sign `
             --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
@@ -250,7 +250,7 @@ jobs:
             
 
       - name: Verify code signatures
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.AZURE_CLIENT_ID != ''
         run: |
           Write-Host "Verifying code signatures..."
           $files = @(
@@ -344,7 +344,7 @@ jobs:
             --clean --noconfirm
             
       - name: Import signing certificates
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.APPLE_CERTIFICATE_P12 != ''
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -376,7 +376,7 @@ jobs:
           rm /tmp/app_cert.p12 /tmp/installer_cert.p12
           
       - name: Sign executable
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.APPLE_CERTIFICATE_P12 != ''
         run: |
           codesign --force --options runtime \
             --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
@@ -417,7 +417,7 @@ jobs:
             "dist/macos/jarwis-agent.pkg"
             
       - name: Sign PKG installer
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.APPLE_CERTIFICATE_P12 != ''
         run: |
           productsign \
             --sign "Developer ID Installer: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
@@ -428,7 +428,7 @@ jobs:
           mv dist/macos/jarwis-agent-signed.pkg dist/macos/jarwis-agent.pkg
           
       - name: Notarize PKG
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.APPLE_CERTIFICATE_P12 != ''
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -456,7 +456,7 @@ jobs:
             "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg"
             
       - name: Sign DMG
-        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        if: (github.event.inputs.sign == 'true' || github.event_name == 'push') && secrets.APPLE_CERTIFICATE_P12 != ''
         run: |
           codesign --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
             "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg"
