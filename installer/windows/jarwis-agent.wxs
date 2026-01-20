@@ -11,7 +11,7 @@
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
   <?define ProductName = "Jarwis Security Agent" ?>
-  <?<?define ProductVersion = "2.1.0" ?>
+  <?define ProductVersion = "2.1.0" ?>
   <?define Manufacturer = "Jarwis Security" ?>
   <?define UpgradeCode = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" ?>
   
@@ -76,7 +76,7 @@
 
       <!-- License file -->
       <Component Id="LicenseFile" Guid="D4E5F6A7-B8C9-0123-DEF0-456789012345">
-        <File Id="License" Source="$(var.SourceDir)\LICENSE.txt" KeyPath="yes" />
+        <File Id="License" Source="$(var.SourceDir)\license.txt" KeyPath="yes" />
       </Component>
 
       <!-- README -->

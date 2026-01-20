@@ -23,8 +23,8 @@ chmod 755 /usr/local/var/jarwis
 chmod 644 /Library/LaunchDaemons/com.jarwis.agent.plist
 
 # Create default config if not exists
-if [ ! -f /usr/local/etc/jarwis/agent.conf ]; then
-    cat > /usr/local/etc/jarwis/agent.conf << EOF
+if [ ! -f /usr/local/etc/jarwis/config.yaml ]; then
+    cat > /usr/local/etc/jarwis/config.yaml << EOF
 # Jarwis Agent Configuration
 # 
 # Edit this file or use: jarwis-agent --configure
@@ -45,7 +45,7 @@ echo "To activate the agent, run:"
 echo "  sudo jarwis-agent --activate YOUR_ACTIVATION_KEY"
 echo ""
 echo "Or configure manually:"
-echo "  sudo nano /usr/local/etc/jarwis/agent.conf"
+echo "  sudo nano /usr/local/etc/jarwis/config.yaml"
 echo "  sudo launchctl start com.jarwis.agent"
 
 exit 0

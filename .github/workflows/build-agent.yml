@@ -56,7 +56,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  VERSION: ${{ github.event.inputs.version || '2.1.0' }}
+  VERSION: '2.1.6'
 
 jobs:
   # ===========================================================================
@@ -69,6 +69,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -match '^v(.+)$') {
+            $version = $Matches[1]
+          } else {
+            $version = "${{ env.VERSION }}"
+          }
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+          echo "Extracted version: $version"
         
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -154,6 +167,25 @@ jobs:
         run: |
           choco install innosetup -y
           
+      - name: Validate build outputs
+        run: |
+          Write-Host "Validating build outputs..."
+          $required = @(
+            "dist/windows/jarwis-agent.exe",
+            "dist/windows/jarwis-tray.exe",
+            "installer/assets/icons/jarwis-agent.ico",
+            "installer/assets/bitmaps/wix_banner.bmp",
+            "installer/assets/bitmaps/wix_dialog.bmp",
+            "config/config.yaml"
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Host "ERROR: Missing required files:" -ForegroundColor Red
+            $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+            exit 1
+          }
+          Write-Host "All required files present" -ForegroundColor Green
+
       - name: Build MSI installer (Enterprise)
         run: |
           cd dist/windows
@@ -161,11 +193,18 @@ jobs:
           # Copy required files
           Copy-Item "../../config/config.yaml" .
           Copy-Item "../../installer/LICENSE.rtf" ./license.rtf
+          Copy-Item "../../installer/LICENSE.rtf" ./license.txt
           Copy-Item "../../installer/assets/bitmaps/wix_banner.bmp" ./banner.bmp
           Copy-Item "../../installer/assets/bitmaps/wix_dialog.bmp" ./dialog.bmp
           "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
           
           # Build MSI
+
+          # Update WiX version
+          $wxsContent = Get-Content "../../installer/windows/jarwis-agent.wxs" -Raw
+          $wxsContent = $wxsContent -replace '<?define ProductVersion = ".*" ?>', "<?define ProductVersion = `"${{ env.VERSION }}`" ?>"
+          Set-Content "../../installer/windows/jarwis-agent.wxs" $wxsContent
+
           wix build "../../installer/windows/jarwis-agent.wxs" `
             -d SourceDir="." `
             -ext WixToolset.UI.wixext `
@@ -252,6 +291,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          tag="${{ github.ref_name }}"
+          if [[ "$tag" =~ ^v(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+          else
+            version="${{ env.VERSION }}"
+          fi
+          echo "VERSION=$version" >> $GITHUB_ENV
+          echo "Extracted version: $version"
         
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -436,6 +487,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          tag="${{ github.ref_name }}"
+          if [[ "$tag" =~ ^v(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+          else
+            version="${{ env.VERSION }}"
+          fi
+          echo "VERSION=$version" >> $GITHUB_ENV
+          echo "Extracted version: $version"
         
       - name: Set up Python
         uses: actions/setup-python@v5
