@@ -27,8 +27,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 ACTIVATION_KEY="${1:-}"
-VERSION="1.0.0"
-BASE_URL="https://releases.jarwis.io/agent"
+VERSION="2.1.0"
+GITHUB_REPO="sureshdevrari/jarwis-agent"
+BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 echo -e "${BLUE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -88,7 +89,7 @@ detect_arch() {
 install_deb() {
     echo -e "${YELLOW}Installing DEB package...${NC}"
     
-    PKG_URL="$BASE_URL/v$VERSION/jarwis-agent_${VERSION}_${ARCH_PKG}.deb"
+    PKG_URL="${BASE_URL}/jarwis-agent_${VERSION}_${ARCH_PKG}.deb"
     TMP_PKG="/tmp/jarwis-agent.deb"
     
     curl -sL "$PKG_URL" -o "$TMP_PKG"
@@ -103,7 +104,7 @@ install_rpm() {
     RPM_ARCH="$ARCH"
     [ "$ARCH" == "amd64" ] && RPM_ARCH="x86_64"
     
-    PKG_URL="$BASE_URL/v$VERSION/jarwis-agent-${VERSION}-1.${RPM_ARCH}.rpm"
+    PKG_URL="${BASE_URL}/jarwis-agent-${VERSION}-1.${RPM_ARCH}.rpm"
     TMP_PKG="/tmp/jarwis-agent.rpm"
     
     curl -sL "$PKG_URL" -o "$TMP_PKG"
