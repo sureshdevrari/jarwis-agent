@@ -40,7 +40,7 @@ ICON_WINDOWS = str(PROJECT_ROOT / 'assets' / 'logos' / 'jarwis-agent.ico')
 ICON_MACOS = str(PROJECT_ROOT / 'assets' / 'logos' / 'jarwis-agent.icns')
 
 # Version info for Windows
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 
 # Analysis - collect all Python files
 a = Analysis(

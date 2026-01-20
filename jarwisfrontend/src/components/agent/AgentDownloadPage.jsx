@@ -26,7 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { universalAgentAPI, mobileAgentAPI } from '../../services/api';
+import { universalAgentAPI, mobileAgentAPI, serverConfigAPI } from '../../services/api';
 
 // Platform detection
 const detectPlatform = () => {
@@ -38,8 +38,9 @@ const detectPlatform = () => {
 };
 
 // Agent version and download info
-const AGENT_VERSION = '1.0.0';
-const RELEASE_DATE = '2026-01-19';
+const AGENT_VERSION = '2.1.0';
+const RELEASE_DATE = '2026-01-20';
+const GITHUB_RELEASE_BASE = `https://github.com/sureshdevrari/jarwis-agent/releases/download/v${AGENT_VERSION}`;
 
 const DOWNLOAD_OPTIONS = {
   windows: {
@@ -48,22 +49,24 @@ const DOWNLOAD_OPTIONS = {
     description: 'Windows 10/11 (64-bit)',
     downloads: [
       {
-        id: 'msi',
-        name: 'MSI Installer',
-        filename: `jarwis-agent_${AGENT_VERSION}_x64.msi`,
+        id: 'gui',
+        name: 'GUI Installer',
+        filename: 'JarwisAgentSetup-GUI.exe',
         size: '45 MB',
         recommended: true,
-        description: 'Enterprise installer with silent install support',
-        silentCmd: 'msiexec /i jarwis-agent.msi /quiet ACTIVATION_KEY=YOUR_KEY',
+        description: '⭐ Professional installer wizard with branding and EULA',
+        silentCmd: null,
+        directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-GUI.exe`,
       },
       {
         id: 'exe',
-        name: 'Standalone EXE',
-        filename: `jarwis-agent_${AGENT_VERSION}_x64.exe`,
-        size: '42 MB',
+        name: 'CLI Executable',
+        filename: 'jarwis-agent.exe',
+        size: '15 MB',
         recommended: false,
-        description: 'Portable executable, no installation required',
+        description: 'Standalone executable for advanced users',
         silentCmd: 'jarwis-agent.exe --activate YOUR_KEY --service',
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent.exe`,
       },
     ],
     requirements: [
@@ -80,22 +83,24 @@ const DOWNLOAD_OPTIONS = {
     description: 'macOS 11+ (Intel & Apple Silicon)',
     downloads: [
       {
-        id: 'pkg',
-        name: 'PKG Installer',
-        filename: `jarwis-agent_${AGENT_VERSION}_universal.pkg`,
-        size: '48 MB',
+        id: 'dmg',
+        name: 'DMG Installer',
+        filename: `JarwisAgentSetup-${AGENT_VERSION}.dmg`,
+        size: '45 MB',
         recommended: true,
-        description: 'Standard macOS installer package',
-        silentCmd: 'sudo installer -pkg jarwis-agent.pkg -target /',
+        description: '⭐ DMG with professional GUI installer wizard',
+        silentCmd: null,
+        directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-${AGENT_VERSION}.dmg`,
       },
       {
-        id: 'dmg',
-        name: 'DMG Image',
-        filename: `jarwis-agent_${AGENT_VERSION}_universal.dmg`,
-        size: '52 MB',
+        id: 'binary',
+        name: 'CLI Binary',
+        filename: 'jarwis-agent-macos',
+        size: '14 MB',
         recommended: false,
-        description: 'Disk image containing PKG installer',
-        silentCmd: null,
+        description: 'Standalone binary for advanced users',
+        silentCmd: 'chmod +x jarwis-agent-macos && sudo mv jarwis-agent-macos /usr/local/bin/jarwis-agent',
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-macos`,
       },
     ],
     requirements: [
@@ -112,31 +117,44 @@ const DOWNLOAD_OPTIONS = {
     description: 'Ubuntu, Debian, RHEL, CentOS',
     downloads: [
       {
+        id: 'installer',
+        name: 'GUI Installer',
+        filename: `jarwis-agent-${AGENT_VERSION}-linux-installer.tar.gz`,
+        size: '50 MB',
+        recommended: true,
+        description: '⭐ Extract & run install.sh - launches GUI wizard if X11 available',
+        silentCmd: 'tar -xzf jarwis-agent-*-linux-installer.tar.gz && sudo ./install.sh',
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${AGENT_VERSION}-linux-installer.tar.gz`,
+      },
+      {
         id: 'deb',
         name: 'DEB Package',
         filename: `jarwis-agent_${AGENT_VERSION}_amd64.deb`,
-        size: '40 MB',
-        recommended: true,
+        size: '28 MB',
+        recommended: false,
         description: 'For Ubuntu, Debian, Linux Mint',
-        silentCmd: 'sudo dpkg -i jarwis-agent.deb && sudo jarwis-agent --activate YOUR_KEY',
+        silentCmd: `sudo dpkg -i jarwis-agent_${AGENT_VERSION}_amd64.deb`,
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent_${AGENT_VERSION}_amd64.deb`,
       },
       {
         id: 'rpm',
         name: 'RPM Package',
         filename: `jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
-        size: '40 MB',
+        size: '28 MB',
         recommended: false,
         description: 'For RHEL, CentOS, Fedora, Rocky',
-        silentCmd: 'sudo rpm -i jarwis-agent.rpm && sudo jarwis-agent --activate YOUR_KEY',
+        silentCmd: `sudo rpm -i jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
       },
       {
-        id: 'script',
-        name: 'Install Script',
-        filename: 'install.sh',
-        size: '5 KB',
+        id: 'binary',
+        name: 'CLI Binary',
+        filename: 'jarwis-agent-linux',
+        size: '28 MB',
         recommended: false,
-        description: 'One-liner installation script',
-        silentCmd: 'curl -sL https://jarwis.io/install.sh | sudo bash -s -- YOUR_KEY',
+        description: 'Portable binary for any Linux distro',
+        silentCmd: 'chmod +x jarwis-agent-linux && sudo mv jarwis-agent-linux /usr/local/bin/jarwis-agent',
+        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-linux`,
       },
     ],
     requirements: [
@@ -201,23 +219,33 @@ const NETWORK_REQUIREMENTS = {
 // Installation steps per OS
 const INSTALLATION_STEPS = {
   windows: [
-    { step: 1, title: 'Download Installer', description: 'Download the MSI installer (recommended) or standalone EXE' },
-    { step: 2, title: 'Run Installer', description: 'Double-click the MSI file or right-click → Run as Administrator' },
-    { step: 3, title: 'Enter Activation Key', description: 'Copy your activation key from below and paste when prompted' },
-    { step: 4, title: 'Verify Connection', description: 'Agent will connect automatically. Check status below.' },
+    { step: 1, title: 'Download GUI Installer', description: 'Download JarwisAgentSetup-GUI.exe (recommended)' },
+    { step: 2, title: 'Run Installer', description: 'Double-click to launch the professional setup wizard' },
+    { step: 3, title: 'Configure Server', description: 'Server URL is pre-filled with the URL shown above. Change only if using a different Jarwis server' },
+    { step: 4, title: 'Enter Activation Key', description: 'Copy your activation key from below (optional - can activate later)' },
+    { step: 5, title: 'Complete Setup', description: 'Agent connects automatically. Tray icon shows connection status' },
   ],
   macos: [
-    { step: 1, title: 'Download PKG', description: 'Download the PKG installer for macOS' },
-    { step: 2, title: 'Install Package', description: 'Double-click the PKG file and follow the installation wizard' },
-    { step: 3, title: 'Grant Permissions', description: 'Allow the agent in System Preferences → Security & Privacy if prompted' },
-    { step: 4, title: 'Activate Agent', description: 'Open Terminal and run: jarwis-agent --activate YOUR_KEY' },
+    { step: 1, title: 'Download DMG', description: 'Download JarwisAgentSetup DMG with GUI installer' },
+    { step: 2, title: 'Run Installer', description: 'Mount DMG and run the installer wizard' },
+    { step: 3, title: 'Configure Server', description: 'Enter the Server URL shown above (or your self-hosted server URL)' },
+    { step: 4, title: 'Enter Activation Key', description: 'Paste your activation key or skip to activate later' },
+    { step: 5, title: 'Grant Permissions', description: 'Allow the agent in System Preferences → Security & Privacy if prompted' },
   ],
   linux: [
-    { step: 1, title: 'Download Package', description: 'Download DEB (Ubuntu/Debian) or RPM (RHEL/CentOS/Fedora)' },
-    { step: 2, title: 'Install Package', description: 'Run: sudo dpkg -i jarwis-agent.deb (or sudo rpm -i jarwis-agent.rpm)' },
-    { step: 3, title: 'Activate Agent', description: 'Run: sudo jarwis-agent --activate YOUR_KEY' },
-    { step: 4, title: 'Start Service', description: 'Run: sudo systemctl enable --now jarwis-agent' },
+    { step: 1, title: 'Download Installer', description: 'Download the GUI installer tarball or DEB/RPM package' },
+    { step: 2, title: 'Run Installer', description: 'Extract tarball and run ./install.sh (launches GUI if X11 available)' },
+    { step: 3, title: 'Configure Server', description: 'Enter the Server URL shown above (or your self-hosted server URL)' },
+    { step: 4, title: 'Enter Activation Key', description: 'Paste your activation key or skip to activate later' },
+    { step: 5, title: 'Start Service', description: 'Installer enables systemd service automatically' },
   ],
+};
+
+// Server configuration info - will be overridden by dynamic config
+const DEFAULT_SERVER_CONFIG = {
+  defaultUrl: window.location.origin,
+  description: 'The Jarwis Server URL is where your agent connects to receive scan commands and send results.',
+  selfHostedNote: 'If your organization uses a self-hosted Jarwis server, enter that URL instead.',
 };
 
 // Troubleshooting FAQ
@@ -244,6 +272,38 @@ const TROUBLESHOOTING = [
   },
 ];
 
+// Cache key for server config
+const SERVER_CONFIG_CACHE_KEY = 'jarwis_server_config';
+const SERVER_CONFIG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Get cached config or return null
+const getCachedServerConfig = () => {
+  try {
+    const cached = sessionStorage.getItem(SERVER_CONFIG_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < SERVER_CONFIG_CACHE_TTL) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to read server config cache:', e);
+  }
+  return null;
+};
+
+// Save config to cache
+const setCachedServerConfig = (config) => {
+  try {
+    sessionStorage.setItem(SERVER_CONFIG_CACHE_KEY, JSON.stringify({
+      data: config,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    console.warn('Failed to cache server config:', e);
+  }
+};
+
 const AgentDownloadPage = () => {
   const { isDarkMode } = useTheme();
   const [selectedPlatform, setSelectedPlatform] = useState(detectPlatform());
@@ -255,12 +315,45 @@ const AgentDownloadPage = () => {
   const [copied, setCopied] = useState(null);
   const [expandedDownload, setExpandedDownload] = useState(null);
   const [showAllPlatforms, setShowAllPlatforms] = useState(false);
+  // Initialize with immediate fallback to window.location.origin
+  const [serverUrl, setServerUrl] = useState(() => {
+    // Priority: 1. Cached config 2. Environment variable 3. window.location.origin
+    const cached = getCachedServerConfig();
+    if (cached?.server_url) return cached.server_url;
+    if (import.meta.env.VITE_JARWIS_SERVER_URL) return import.meta.env.VITE_JARWIS_SERVER_URL;
+    return window.location.origin;
+  });
+  const [serverConfigLoading, setServerConfigLoading] = useState(false); // Start false since we have immediate fallback
 
-  // Load connected agents on mount
+  // Load server config, connected agents, and activation key on mount
   useEffect(() => {
+    fetchServerConfig();
     fetchConnectedAgents();
     generateActivationKey();
   }, []);
+
+  const fetchServerConfig = async () => {
+    // Check cache first
+    const cached = getCachedServerConfig();
+    if (cached?.server_url) {
+      setServerUrl(cached.server_url);
+      return; // Use cached value, skip API call
+    }
+
+    setServerConfigLoading(true);
+    try {
+      const config = await serverConfigAPI.getAgentSetupConfig();
+      const url = config.server_url || window.location.origin;
+      setServerUrl(url);
+      // Cache the successful response
+      setCachedServerConfig({ server_url: url, ...config });
+    } catch (err) {
+      console.error('Failed to fetch server config:', err);
+      // Fallback already set via useState initializer - window.location.origin handles 99% of cases
+    } finally {
+      setServerConfigLoading(false);
+    }
+  };
 
   const fetchConnectedAgents = async () => {
     setAgentsLoading(true);
@@ -310,12 +403,19 @@ const AgentDownloadPage = () => {
   const [downloadError, setDownloadError] = useState(null);
   const [downloading, setDownloading] = useState(null);
 
-  const handleDownload = async (platform, downloadId) => {
+  const handleDownload = async (platform, downloadId, directUrl = null) => {
     setDownloading(downloadId);
     setDownloadError(null);
     
     try {
-      // Use the backend API endpoint for downloads
+      // If we have a direct URL (GitHub release), use it directly
+      if (directUrl) {
+        window.open(directUrl, '_blank');
+        setDownloading(null);
+        return;
+      }
+      
+      // Fallback to backend API endpoint for downloads
       const response = await universalAgentAPI.downloadAgent(platform, downloadId);
       
       // If we get a redirect URL, open it
@@ -371,19 +471,56 @@ const AgentDownloadPage = () => {
           </p>
         </div>
 
-        {/* Activation Key Section */}
+        {/* Server URL & Activation Key Section */}
         <div className={`${cardBg} border ${cardBorder} rounded-xl p-6 mb-8`}>
+          {/* Server URL Info */}
+          <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Server className="w-5 h-5 text-blue-500" />
+            </div>
+            <div className="flex-1">
+              <h2 className={`text-lg font-semibold ${textPrimary} mb-1`}>
+                Jarwis Server URL
+              </h2>
+              <p className={`${textSecondary} text-sm mb-3`}>
+                The installer will ask for the server URL. Use the default unless you have a self-hosted Jarwis server.
+              </p>
+              <div className="flex items-center gap-3">
+                <code className={`flex-1 px-4 py-3 rounded-lg font-mono text-sm ${
+                  isDarkMode ? 'bg-gray-900 text-blue-400' : 'bg-gray-100 text-blue-600'
+                }`}>
+                  {serverConfigLoading ? 'Loading...' : serverUrl}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(serverUrl, 'server-url')}
+                  className={`p-3 rounded-lg ${hoverBg} border ${cardBorder} transition-colors`}
+                  title="Copy to clipboard"
+                  disabled={serverConfigLoading}
+                >
+                  {copied === 'server-url' ? (
+                    <Check className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              <p className={`${textSecondary} text-xs mt-2`}>
+                💡 This is pre-filled in the installer. Only change if using a self-hosted Jarwis deployment.
+              </p>
+            </div>
+          </div>
+
+          {/* Activation Key */}
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
               <Key className="w-5 h-5 text-amber-500" />
             </div>
             <div className="flex-1">
               <h2 className={`text-lg font-semibold ${textPrimary} mb-1`}>
-                Your Activation Key
+                Your Activation Key <span className={`text-sm font-normal ${textSecondary}`}>(Optional)</span>
               </h2>
               <p className={`${textSecondary} text-sm mb-4`}>
-                Use this key during installation to link the agent to your account.
-                Keep it secure and don't share it publicly.
+                This key links the agent to your account. You can enter it during installation or activate later from the dashboard.
               </p>
               
               {keyLoading ? (
@@ -525,7 +662,7 @@ const AgentDownloadPage = () => {
                       )}
                     </button>
                     <button
-                      onClick={() => handleDownload(selectedPlatform, download.id)}
+                      onClick={() => handleDownload(selectedPlatform, download.id, download.directUrl)}
                       disabled={downloading === download.id}
                       className={`px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                     >

@@ -25,105 +25,163 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent-downloads", tags=["Agent Downloads"])
 
 # Agent release configuration
-AGENT_VERSION = "1.0.0"
-RELEASE_DATE = "2026-01-19"
+AGENT_VERSION = "2.1.0"
+RELEASE_DATE = "2026-01-20"
 RELEASE_NOTES = """
-## Jarwis Agent v1.0.0
+## Jarwis Agent v2.0.0
 
-### Features
+### 🚀 What's New
+- **Professional GUI Installer** - User-friendly setup wizard with branding
+- **System Tray Application** - Background status indicator and quick actions
+- **Post-Install Configuration** - Interactive server configuration with connection testing
+- **Feature Selection** - Choose which security testing modules to enable
+
+### 🛡️ Features
+- Web application security testing (OWASP Top 10)
 - Mobile dynamic analysis with Frida integration
 - Internal network scanning support
+- Cloud security assessment (AWS, Azure, GCP)
+- Static code analysis (SAST)
 - WebSocket-based secure connection to cloud
 - Auto-reconnection and heartbeat
 - Windows service / macOS LaunchDaemon / Linux systemd support
 
+### 📦 Installers
+- **Windows (GUI)**: `jarwis-agent-setup.exe` - Recommended for end users
+- **Windows (MSI)**: `jarwis-agent.msi` - Enterprise deployment (SCCM, Intune)
+- **macOS**: `jarwis-agent.pkg` - Signed and notarized
+- **Linux**: `.deb` (Debian/Ubuntu) and `.rpm` (RHEL/CentOS)
+
 ### Supported Platforms
 - Windows 10/11 (x64)
 - macOS 11+ (Intel & Apple Silicon)
-- Linux (Ubuntu 18.04+, Debian 10+, RHEL 7+, CentOS 7+)
+- Linux (Ubuntu 20.04+, Debian 11+, RHEL 8+, CentOS Stream 8+)
 """
 
 # Base directory for local agent builds - using absolute path from project root
 PROJECT_ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 LOCAL_BUILDS_DIR = PROJECT_ROOT / "dist"
 
-# Download URLs - In production, these would point to your release CDN
-RELEASE_BASE_URL = os.environ.get(
-    "AGENT_RELEASE_URL", 
-    "https://releases.jarwis.io/agent"
-)
+# GitHub Release URLs
+GITHUB_REPO = "sureshdevrari/jarwis-agent"
+GITHUB_RELEASE_BASE = f"https://github.com/{GITHUB_REPO}/releases/download/v{AGENT_VERSION}"
 
-# Check if we're in development mode (no CDN URL set)
-IS_DEV_MODE = "AGENT_RELEASE_URL" not in os.environ
+# Check if we're in development mode
+IS_DEV_MODE = os.environ.get("JARWIS_ENV", "development") == "development"
 
 DOWNLOADS = {
     "windows": {
-        "msi": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_x64.msi",
-            "local_filename": "jarwis-agent_x64.msi",  # PyInstaller output name
-            "size_bytes": 47185920,  # ~45 MB
-            "sha256": "pending",  # Will be populated during build
-            "content_type": "application/x-msi",
+        "setup": {
+            "filename": "JarwisAgentSetup-GUI.exe",
+            "github_filename": "JarwisAgentSetup-GUI.exe",
+            "size_bytes": 45000000,  # ~45 MB (includes PyQt6)
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-GUI.exe",
+            "description": "⭐ Recommended - Professional GUI installer wizard",
+        },
+        "inno": {
+            "filename": f"JarwisAgentSetup-{AGENT_VERSION}.exe",
+            "github_filename": f"JarwisAgentSetup-{AGENT_VERSION}.exe",
+            "size_bytes": 35000000,  # ~35 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-{AGENT_VERSION}.exe",
+            "description": "Inno Setup installer (alternative)",
         },
         "exe": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_x64.exe",
-            "local_filename": "jarwis-agent.exe",  # PyInstaller output name
-            "size_bytes": 191102976,  # ~182 MB (actual built size)
-            "sha256": "pending",
+            "filename": "jarwis-agent.exe",
+            "github_filename": "jarwis-agent.exe",
+            "size_bytes": 15049524,  # ~15 MB
+            "sha256": "",
             "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent.exe",
+            "description": "Standalone CLI executable",
+        },
+        "tray": {
+            "filename": "jarwis-tray.exe",
+            "github_filename": "jarwis-tray.exe",
+            "size_bytes": 25000000,  # ~25 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-tray.exe",
+            "description": "System tray application",
         },
     },
     "macos": {
-        "pkg": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_universal.pkg",
-            "local_filename": "jarwis-agent.pkg",
-            "size_bytes": 50331648,  # ~48 MB
-            "sha256": "pending",
+        "dmg_installer": {
+            "filename": f"JarwisAgentSetup-{AGENT_VERSION}.dmg",
+            "github_filename": f"JarwisAgentSetup-{AGENT_VERSION}.dmg",
+            "size_bytes": 45000000,  # ~45 MB
+            "sha256": "",
             "content_type": "application/x-apple-diskimage",
+            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-{AGENT_VERSION}.dmg",
+            "description": "⭐ Recommended - DMG with GUI installer wizard",
         },
-        "dmg": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_universal.dmg",
-            "local_filename": "jarwis-agent.dmg",
-            "size_bytes": 54525952,  # ~52 MB
-            "sha256": "pending",
-            "content_type": "application/x-apple-diskimage",
+        "setup": {
+            "filename": "JarwisAgentSetup-macos",
+            "github_filename": "JarwisAgentSetup-macos",
+            "size_bytes": 40000000,  # ~40 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-macos",
+            "description": "GUI installer executable",
         },
         "binary": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_macos",
-            "local_filename": "jarwis-agent",  # PyInstaller output name
-            "size_bytes": 50331648,
-            "sha256": "pending",
-            "content_type": "application/octet-stream",
+            "filename": "jarwis-agent-macos",
+            "github_filename": "jarwis-agent-macos",
+            "size_bytes": 14700470,  # ~14 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-macos",
+            "description": "Standalone CLI binary",
         },
     },
     "linux": {
+        "installer": {
+            "filename": f"jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
+            "github_filename": f"jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
+            "size_bytes": 50000000,  # ~50 MB
+            "sha256": "",
+            "content_type": "application/gzip",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
+            "description": "⭐ Installer with GUI wizard (extract & run install.sh)",
+        },
         "deb": {
             "filename": f"jarwis-agent_{AGENT_VERSION}_amd64.deb",
-            "local_filename": "jarwis-agent.deb",
-            "size_bytes": 41943040,  # ~40 MB
-            "sha256": "pending",
+            "github_filename": f"jarwis-agent_{AGENT_VERSION}_amd64.deb",
+            "size_bytes": 29111956,  # ~28 MB
+            "sha256": "",
             "content_type": "application/vnd.debian.binary-package",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent_{AGENT_VERSION}_amd64.deb",
+            "description": "Debian/Ubuntu package",
         },
         "rpm": {
             "filename": f"jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
-            "local_filename": "jarwis-agent.rpm",
-            "size_bytes": 41943040,  # ~40 MB
-            "sha256": "pending",
+            "github_filename": f"jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
+            "size_bytes": 29126659,  # ~28 MB
+            "sha256": "",
             "content_type": "application/x-rpm",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
+            "description": "RHEL/CentOS/Fedora package",
+        },
+        "setup": {
+            "filename": "JarwisAgentSetup-linux",
+            "github_filename": "JarwisAgentSetup-linux",
+            "size_bytes": 45000000,  # ~45 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-linux",
+            "description": "GUI installer executable (requires X11)",
         },
         "binary": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_linux",
-            "local_filename": "jarwis-agent",  # PyInstaller output name
-            "size_bytes": 41943040,
-            "sha256": "pending",
-            "content_type": "application/octet-stream",
-        },
-        "script": {
-            "filename": "install.sh",
-            "local_filename": "install.sh",
-            "size_bytes": 5120,  # ~5 KB
-            "sha256": "pending",
-            "content_type": "text/x-shellscript",
+            "filename": "jarwis-agent-linux",
+            "github_filename": "jarwis-agent-linux",
+            "size_bytes": 29380312,  # ~28 MB
+            "sha256": "",
+            "content_type": "application/x-executable",
+            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-linux",
+            "description": "Standalone CLI binary",
         },
     },
 }
@@ -161,7 +219,9 @@ async def get_release_info():
                 "filename": info["filename"],
                 "size_bytes": info["size_bytes"],
                 "size_human": _format_size(info["size_bytes"]),
-                "download_url": f"{RELEASE_BASE_URL}/v{AGENT_VERSION}/{info['filename']}",
+                "sha256": info.get("sha256", ""),
+                "download_url": info["download_url"],
+                "description": info.get("description", ""),
             }
     
     return ReleaseInfo(
@@ -170,6 +230,37 @@ async def get_release_info():
         release_notes=RELEASE_NOTES,
         downloads=downloads,
     )
+
+
+@router.get("/recommended/{platform}")
+async def get_recommended_download(platform: str):
+    """
+    Get recommended download for a platform.
+    
+    Returns the best installer option for the given platform.
+    """
+    platform = platform.lower()
+    
+    recommendations = {
+        "windows": "setup",  # GUI installer
+        "macos": "pkg",      # Signed PKG
+        "linux": "deb",      # Most common
+    }
+    
+    if platform not in DOWNLOADS:
+        raise HTTPException(status_code=404, detail=f"Unknown platform: {platform}")
+    
+    recommended_format = recommendations.get(platform, list(DOWNLOADS[platform].keys())[0])
+    info = DOWNLOADS[platform][recommended_format]
+    
+    return {
+        "platform": platform,
+        "format": recommended_format,
+        "filename": info["filename"],
+        "download_url": info["download_url"],
+        "size_human": _format_size(info["size_bytes"]),
+        "description": info.get("description", ""),
+    }
 
 
 @router.get("/download/{platform}/{format}")
@@ -183,11 +274,8 @@ async def download_agent(
     """
     Get download URL for agent installer.
     
-    Redirects to the actual download URL (CDN or direct file).
+    Redirects to GitHub releases for actual download.
     Tracks download statistics.
-    
-    In dev mode, serves local builds if available.
-    Token can be passed as query param for browser-initiated downloads.
     """
     # Validate platform
     if platform not in DOWNLOADS:
@@ -223,39 +311,8 @@ async def download_agent(
     except Exception as e:
         logger.warning(f"Failed to track download: {e}")
     
-    # In dev mode, check for local builds first
-    if IS_DEV_MODE:
-        local_file = _find_local_build(platform, format, download_info)
-        if local_file and local_file.exists():
-            logger.info(f"Serving local build: {local_file}")
-            # Get actual file size
-            actual_size = local_file.stat().st_size
-            return FileResponse(
-                path=str(local_file),
-                filename=download_info['filename'],
-                media_type=download_info['content_type'],
-                headers={
-                    "Content-Length": str(actual_size),
-                    "X-Jarwis-Agent-Version": AGENT_VERSION,
-                }
-            )
-        else:
-            # No local build - return helpful error
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "build_not_found",
-                    "message": f"Agent installer not found. Please build it first using the installer scripts.",
-                    "platform": platform,
-                    "format": format,
-                    "expected_path": str(LOCAL_BUILDS_DIR / platform / download_info.get('local_filename', download_info['filename'])),
-                    "build_command": _get_build_command(platform),
-                }
-            )
-    
-    # Production mode: redirect to CDN
-    download_url = f"{RELEASE_BASE_URL}/v{AGENT_VERSION}/{download_info['filename']}"
-    return RedirectResponse(url=download_url, status_code=302)
+    # Redirect to GitHub releases
+    return RedirectResponse(url=download_info["download_url"], status_code=302)
 
 
 @router.get("/install-script")
@@ -265,28 +322,63 @@ async def get_install_script():
     
     Usage: curl -sL https://jarwis.io/api/agent-downloads/install-script | sudo bash
     """
-    # Read the install script from disk
-    script_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        "installer", "linux", "install.sh"
-    )
-    
-    if os.path.exists(script_path):
-        return FileResponse(
-            path=script_path,
-            media_type="text/x-shellscript",
-            filename="install.sh",
-        )
-    
-    # Fallback: Return a simple redirect script
     script = f"""#!/bin/bash
-# Jarwis Agent Quick Install
-# This script downloads and installs the latest Jarwis Agent
+# Jarwis Agent Quick Install Script
+# Usage: curl -sL https://jarwis.io/api/agent-downloads/install-script | sudo bash
 
 set -e
 
-echo "Downloading Jarwis Agent installer..."
-curl -sL {RELEASE_BASE_URL}/v{AGENT_VERSION}/install.sh | sudo bash -s -- "$@"
+AGENT_VERSION="{AGENT_VERSION}"
+GITHUB_RELEASE="{GITHUB_RELEASE_BASE}"
+
+echo "============================================"
+echo "   Jarwis Agent Installer v$AGENT_VERSION"
+echo "============================================"
+echo ""
+
+# Detect OS and architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+case "$OS" in
+    linux)
+        if command -v apt-get &> /dev/null; then
+            echo "Detected Debian/Ubuntu - Installing via .deb package..."
+            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent_${{AGENT_VERSION}}_amd64.deb"
+            TMP_FILE="/tmp/jarwis-agent.deb"
+            curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"
+            sudo dpkg -i "$TMP_FILE"
+            rm "$TMP_FILE"
+        elif command -v yum &> /dev/null || command -v dnf &> /dev/null; then
+            echo "Detected RHEL/CentOS/Fedora - Installing via .rpm package..."
+            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-${{AGENT_VERSION}}-1.x86_64.rpm"
+            TMP_FILE="/tmp/jarwis-agent.rpm"
+            curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"
+            sudo rpm -i "$TMP_FILE"
+            rm "$TMP_FILE"
+        else
+            echo "Installing standalone binary..."
+            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-linux"
+            sudo curl -sL "$DOWNLOAD_URL" -o /usr/local/bin/jarwis-agent
+            sudo chmod +x /usr/local/bin/jarwis-agent
+        fi
+        ;;
+    darwin)
+        echo "Detected macOS - Downloading DMG..."
+        DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-macos.dmg"
+        curl -sL "$DOWNLOAD_URL" -o ~/Downloads/jarwis-agent-macos.dmg
+        echo "Downloaded to ~/Downloads/jarwis-agent-macos.dmg"
+        echo "Please open the DMG and drag the app to Applications."
+        ;;
+    *)
+        echo "Unsupported OS: $OS"
+        exit 1
+        ;;
+esac
+
+echo ""
+echo "Installation complete!"
+echo "Run 'jarwis-agent --check' to verify installation."
 """
     
     return Response(
@@ -395,30 +487,27 @@ async def _track_download(
 @router.get("/build-status")
 async def get_build_status():
     """
-    Check which agent builds are available locally.
-    Useful for development to know what needs to be built.
+    Check which agent builds are available.
+    All builds are now hosted on GitHub releases.
     """
     status = {
         "is_dev_mode": IS_DEV_MODE,
-        "builds_dir": str(LOCAL_BUILDS_DIR),
-        "project_root": str(PROJECT_ROOT),
+        "version": AGENT_VERSION,
+        "github_repo": GITHUB_REPO,
+        "release_url": f"https://github.com/{GITHUB_REPO}/releases/tag/v{AGENT_VERSION}",
         "platforms": {}
     }
     
     for platform, formats in DOWNLOADS.items():
         status["platforms"][platform] = {}
         for fmt, info in formats.items():
-            local_file = _find_local_build(platform, fmt, info)
-            is_available = local_file is not None and local_file.exists()
-            file_size = local_file.stat().st_size if is_available else None
             status["platforms"][platform][fmt] = {
                 "filename": info['filename'],
-                "local_filename": info.get('local_filename', info['filename']),
-                "available": is_available,
-                "local_path": str(local_file) if local_file else None,
-                "size_bytes": file_size,
-                "size_human": _format_size(file_size) if file_size else None,
-                "build_command": _get_build_command(platform),
+                "available": True,  # Always available via GitHub
+                "download_url": info['download_url'],
+                "size_bytes": info['size_bytes'],
+                "size_human": _format_size(info['size_bytes']),
+                "sha256": info.get('sha256', ''),
             }
     
     return status

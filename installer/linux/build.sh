@@ -31,7 +31,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/dist/linux"
 INSTALLER_DIR="$PROJECT_ROOT/installer"
 APP_NAME="jarwis-agent"
-VERSION="1.0.0"
+VERSION="2.1.0"
 ARCH="$(uname -m)"
 
 # Map architecture

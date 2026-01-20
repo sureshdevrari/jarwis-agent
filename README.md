@@ -240,7 +240,23 @@ reporting:
     - "json"
   output_dir: "./reports"
 ```
+### Environment Variables
 
+The following environment variables can be set to configure the application:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JARWIS_ENV` | Environment mode (`development`, `staging`, `production`) | `development` |
+| `JARWIS_SERVER_URL` | Server URL for agent connections (auto-detected if not set) | Auto-detected |
+| `JARWIS_API_URL` | API URL (defaults to `JARWIS_SERVER_URL` if not set) | Auto-detected |
+| `SECRET_KEY` | JWT secret key (change in production!) | See `.env.example` |
+| `POSTGRES_HOST` | PostgreSQL database host | `localhost` |
+| `POSTGRES_PORT` | PostgreSQL database port | `5432` |
+| `POSTGRES_DB` | PostgreSQL database name | `jarwis_db` |
+| `OLLAMA_BASE_URL` | Ollama AI server URL | `http://localhost:11434` |
+| `DEBUG` | Enable debug mode | `true` |
+
+For a complete list, see [.env.example](.env.example).
 ---
 
 ## ðŸ“– Usage

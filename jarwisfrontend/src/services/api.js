@@ -1547,6 +1547,23 @@ export const domainAPI = {
   },
 };
 
+// ============== Server Configuration API ==============
+// Dynamic server configuration for environment-aware URLs
+
+export const serverConfigAPI = {
+  // Get server configuration (URLs, environment, features)
+  getServerConfig: async () => {
+    const response = await api.get('/api/config/server');
+    return response.data;
+  },
+
+  // Get agent setup specific configuration
+  getAgentSetupConfig: async () => {
+    const response = await api.get('/api/config/agent-setup');
+    return response.data;
+  },
+};
+
 // ============== Universal Agent API ==============
 // Unified agent API for ALL scan types (Web, Mobile, Network, Cloud, SAST)
 
@@ -1576,22 +1593,44 @@ export const universalAgentAPI = {
   },
 
   // Download agent installer
-  downloadAgent: async (platform, format) => {
+  downloadAgent: async (platform, format = null) => {
+    // Auto-select recommended format if not specified
+    const recommendedFormats = {
+      windows: 'setup',  // GUI installer - best for end users
+      macos: 'pkg',      // Signed PKG installer
+      linux: 'deb',      // Most common Linux distro
+    };
+    
+    const selectedFormat = format || recommendedFormats[platform] || 'setup';
+    
     // First check if the build exists, then trigger download
     try {
       const buildStatus = await api.get('/api/agent-downloads/build-status');
-      const platformStatus = buildStatus.data?.platforms?.[platform]?.[format];
+      const platformStatus = buildStatus.data?.platforms?.[platform]?.[selectedFormat];
       
       if (!platformStatus?.available) {
+        // Try to get the recommended download URL from release endpoint
+        try {
+          const releaseInfo = await api.get('/api/agent-downloads/release');
+          const downloadInfo = releaseInfo.data?.downloads?.[platform]?.[selectedFormat];
+          if (downloadInfo?.download_url) {
+            window.open(downloadInfo.download_url, '_blank');
+            return { success: true, source: 'github_release' };
+          }
+        } catch (releaseErr) {
+          // Fall through to error
+        }
+        
         // Throw error with build instructions
         const error = new Error('Agent installer not built');
         error.response = {
           data: {
             detail: {
               error: 'build_not_found',
-              message: `Agent installer for ${platform}/${format} has not been built yet.`,
+              message: `Agent installer for ${platform}/${selectedFormat} has not been built yet.`,
               build_command: platformStatus?.build_command || 'See installer/README.md',
               platform: platform,
+              available_formats: Object.keys(buildStatus.data?.platforms?.[platform] || {}),
             }
           }
         };
@@ -1600,13 +1639,33 @@ export const universalAgentAPI = {
       
       // Build exists - trigger download via window.open
       const token = getAccessToken();
-      const downloadUrl = `/api/agent-downloads/download/${platform}/${format}`;
+      const downloadUrl = `/api/agent-downloads/download/${platform}/${selectedFormat}`;
       
       // Create a hidden form to POST with auth header (or use a temporary download link)
       // For simplicity, we'll add token as query param (backend should support this)
       window.open(`${api.defaults.baseURL}${downloadUrl}?token=${token}`, '_blank');
-      return { success: true };
+      return { success: true, source: 'local_build' };
       
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get available download formats for a platform
+  getDownloadFormats: async (platform) => {
+    try {
+      const releaseInfo = await api.get('/api/agent-downloads/release');
+      const platformDownloads = releaseInfo.data?.downloads?.[platform] || {};
+      return {
+        version: releaseInfo.data?.version,
+        formats: Object.entries(platformDownloads).map(([key, info]) => ({
+          format: key,
+          filename: info.filename,
+          size_human: info.size_human,
+          description: info.description || '',
+          download_url: info.download_url,
+        })),
+      };
     } catch (error) {
       throw error;
     }

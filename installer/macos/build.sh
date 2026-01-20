@@ -38,7 +38,7 @@ INSTALLER_DIR="$PROJECT_ROOT/installer"
 APP_NAME="jarwis-agent"
 PKG_NAME="jarwis-agent.pkg"
 DMG_NAME="jarwis-agent.dmg"
-VERSION="1.0.0"
+VERSION="2.1.0"
 BUNDLE_ID="com.jarwis.agent"
 
 # Parse arguments

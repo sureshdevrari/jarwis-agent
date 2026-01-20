@@ -45,9 +45,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g., 1.0.0)'
+        description: 'Version to build (e.g., 2.1.0)'
         required: false
-        default: ''
+        default: '2.1.0'
       sign:
         description: 'Sign the installers'
         type: boolean
@@ -56,7 +56,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  VERSION: ${{ github.event.inputs.version || '1.0.0' }}
+  VERSION: ${{ github.event.inputs.version || '2.1.0' }}
 
 jobs:
   # ===========================================================================
@@ -79,15 +79,42 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
+          pip install pyinstaller PyQt6 Pillow
           pip install -r requirements.txt
           
-      - name: Build executable with PyInstaller
+      - name: Generate branding assets
+        run: |
+          cd installer/assets
+          python create_icons.py
+          
+      - name: Build main executable with PyInstaller
         run: |
           pyinstaller installer/jarwis-agent.spec `
             --distpath dist/windows `
             --workpath dist/windows/build `
             --clean --noconfirm
+            
+      - name: Build system tray application
+        run: |
+          pyinstaller `
+            --onefile `
+            --windowed `
+            --name jarwis-tray `
+            --icon "installer/assets/icons/jarwis-agent.ico" `
+            --distpath dist/windows `
+            --workpath dist/windows/build `
+            installer/gui/system_tray.py
+            
+      - name: Build post-install config tool
+        run: |
+          pyinstaller `
+            --onefile `
+            --windowed `
+            --name jarwis-config `
+            --icon "installer/assets/icons/jarwis-agent.ico" `
+            --distpath dist/windows `
+            --workpath dist/windows/build `
+            installer/gui/post_install_config.py
             
       - name: Install Azure CLI
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
@@ -95,7 +122,7 @@ jobs:
           Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile AzureCLI.msi
           Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
           
-      - name: Sign executable with Azure Trusted Signing
+      - name: Sign executables with Azure Trusted Signing
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -107,11 +134,12 @@ jobs:
             -p $env:AZURE_CLIENT_SECRET `
             --tenant $env:AZURE_TENANT_ID
             
+          # Sign all executables
           az trustedsigning sign `
             --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
             --certificate-profile ${{ secrets.AZURE_SIGNING_PROFILE }} `
             --endpoint https://eus.codesigning.azure.net `
-            --files "dist/windows/jarwis-agent.exe" `
+            --files "dist/windows/jarwis-agent.exe" "dist/windows/jarwis-tray.exe" "dist/windows/jarwis-config.exe" `
             --description "Jarwis Security Agent" `
             --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
             --timestamp-digest SHA256
@@ -120,28 +148,59 @@ jobs:
         run: |
           dotnet tool install --global wix
           
-      - name: Build MSI installer
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+          
+      - name: Build MSI installer (Enterprise)
         run: |
           cd dist/windows
           
           # Copy required files
           Copy-Item "../../config/config.yaml" .
-          "Jarwis Security Agent" | Out-File -Encoding utf8 LICENSE.txt
+          Copy-Item "../../installer/LICENSE.rtf" ./license.rtf
+          Copy-Item "../../installer/assets/bitmaps/banner.bmp" .
+          Copy-Item "../../installer/assets/bitmaps/dialog.bmp" .
           "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
           
           # Build MSI
           wix build "../../installer/windows/jarwis-agent.wxs" `
             -d SourceDir="." `
+            -ext WixToolset.UI.wixext `
+            -ext WixToolset.Util.wixext `
             -o jarwis-agent.msi
             
-      - name: Sign MSI installer
+      - name: Build Inno Setup installer (User-friendly)
+        run: |
+          # Update version in ISS file
+          $issContent = Get-Content "installer/inno/jarwis-agent.iss" -Raw
+          $issContent = $issContent -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"${{ env.VERSION }}`""
+          Set-Content "installer/inno/jarwis-agent.iss" $issContent
+          
+          # Build installer
+          iscc "installer/inno/jarwis-agent.iss"
+          
+      - name: Build GUI Setup Wizard
+        run: |
+          # Build the PyQt6 GUI installer wizard
+          pyinstaller `
+            --onefile `
+            --windowed `
+            --name JarwisAgentSetup-GUI `
+            --icon "installer/assets/icons/jarwis-agent.ico" `
+            --add-data "installer/LICENSE.rtf;." `
+            --distpath dist/windows `
+            --workpath dist/windows/build `
+            installer/gui/setup_wizard.py
+          
+      - name: Sign installers
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
         run: |
           az trustedsigning sign `
             --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
             --certificate-profile ${{ secrets.AZURE_SIGNING_PROFILE }} `
             --endpoint https://eus.codesigning.azure.net `
-            --files "dist/windows/jarwis-agent.msi" `
+            --files "dist/windows/jarwis-agent.msi" "dist/inno/jarwis-agent-${{ env.VERSION }}-setup.exe" `
             --description "Jarwis Security Agent Installer" `
             --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
             --timestamp-digest SHA256
@@ -152,7 +211,11 @@ jobs:
           name: windows-installer
           path: |
             dist/windows/jarwis-agent.exe
+            dist/windows/jarwis-tray.exe
+            dist/windows/jarwis-config.exe
+            dist/windows/JarwisAgentSetup-GUI.exe
             dist/windows/jarwis-agent.msi
+            dist/inno/jarwis-agent-*-setup.exe
           retention-days: 30
 
   # ===========================================================================
@@ -177,6 +240,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -r requirements.txt
+          
+      - name: Generate macOS app icon
+        run: |
+          # Check if iconset exists and generate .icns
+          ICONSET_PATH="assets/logos/jarwis-agent.iconset"
+          ICNS_PATH="assets/logos/jarwis-agent.icns"
+          
+          if [ -d "$ICONSET_PATH" ]; then
+            iconutil -c icns "$ICONSET_PATH" -o "$ICNS_PATH"
+            echo "Generated $ICNS_PATH from iconset"
+          elif [ ! -f "$ICNS_PATH" ]; then
+            echo "Warning: No iconset or icns found, using placeholder"
+            # Create a minimal placeholder icns (optional)
+          fi
           
       - name: Build executable with PyInstaller
         run: |
@@ -295,21 +372,21 @@ jobs:
             -srcfolder dist/macos/dmg-contents \
             -ov \
             -format UDZO \
-            dist/macos/jarwis-agent.dmg
+            "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg"
             
       - name: Sign DMG
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
         run: |
           codesign --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
-            dist/macos/jarwis-agent.dmg
+            "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg"
             
-          xcrun notarytool submit dist/macos/jarwis-agent.dmg \
+          xcrun notarytool submit "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg" \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --team-id "${{ secrets.APPLE_TEAM_ID }}" \
             --password "${{ secrets.APPLE_APP_PASSWORD }}" \
             --wait
             
-          xcrun stapler staple dist/macos/jarwis-agent.dmg
+          xcrun stapler staple "dist/macos/JarwisAgentSetup-${{ env.VERSION }}.dmg"
           
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -317,7 +394,8 @@ jobs:
           name: macos-installer
           path: |
             dist/macos/jarwis-agent.pkg
-            dist/macos/jarwis-agent.dmg
+            dist/macos/JarwisAgentSetup-*.dmg
+            dist/macos/jarwis-agent
           retention-days: 30
 
   # ===========================================================================
@@ -411,13 +489,65 @@ jobs:
             --package "dist/linux/jarwis-agent-${{ env.VERSION }}-1.x86_64.rpm" \
             .
             
-      - name: Create tarball
+      - name: Create basic tarball
         run: |
           tar -czf "dist/linux/jarwis-agent-${{ env.VERSION }}-linux-x86_64.tar.gz" \
             -C "dist/linux/pkg-root" \
             usr/bin/jarwis-agent \
             etc/jarwis \
             lib/systemd/system/jarwis-agent.service
+            
+      - name: Create GUI installer tarball
+        run: |
+          # Create installer package with install.sh script
+          INSTALLER_DIR="dist/linux/installer-package"
+          mkdir -p "$INSTALLER_DIR"
+          
+          # Copy binary and required files
+          cp dist/linux/jarwis-agent "$INSTALLER_DIR/"
+          cp installer/linux/jarwis-agent.service "$INSTALLER_DIR/"
+          cp config/config.yaml "$INSTALLER_DIR/"
+          cp installer/linux/postinstall.sh "$INSTALLER_DIR/"
+          cp installer/linux/preremove.sh "$INSTALLER_DIR/"
+          cp installer/linux/postremove.sh "$INSTALLER_DIR/"
+          
+          # Create install.sh wrapper script using echo commands (avoids heredoc YAML issues)
+          echo '#!/bin/bash' > "$INSTALLER_DIR/install.sh"
+          echo '# Jarwis Agent Installer' >> "$INSTALLER_DIR/install.sh"
+          echo 'set -e' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo 'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo 'echo "Installing Jarwis Security Agent..."' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo '# Check root' >> "$INSTALLER_DIR/install.sh"
+          echo 'if [ "$EUID" -ne 0 ]; then' >> "$INSTALLER_DIR/install.sh"
+          echo '    echo "Please run as root (sudo ./install.sh)"' >> "$INSTALLER_DIR/install.sh"
+          echo '    exit 1' >> "$INSTALLER_DIR/install.sh"
+          echo 'fi' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo '# Install files' >> "$INSTALLER_DIR/install.sh"
+          echo 'install -Dm755 "$SCRIPT_DIR/jarwis-agent" /usr/bin/jarwis-agent' >> "$INSTALLER_DIR/install.sh"
+          echo 'install -Dm644 "$SCRIPT_DIR/jarwis-agent.service" /lib/systemd/system/jarwis-agent.service' >> "$INSTALLER_DIR/install.sh"
+          echo 'install -Dm644 "$SCRIPT_DIR/config.yaml" /etc/jarwis/config.yaml' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo '# Create directories' >> "$INSTALLER_DIR/install.sh"
+          echo 'mkdir -p /var/log/jarwis' >> "$INSTALLER_DIR/install.sh"
+          echo 'mkdir -p /var/lib/jarwis' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo '# Run post-install' >> "$INSTALLER_DIR/install.sh"
+          echo 'bash "$SCRIPT_DIR/postinstall.sh"' >> "$INSTALLER_DIR/install.sh"
+          echo '' >> "$INSTALLER_DIR/install.sh"
+          echo 'echo "Installation complete!"' >> "$INSTALLER_DIR/install.sh"
+          echo 'echo "Configure with: jarwis-agent --configure"' >> "$INSTALLER_DIR/install.sh"
+          echo 'echo "Start with: sudo systemctl start jarwis-agent"' >> "$INSTALLER_DIR/install.sh"
+          
+          chmod +x "$INSTALLER_DIR/install.sh"
+          
+          # Create the installer tarball
+          tar -czf "dist/linux/jarwis-agent-${{ env.VERSION }}-linux-installer.tar.gz" \
+            -C "dist/linux" \
+            installer-package
             
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -427,6 +557,7 @@ jobs:
             dist/linux/jarwis-agent_*_amd64.deb
             dist/linux/jarwis-agent-*-1.x86_64.rpm
             dist/linux/jarwis-agent-*-linux-x86_64.tar.gz
+            dist/linux/jarwis-agent-*-linux-installer.tar.gz
           retention-days: 30
 
   # ===========================================================================
@@ -454,6 +585,42 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            ## Jarwis Security Agent ${{ github.ref_name }}
+            
+            ### 🚀 Installation
+            
+            **Windows (Recommended - GUI Installer):**
+            Download `jarwis-agent-${{ github.ref_name }}-setup.exe` and run it.
+            
+            **Windows (Enterprise/Silent - MSI):**
+            ```
+            msiexec /i jarwis-agent.msi /quiet ACTIVATION_KEY=your-key
+            ```
+            
+            **macOS:**
+            Download and open `jarwis-agent.pkg`
+            
+            **Linux (Debian/Ubuntu):**
+            ```
+            sudo dpkg -i jarwis-agent_*_amd64.deb
+            ```
+            
+            **Linux (RHEL/CentOS):**
+            ```
+            sudo rpm -i jarwis-agent-*.x86_64.rpm
+            ```
+            
+            ### 📦 Included Components
+            - `jarwis-agent` - Main security testing agent
+            - `jarwis-tray` - System tray status application (Windows)
+            - `jarwis-config` - Configuration utility
+            
+            ### 📋 Requirements
+            - Windows 10/11 (64-bit), macOS 11+, or Linux (Ubuntu 20.04+, RHEL 8+)
+            - 4 GB RAM minimum
+            - Internet connection for cloud features
+            
           files: |
             artifacts/windows-installer/*
             artifacts/macos-installer/*

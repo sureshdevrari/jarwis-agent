@@ -33,6 +33,7 @@ from api.routes.sast import router as sast_router  # SAST / Source code review s
 from api.routes.websocket_routes import router as websocket_router  # Real-time WebSocket updates
 from api.routes.ai_chat import router as ai_chat_router  # Jarwis AI chat (no LLM required)
 from api.routes.agent_downloads import router as agent_downloads_router  # Agent installer downloads
+from api.routes.server_config import router as server_config_router  # Dynamic server configuration
 
 # Try to import universal agent router
 try:
@@ -76,6 +77,7 @@ api_router.include_router(sast_router)  # SAST / Source code review scanning
 api_router.include_router(websocket_router)  # Real-time WebSocket updates
 api_router.include_router(ai_chat_router)  # Jarwis AI chat (no LLM required)
 api_router.include_router(agent_downloads_router)  # Agent installer downloads
+api_router.include_router(server_config_router)  # Dynamic server configuration
 api_router.include_router(universal_agent_router)  # Universal agent WebSocket + REST (ALL scan types)
 
 if admin_router:
