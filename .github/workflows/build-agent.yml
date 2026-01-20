@@ -147,6 +147,8 @@ jobs:
       - name: Install WiX Toolset
         run: |
           dotnet tool install --global wix
+          # Add dotnet tools to PATH
+          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
           
       - name: Install Inno Setup
         run: |
@@ -610,7 +612,7 @@ jobs:
           body: |
             ## Jarwis Security Agent ${{ github.ref_name }}
             
-            ### 🚀 Installation
+            ### ðŸš€ Installation
             
             **Windows (Recommended - GUI Installer):**
             Download `jarwis-agent-${{ github.ref_name }}-setup.exe` and run it.
@@ -633,12 +635,12 @@ jobs:
             sudo rpm -i jarwis-agent-*.x86_64.rpm
             ```
             
-            ### 📦 Included Components
+            ### ðŸ“¦ Included Components
             - `jarwis-agent` - Main security testing agent
             - `jarwis-tray` - System tray status application (Windows)
             - `jarwis-config` - Configuration utility
             
-            ### 📋 Requirements
+            ### ðŸ“‹ Requirements
             - Windows 10/11 (64-bit), macOS 11+, or Linux (Ubuntu 20.04+, RHEL 8+)
             - 4 GB RAM minimum
             - Internet connection for cloud features
