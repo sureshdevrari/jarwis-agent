@@ -202,7 +202,9 @@ jobs:
 
           # Update WiX version
           $wxsContent = Get-Content "../../installer/windows/jarwis-agent.wxs" -Raw
-          $wxsContent = $wxsContent -replace '<?define ProductVersion = ".*" ?>', "<?define ProductVersion = `"${{ env.VERSION }}`" ?>"
+          $searchPattern = '\<\?define ProductVersion = ".*" \?\>'
+          $replaceValue = "<?define ProductVersion = `"${{ env.VERSION }}`" ?>"
+          $wxsContent = $wxsContent -replace $searchPattern, $replaceValue
           Set-Content "../../installer/windows/jarwis-agent.wxs" $wxsContent
 
           wix build "../../installer/windows/jarwis-agent.wxs" `
