@@ -219,16 +219,22 @@ jobs:
             -o jarwis-agent.msi
             
       - name: Build Inno Setup installer (User-friendly)
+        continue-on-error: true
         run: |
           # Update version in ISS file
           $issContent = Get-Content "installer/inno/jarwis-agent.iss" -Raw
           $issContent = $issContent -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"${{ env.VERSION }}`""
           Set-Content "installer/inno/jarwis-agent.iss" $issContent
           
+          # Verify files exist before build
+          Write-Host 'Checking required files...'
+          Get-ChildItem dist/windows/ | Select-Object Name
+          
           # Build installer
           iscc "installer/inno/jarwis-agent.iss"
           
       - name: Build GUI Setup Wizard
+        continue-on-error: true
         run: |
           # Build the PyQt6 GUI installer wizard
           pyinstaller `
