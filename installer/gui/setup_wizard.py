@@ -59,7 +59,7 @@ except ImportError:
 @dataclass
 class InstallConfig:
     """Installation configuration."""
-    install_path: str = r"C:\Program Files\Jarwis Agent"
+    install_path: str = field(default_factory=lambda: r"C:\Program Files\Jarwis Agent" if platform.system() == "Windows" else "/Applications/Jarwis Agent" if platform.system() == "Darwin" else "/opt/jarwis-agent")
     server_url: str = "wss://jarwis.io/ws/agent"
     activation_key: str = ""
     install_service: bool = True

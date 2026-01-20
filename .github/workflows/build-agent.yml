@@ -205,6 +205,28 @@ jobs:
             --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
             --timestamp-digest SHA256
             
+
+      - name: Verify code signatures
+        if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        run: |
+          Write-Host "Verifying code signatures..."
+          $files = @(
+            "dist/windows/jarwis-agent.exe",
+            "dist/windows/jarwis-tray.exe",
+            "dist/windows/jarwis-config.exe",
+            "dist/windows/JarwisAgentSetup-GUI.exe"
+          )
+          foreach ($file in $files) {
+            if (Test-Path $file) {
+              $sig = Get-AuthenticodeSignature $file
+              if ($sig.Status -ne "Valid") {
+                Write-Host "WARNING: $file signature status: $($sig.Status)"
+              } else {
+                Write-Host "OK: $file is properly signed"
+              }
+            }
+          }
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:

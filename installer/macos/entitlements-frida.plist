@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Jarwis Agent - macOS Entitlements (Frida-Enabled)
+
+  ADVANCED USE ONLY - These entitlements may cause notarization issues.
+  
+  Use this file only when building with Frida integration for dynamic
+  instrumentation and mobile app security testing.
+  
+  Regular builds should use entitlements.plist instead.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Network access -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Allow loading unsigned libraries (for Frida) -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Allow code injection (for Frida) -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Allow JIT (for Frida scripts) -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- Allow debugging other processes (for Frida) -->
+    <key>com.apple.security.cs.debugger</key>
+    <true/>
+
+    <!-- Keychain access -->
+    <key>com.apple.security.keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.jarwis.agent</string>
+    </array>
+
+    <!-- File access -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>

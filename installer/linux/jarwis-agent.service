@@ -10,7 +10,7 @@ User=root
 Group=root
 
 # Executable
-ExecStart=/usr/bin/jarwis-agent --service --config /etc/jarwis/agent.conf
+ExecStart=/usr/bin/jarwis-agent --service --config /etc/jarwis/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 
 # Working directory

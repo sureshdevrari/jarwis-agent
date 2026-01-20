@@ -74,8 +74,6 @@ detect_arch() {
     ARCH=$(uname -m)
     case "$ARCH" in
         x86_64)  ARCH_PKG="amd64" ;;
-        aarch64) ARCH_PKG="arm64" ;;
-        armv7l)  ARCH_PKG="armhf" ;;
         *)
             echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"
             exit 1

@@ -126,12 +126,12 @@ Name: "desktopicon"; Description: "Create Desktop shortcut"; GroupDescription: "
 
 [Files]
 ; Core files
-Source: "..\..\dist\windows\x64\jarwis-agent.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "..\..\dist\windows\x64\config.yaml"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "..\..\dist\windows\jarwis-agent.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "..\..\dist\windows\config.yaml"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "..\LICENSE.rtf"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion; Components: core
 
 ; System tray application
-Source: "..\..\dist\windows\x64\jarwis-tray.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: tray
+Source: "..\..\dist\windows\jarwis-tray.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: tray
 
 ; Additional files would be added here based on components
 
@@ -191,6 +191,7 @@ Type: filesandordirs; Name: "{app}\data"
 
 [Code]
 var
+  ResultCode: Integer;
   ServerUrlPage: TInputQueryWizardPage;
   ActivationKeyPage: TInputQueryWizardPage;
   ServerUrl: String;

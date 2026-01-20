@@ -21,7 +21,7 @@ mkdir -p /etc/jarwis
 chmod 755 /usr/bin/jarwis-agent
 chmod 755 /var/lib/jarwis
 chmod 755 /var/log/jarwis
-chmod 644 /etc/jarwis/agent.conf
+chmod 644 /etc/jarwis/config.yaml
 
 # Reload systemd
 systemctl daemon-reload
@@ -38,7 +38,7 @@ echo "To activate the agent, run:"
 echo "  sudo jarwis-agent --activate YOUR_ACTIVATION_KEY"
 echo ""
 echo "Or configure manually:"
-echo "  sudo nano /etc/jarwis/agent.conf"
+echo "  sudo nano /etc/jarwis/config.yaml"
 echo "  sudo systemctl start jarwis-agent"
 echo ""
 echo "Check status:"
