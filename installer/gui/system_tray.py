@@ -1,4 +1,4 @@
-﻿"""
+"""
 Jarwis Security Agent - System Tray Application
 Shows connection status and provides quick access to agent features
 """
@@ -22,50 +22,71 @@ class ConnectionStatus(Enum):
     ERROR = "error"
 
 
+def get_logo_path():
+    """Find the Jarwis logo file"""
+    possible_paths = [
+        os.path.join(os.path.dirname(__file__), '..', 'assets', 'logos', 'PNG-01.png'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'logos', 'PNG-01.png'),
+        os.path.join(sys._MEIPASS, 'assets', 'logos', 'PNG-01.png') if hasattr(sys, '_MEIPASS') else None,
+        os.path.join(os.path.dirname(__file__), 'assets', 'icons', 'jarwis-agent.ico'),
+        os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons', 'jarwis-agent.ico'),
+    ]
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
 def create_status_icon(status: ConnectionStatus, size=64):
-    """Create a status indicator icon"""
+    """Create a status indicator icon with Jarwis logo"""
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
-    
+
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+    # Try to load Jarwis logo
+    logo_path = get_logo_path()
+    if logo_path:
+        logo = QPixmap(logo_path)
+        if not logo.isNull():
+            scaled_logo = logo.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                                      Qt.TransformationMode.SmoothTransformation)
+            x = (size - scaled_logo.width()) // 2
+            y = (size - scaled_logo.height()) // 2
+            painter.drawPixmap(x, y, scaled_logo)
+    else:
+        # Fallback: Draw shield if logo not found
+        painter.setBrush(QColor(41, 128, 185))
+        painter.setPen(Qt.PenStyle.NoPen)
+        from PyQt6.QtGui import QPainterPath
+        path = QPainterPath()
+        path.moveTo(size/2, 4)
+        path.lineTo(size-8, 12)
+        path.lineTo(size-8, size/2)
+        path.quadTo(size/2, size-4, size/2, size-4)
+        path.quadTo(size/2, size-4, 8, size/2)
+        path.lineTo(8, 12)
+        path.closeSubpath()
+        painter.drawPath(path)
+
     # Status colors
     colors = {
-        ConnectionStatus.CONNECTED: QColor(39, 174, 96),      # Green
-        ConnectionStatus.CONNECTING: QColor(241, 196, 15),    # Yellow
-        ConnectionStatus.DISCONNECTED: QColor(149, 165, 166), # Gray
-        ConnectionStatus.ERROR: QColor(231, 76, 60),          # Red
+        ConnectionStatus.CONNECTED: QColor(39, 174, 96),
+        ConnectionStatus.CONNECTING: QColor(241, 196, 15),
+        ConnectionStatus.DISCONNECTED: QColor(149, 165, 166),
+        ConnectionStatus.ERROR: QColor(231, 76, 60),
     }
-    
+
     color = colors.get(status, colors[ConnectionStatus.DISCONNECTED])
-    
-    # Draw shield shape
-    painter.setBrush(QColor(41, 128, 185))  # Jarwis blue base
-    painter.setPen(Qt.PenStyle.NoPen)
-    
-    # Main shield
-    from PyQt6.QtGui import QPainterPath
-    path = QPainterPath()
-    path.moveTo(size/2, 4)
-    path.lineTo(size-8, 12)
-    path.lineTo(size-8, size/2)
-    path.quadTo(size/2, size-4, size/2, size-4)
-    path.quadTo(size/2, size-4, 8, size/2)
-    path.lineTo(8, 12)
-    path.closeSubpath()
-    painter.drawPath(path)
-    
-    # Status indicator circle
+
+    # Draw status indicator circle
     painter.setBrush(color)
+    painter.setPen(QColor(255, 255, 255))
     indicator_size = size // 4
-    painter.drawEllipse(
-        size - indicator_size - 4,
-        size - indicator_size - 4,
-        indicator_size,
-        indicator_size
-    )
-    
+    painter.drawEllipse(size - indicator_size - 2, size - indicator_size - 2, indicator_size, indicator_size)
+
     painter.end()
     return QIcon(pixmap)
 

@@ -161,8 +161,8 @@ jobs:
           # Copy required files
           Copy-Item "../../config/config.yaml" .
           Copy-Item "../../installer/LICENSE.rtf" ./license.rtf
-          Copy-Item "../../installer/assets/bitmaps/banner.bmp" .
-          Copy-Item "../../installer/assets/bitmaps/dialog.bmp" .
+          Copy-Item "../../installer/assets/bitmaps/wix_banner.bmp" ./banner.bmp
+          Copy-Item "../../installer/assets/bitmaps/wix_dialog.bmp" ./dialog.bmp
           "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
           
           # Build MSI
@@ -265,20 +265,24 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
           
-      - name: Generate macOS app icon
+      - name: Generate branding assets and macOS icon
         run: |
-          # Check if iconset exists and generate .icns
-          ICONSET_PATH="assets/logos/jarwis-agent.iconset"
-          ICNS_PATH="assets/logos/jarwis-agent.icns"
+          # First generate icons from PNG
+          cd installer/assets
+          python create_icons.py
+          cd ../..
+          
+          # Convert iconset to icns
+          ICONSET_PATH="installer/assets/icons/jarwis-agent.iconset"
+          ICNS_PATH="installer/assets/icons/jarwis-agent.icns"
           
           if [ -d "$ICONSET_PATH" ]; then
             iconutil -c icns "$ICONSET_PATH" -o "$ICNS_PATH"
             echo "Generated $ICNS_PATH from iconset"
-          elif [ ! -f "$ICNS_PATH" ]; then
-            echo "Warning: No iconset or icns found, using placeholder"
-            # Create a minimal placeholder icns (optional)
+          else
+            echo "Warning: Iconset not found at $ICONSET_PATH"
           fi
-          
+
       - name: Build executable with PyInstaller
         run: |
           pyinstaller installer/jarwis-agent.spec \
