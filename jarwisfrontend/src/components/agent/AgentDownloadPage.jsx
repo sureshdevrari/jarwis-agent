@@ -1,7 +1,7 @@
 // src/components/agent/AgentDownloadPage.jsx
 // Enterprise-style agent download page for all security testing modules
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Download,
   Monitor,
@@ -26,7 +26,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { universalAgentAPI, mobileAgentAPI, serverConfigAPI } from '../../services/api';
+import { universalAgentAPI, mobileAgentAPI, serverConfigAPI, githubReleaseAPI } from '../../services/api';
+// Import auto-generated agent version (updated at build time from GitHub releases)
+import { 
+  AGENT_VERSION as GENERATED_AGENT_VERSION, 
+  AGENT_RELEASE_DATE as GENERATED_RELEASE_DATE 
+} from '../../config/agentVersion.generated';
 
 // Platform detection
 const detectPlatform = () => {
@@ -37,135 +42,139 @@ const detectPlatform = () => {
   return 'windows';
 };
 
-// Agent version and download info
-const AGENT_VERSION = '2.1.0';
-const RELEASE_DATE = '2026-01-20';
-const GITHUB_RELEASE_BASE = `https://github.com/sureshdevrari/jarwis-agent/releases/download/v${AGENT_VERSION}`;
+// Fallback agent version (auto-generated from GitHub releases at build time)
+const FALLBACK_AGENT_VERSION = GENERATED_AGENT_VERSION || '2.1.9';
+const FALLBACK_RELEASE_DATE = GENERATED_RELEASE_DATE || '2026-01-21';
 
-const DOWNLOAD_OPTIONS = {
-  windows: {
-    name: 'Windows',
-    icon: Monitor,
-    description: 'Windows 10/11 (64-bit)',
-    downloads: [
-      {
-        id: 'gui',
-        name: 'GUI Installer',
-        filename: 'JarwisAgentSetup-GUI.exe',
-        size: '45 MB',
-        recommended: true,
-        description: '⭐ Professional installer wizard with branding and EULA',
-        silentCmd: null,
-        directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-GUI.exe`,
-      },
-      {
-        id: 'exe',
-        name: 'CLI Executable',
-        filename: 'jarwis-agent.exe',
-        size: '15 MB',
-        recommended: false,
-        description: 'Standalone executable for advanced users',
-        silentCmd: 'jarwis-agent.exe --activate YOUR_KEY --service',
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent.exe`,
-      },
-    ],
-    requirements: [
-      'Windows 10 version 1903 or later',
-      'Windows 11 (all versions)',
-      '4 GB RAM minimum',
-      '500 MB free disk space',
-      'Administrator privileges for installation',
-    ],
-  },
-  macos: {
-    name: 'macOS',
-    icon: Apple,
-    description: 'macOS 11+ (Intel & Apple Silicon)',
-    downloads: [
-      {
-        id: 'dmg',
-        name: 'DMG Installer',
-        filename: `JarwisAgentSetup-${AGENT_VERSION}.dmg`,
-        size: '45 MB',
-        recommended: true,
-        description: '⭐ DMG with professional GUI installer wizard',
-        silentCmd: null,
-        directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-${AGENT_VERSION}.dmg`,
-      },
-      {
-        id: 'binary',
-        name: 'CLI Binary',
-        filename: 'jarwis-agent-macos',
-        size: '14 MB',
-        recommended: false,
-        description: 'Standalone binary for advanced users',
-        silentCmd: 'chmod +x jarwis-agent-macos && sudo mv jarwis-agent-macos /usr/local/bin/jarwis-agent',
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-macos`,
-      },
-    ],
-    requirements: [
-      'macOS 11 Big Sur or later',
-      'Intel or Apple Silicon (M1/M2/M3)',
-      '4 GB RAM minimum',
-      '500 MB free disk space',
-      'Administrator password for installation',
-    ],
-  },
-  linux: {
-    name: 'Linux',
-    icon: Terminal,
-    description: 'Ubuntu, Debian, RHEL, CentOS',
-    downloads: [
-      {
-        id: 'installer',
-        name: 'GUI Installer',
-        filename: `jarwis-agent-${AGENT_VERSION}-linux-installer.tar.gz`,
-        size: '50 MB',
-        recommended: true,
-        description: '⭐ Extract & run install.sh - launches GUI wizard if X11 available',
-        silentCmd: 'tar -xzf jarwis-agent-*-linux-installer.tar.gz && sudo ./install.sh',
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${AGENT_VERSION}-linux-installer.tar.gz`,
-      },
-      {
-        id: 'deb',
-        name: 'DEB Package',
-        filename: `jarwis-agent_${AGENT_VERSION}_amd64.deb`,
-        size: '28 MB',
-        recommended: false,
-        description: 'For Ubuntu, Debian, Linux Mint',
-        silentCmd: `sudo dpkg -i jarwis-agent_${AGENT_VERSION}_amd64.deb`,
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent_${AGENT_VERSION}_amd64.deb`,
-      },
-      {
-        id: 'rpm',
-        name: 'RPM Package',
-        filename: `jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
-        size: '28 MB',
-        recommended: false,
-        description: 'For RHEL, CentOS, Fedora, Rocky',
-        silentCmd: `sudo rpm -i jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${AGENT_VERSION}-1.x86_64.rpm`,
-      },
-      {
-        id: 'binary',
-        name: 'CLI Binary',
-        filename: 'jarwis-agent-linux',
-        size: '28 MB',
-        recommended: false,
-        description: 'Portable binary for any Linux distro',
-        silentCmd: 'chmod +x jarwis-agent-linux && sudo mv jarwis-agent-linux /usr/local/bin/jarwis-agent',
-        directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-linux`,
-      },
-    ],
-    requirements: [
-      'Ubuntu 18.04+, Debian 10+',
-      'RHEL/CentOS 7+, Fedora 30+',
-      'x86_64 or ARM64 architecture',
-      '4 GB RAM minimum',
-      '500 MB free disk space',
-      'Root/sudo privileges',
-    ],
-  },
+// Generate download options dynamically based on version
+const generateDownloadOptions = (version, tagName = `v${version}`) => {
+  const GITHUB_RELEASE_BASE = `https://github.com/sureshdevrari/jarwis-agent/releases/download/${tagName}`;
+  
+  return {
+    windows: {
+      name: 'Windows',
+      icon: Monitor,
+      description: 'Windows 10/11 (64-bit)',
+      downloads: [
+        {
+          id: 'gui',
+          name: 'GUI Installer',
+          filename: 'JarwisAgentSetup-GUI.exe',
+          size: '45 MB',
+          recommended: true,
+          description: '⭐ Professional installer wizard with branding and EULA',
+          silentCmd: null,
+          directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-GUI.exe`,
+        },
+        {
+          id: 'exe',
+          name: 'CLI Executable',
+          filename: 'jarwis-agent.exe',
+          size: '15 MB',
+          recommended: false,
+          description: 'Standalone executable for advanced users',
+          silentCmd: 'jarwis-agent.exe --activate YOUR_KEY --service',
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent.exe`,
+        },
+      ],
+      requirements: [
+        'Windows 10 version 1903 or later',
+        'Windows 11 (all versions)',
+        '4 GB RAM minimum',
+        '500 MB free disk space',
+        'Administrator privileges for installation',
+      ],
+    },
+    macos: {
+      name: 'macOS',
+      icon: Apple,
+      description: 'macOS 11+ (Intel & Apple Silicon)',
+      downloads: [
+        {
+          id: 'dmg',
+          name: 'DMG Installer',
+          filename: `JarwisAgentSetup-${version}.dmg`,
+          size: '45 MB',
+          recommended: true,
+          description: '⭐ DMG with professional GUI installer wizard',
+          silentCmd: null,
+          directUrl: `${GITHUB_RELEASE_BASE}/JarwisAgentSetup-${version}.dmg`,
+        },
+        {
+          id: 'binary',
+          name: 'CLI Binary',
+          filename: 'jarwis-agent-macos',
+          size: '14 MB',
+          recommended: false,
+          description: 'Standalone binary for advanced users',
+          silentCmd: 'chmod +x jarwis-agent-macos && sudo mv jarwis-agent-macos /usr/local/bin/jarwis-agent',
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-macos`,
+        },
+      ],
+      requirements: [
+        'macOS 11 Big Sur or later',
+        'Intel or Apple Silicon (M1/M2/M3)',
+        '4 GB RAM minimum',
+        '500 MB free disk space',
+        'Administrator password for installation',
+      ],
+    },
+    linux: {
+      name: 'Linux',
+      icon: Terminal,
+      description: 'Ubuntu, Debian, RHEL, CentOS',
+      downloads: [
+        {
+          id: 'installer',
+          name: 'GUI Installer',
+          filename: `jarwis-agent-${version}-linux-installer.tar.gz`,
+          size: '50 MB',
+          recommended: true,
+          description: '⭐ Extract & run install.sh - launches GUI wizard if X11 available',
+          silentCmd: 'tar -xzf jarwis-agent-*-linux-installer.tar.gz && sudo ./install.sh',
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${version}-linux-installer.tar.gz`,
+        },
+        {
+          id: 'deb',
+          name: 'DEB Package',
+          filename: `jarwis-agent_${version}_amd64.deb`,
+          size: '28 MB',
+          recommended: false,
+          description: 'For Ubuntu, Debian, Linux Mint',
+          silentCmd: `sudo dpkg -i jarwis-agent_${version}_amd64.deb`,
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent_${version}_amd64.deb`,
+        },
+        {
+          id: 'rpm',
+          name: 'RPM Package',
+          filename: `jarwis-agent-${version}-1.x86_64.rpm`,
+          size: '28 MB',
+          recommended: false,
+          description: 'For RHEL, CentOS, Fedora, Rocky',
+          silentCmd: `sudo rpm -i jarwis-agent-${version}-1.x86_64.rpm`,
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-${version}-1.x86_64.rpm`,
+        },
+        {
+          id: 'binary',
+          name: 'CLI Binary',
+          filename: 'jarwis-agent-linux',
+          size: '28 MB',
+          recommended: false,
+          description: 'Portable binary for any Linux distro',
+          silentCmd: 'chmod +x jarwis-agent-linux && sudo mv jarwis-agent-linux /usr/local/bin/jarwis-agent',
+          directUrl: `${GITHUB_RELEASE_BASE}/jarwis-agent-linux`,
+        },
+      ],
+      requirements: [
+        'Ubuntu 18.04+, Debian 10+',
+        'RHEL/CentOS 7+, Fedora 30+',
+        'x86_64 or ARM64 architecture',
+        '4 GB RAM minimum',
+        '500 MB free disk space',
+        'Root/sudo privileges',
+      ],
+    },
+  };
 };
 
 // Scan types that benefit from the agent
@@ -315,6 +324,19 @@ const AgentDownloadPage = () => {
   const [copied, setCopied] = useState(null);
   const [expandedDownload, setExpandedDownload] = useState(null);
   const [showAllPlatforms, setShowAllPlatforms] = useState(false);
+  
+  // Agent version state - fetched dynamically from GitHub
+  const [agentVersion, setAgentVersion] = useState(FALLBACK_AGENT_VERSION);
+  const [releaseDate, setReleaseDate] = useState(FALLBACK_RELEASE_DATE);
+  const [releaseTagName, setReleaseTagName] = useState(`v${FALLBACK_AGENT_VERSION}`);
+  const [versionLoading, setVersionLoading] = useState(true);
+  
+  // Generate download options dynamically based on current version
+  const downloadOptions = useMemo(() => 
+    generateDownloadOptions(agentVersion, releaseTagName), 
+    [agentVersion, releaseTagName]
+  );
+  
   // Initialize with immediate fallback to window.location.origin
   const [serverUrl, setServerUrl] = useState(() => {
     // Priority: 1. Cached config 2. Environment variable 3. window.location.origin
@@ -325,12 +347,30 @@ const AgentDownloadPage = () => {
   });
   const [serverConfigLoading, setServerConfigLoading] = useState(false); // Start false since we have immediate fallback
 
-  // Load server config, connected agents, and activation key on mount
+  // Fetch latest agent release from GitHub
+  const fetchLatestRelease = useCallback(async (forceRefresh = false) => {
+    setVersionLoading(true);
+    try {
+      const release = await githubReleaseAPI.getLatestRelease(forceRefresh);
+      setAgentVersion(release.version);
+      setReleaseDate(release.releaseDate);
+      setReleaseTagName(release.tagName);
+      console.log('[AgentDownloadPage] Loaded release:', release.version);
+    } catch (err) {
+      console.warn('[AgentDownloadPage] Failed to fetch latest release, using fallback:', err.message);
+      // Keep fallback values (already set in useState)
+    } finally {
+      setVersionLoading(false);
+    }
+  }, []);
+
+  // Load server config, connected agents, activation key, and latest release on mount
   useEffect(() => {
     fetchServerConfig();
     fetchConnectedAgents();
     generateActivationKey();
-  }, []);
+    fetchLatestRelease();
+  }, [fetchLatestRelease]);
 
   const fetchServerConfig = async () => {
     // Check cache first
@@ -451,7 +491,7 @@ const AgentDownloadPage = () => {
   const textSecondary = isDarkMode ? 'text-gray-400' : 'text-gray-600';
   const hoverBg = isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
 
-  const platformInfo = DOWNLOAD_OPTIONS[selectedPlatform];
+  const platformInfo = downloadOptions[selectedPlatform];
   const PlatformIcon = platformInfo.icon;
 
   return (
@@ -572,7 +612,7 @@ const AgentDownloadPage = () => {
 
         {/* Platform Selection */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {Object.entries(DOWNLOAD_OPTIONS).map(([key, platform]) => {
+          {Object.entries(downloadOptions).map(([key, platform]) => {
             const Icon = platform.icon;
             const isSelected = selectedPlatform === key;
             return (
@@ -616,8 +656,21 @@ const AgentDownloadPage = () => {
                   <h2 className={`text-xl font-semibold ${textPrimary}`}>
                     {platformInfo.name} Downloads
                   </h2>
-                  <p className={`text-sm ${textSecondary}`}>
-                    Version {AGENT_VERSION} • Released {RELEASE_DATE}
+                  <p className={`text-sm ${textSecondary} flex items-center gap-2`}>
+                    {versionLoading ? (
+                      <span className="animate-pulse">Loading version...</span>
+                    ) : (
+                      <>
+                        Version {agentVersion} • Released {releaseDate}
+                        <button
+                          onClick={() => fetchLatestRelease(true)}
+                          className="p-1 rounded hover:bg-gray-600/50 transition-colors"
+                          title="Check for updates"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
