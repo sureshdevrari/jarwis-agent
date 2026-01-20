@@ -669,6 +669,8 @@ jobs:
   # Create Release
   # ===========================================================================
   release:
+    permissions:
+      contents: write
     name: Create Release
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
