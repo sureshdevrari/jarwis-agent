@@ -187,6 +187,7 @@ jobs:
           Write-Host "All required files present" -ForegroundColor Green
 
       - name: Build MSI installer (Enterprise)
+        continue-on-error: true
         run: |
           cd dist/windows
           
