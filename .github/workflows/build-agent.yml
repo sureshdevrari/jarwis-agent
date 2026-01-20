@@ -8,134 +8,250 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  VERSION: '1.0.0'
+  VERSION: '2.0.0'
 
 jobs:
   build-windows:
-    name: Windows
+    name: Windows Professional Installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          
+
       - name: Install dependencies
         run: |
-          pip install pyinstaller
+          pip install pyinstaller PyQt6 Pillow pywin32 requests pyyaml
           pip install -r requirements.txt
-          
-      - name: Build EXE
+
+      - name: Generate branding assets
+        run: |
+          cd installer/assets
+          python create_icons.py
+
+      - name: Build main agent executable
         run: |
           pyinstaller installer/jarwis-agent.spec --clean --noconfirm
-          
-      - name: Upload artifact
+
+      - name: Build system tray application
+        run: |
+          pyinstaller --name jarwis-tray --onefile --windowed `
+            --icon=installer/assets/icons/jarwis-agent.ico `
+            --add-data "assets/logos/PNG-01.png;assets/logos" `
+            installer/gui/system_tray.py
+          Move-Item dist/jarwis-tray.exe dist/jarwis-tray.exe -Force
+
+      - name: Build GUI setup wizard
+        run: |
+          pyinstaller --name JarwisAgentSetup-GUI --onefile --windowed `
+            --icon=installer/assets/icons/jarwis-agent.ico `
+            --add-data "assets/logos/PNG-01.png;assets/logos" `
+            --add-data "installer/LICENSE.rtf;." `
+            --add-data "config/config.yaml;config" `
+            --uac-admin `
+            installer/gui/setup_wizard.py
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Inno Setup installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/inno/jarwis-agent.iss
+        continue-on-error: true
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-exe
-          path: dist/jarwis-agent.exe
+          name: windows-installers
+          path: |
+            dist/jarwis-agent.exe
+            dist/jarwis-tray.exe
+            dist/JarwisAgentSetup-GUI.exe
+            dist/installer/JarwisAgentSetup-*.exe
 
   build-macos:
     name: macOS
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          
+
       - name: Install dependencies
         run: |
-          pip install pyinstaller
+          pip install pyinstaller PyQt6 Pillow requests pyyaml
           pip install -r requirements.txt
-          
+
+      - name: Generate branding assets
+        run: |
+          cd installer/assets
+          python create_icons.py
+
       - name: Build binary
         run: |
           pyinstaller installer/jarwis-agent.spec --clean --noconfirm
           mv dist/jarwis-agent dist/jarwis-agent-macos
-          
+          chmod +x dist/jarwis-agent-macos
+
+      - name: Build system tray app
+        run: |
+          pyinstaller --name "Jarwis Agent" --onefile --windowed \
+            --icon=installer/assets/icons/jarwis-agent.iconset \
+            --add-data "assets/logos/PNG-01.png:assets/logos" \
+            installer/gui/system_tray.py
+          mv "dist/Jarwis Agent" dist/jarwis-tray-macos
+
       - name: Create DMG
         run: |
-          mkdir -p dmg-contents
-          cp dist/jarwis-agent-macos dmg-contents/jarwis-agent
-          echo "Jarwis Agent - Copy to /usr/local/bin" > dmg-contents/README.txt
-          hdiutil create -volname "Jarwis Agent" -srcfolder dmg-contents -ov -format UDZO dist/jarwis-agent-macos.dmg
+          mkdir -p dmg-contents/Jarwis\ Agent.app/Contents/MacOS
+          mkdir -p dmg-contents/Jarwis\ Agent.app/Contents/Resources
+          cp dist/jarwis-agent-macos dmg-contents/Jarwis\ Agent.app/Contents/MacOS/jarwis-agent
+          cp dist/jarwis-tray-macos dmg-contents/Jarwis\ Agent.app/Contents/MacOS/jarwis-tray
+          cp assets/logos/PNG-01.png dmg-contents/Jarwis\ Agent.app/Contents/Resources/
           
+          cat > dmg-contents/Jarwis\ Agent.app/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>jarwis-agent</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.jarwis.agent</string>
+            <key>CFBundleName</key>
+            <string>Jarwis Agent</string>
+            <key>CFBundleVersion</key>
+            <string>2.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>2.0.0</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+          </dict>
+          </plist>
+          EOF
+          
+          hdiutil create -volname "Jarwis Agent" -srcfolder dmg-contents -ov -format UDZO dist/JarwisAgent-2.0.0.dmg
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: |
             dist/jarwis-agent-macos
-            dist/jarwis-agent-macos.dmg
+            dist/jarwis-tray-macos
+            dist/JarwisAgent-*.dmg
 
   build-linux:
     name: Linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          
+
       - name: Install dependencies
         run: |
-          pip install pyinstaller
+          pip install pyinstaller PyQt6 Pillow requests pyyaml
           pip install -r requirements.txt
           sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev rpm
+          sudo apt-get install -y ruby ruby-dev rpm libxcb-cursor0
           sudo gem install fpm --no-document
-          
+
+      - name: Generate branding assets
+        run: |
+          cd installer/assets
+          python create_icons.py
+
       - name: Build binary
         run: |
           pyinstaller installer/jarwis-agent.spec --clean --noconfirm
           chmod +x dist/jarwis-agent
           mv dist/jarwis-agent dist/jarwis-agent-linux
-          
+
+      - name: Build system tray app
+        run: |
+          pyinstaller --name jarwis-tray --onefile \
+            --add-data "assets/logos/PNG-01.png:assets/logos" \
+            installer/gui/system_tray.py
+          chmod +x dist/jarwis-tray
+          mv dist/jarwis-tray dist/jarwis-tray-linux
+
       - name: Create packages
         run: |
           VERSION="${{ env.VERSION }}"
           mkdir -p pkg-root/usr/bin
           mkdir -p pkg-root/lib/systemd/system
           mkdir -p pkg-root/etc/jarwis
-          
+          mkdir -p pkg-root/usr/share/applications
+          mkdir -p pkg-root/usr/share/icons/hicolor/256x256/apps
+
           cp dist/jarwis-agent-linux pkg-root/usr/bin/jarwis-agent
+          cp dist/jarwis-tray-linux pkg-root/usr/bin/jarwis-tray
           cp installer/linux/jarwis-agent.service pkg-root/lib/systemd/system/
           cp config/config.yaml pkg-root/etc/jarwis/
-          chmod 755 pkg-root/usr/bin/jarwis-agent
+          cp assets/logos/PNG-01.png pkg-root/usr/share/icons/hicolor/256x256/apps/jarwis-agent.png
           
+          chmod 755 pkg-root/usr/bin/jarwis-agent
+          chmod 755 pkg-root/usr/bin/jarwis-tray
+
+          # Create desktop entry
+          cat > pkg-root/usr/share/applications/jarwis-agent.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Jarwis Agent
+          Comment=Jarwis Security Agent
+          Exec=/usr/bin/jarwis-tray
+          Icon=jarwis-agent
+          Type=Application
+          Categories=System;Security;
+          EOF
+
           fpm -s dir -t deb \
             --name jarwis-agent \
             --version $VERSION \
             --architecture amd64 \
-            --maintainer "Jarwis <support@jarwis.io>" \
-            --description "Jarwis Security Agent" \
+            --maintainer "Jarwis Security <support@jarwis.ai>" \
+            --description "Jarwis Security Agent - Endpoint protection and vulnerability scanning" \
+            --url "https://jarwis.ai" \
+            --license "Proprietary" \
+            --after-install installer/linux/postinstall.sh \
+            --before-remove installer/linux/preremove.sh \
+            --after-remove installer/linux/postremove.sh \
             -C pkg-root \
             --package dist/jarwis-agent_${VERSION}_amd64.deb \
             .
-          
+
           fpm -s dir -t rpm \
             --name jarwis-agent \
             --version $VERSION \
             --architecture x86_64 \
-            --maintainer "Jarwis <support@jarwis.io>" \
-            --description "Jarwis Security Agent" \
+            --maintainer "Jarwis Security <support@jarwis.ai>" \
+            --description "Jarwis Security Agent - Endpoint protection and vulnerability scanning" \
+            --url "https://jarwis.ai" \
+            --license "Proprietary" \
+            --after-install installer/linux/postinstall.sh \
+            --before-remove installer/linux/preremove.sh \
+            --after-remove installer/linux/postremove.sh \
             -C pkg-root \
             --package dist/jarwis-agent-${VERSION}-1.x86_64.rpm \
             .
-          
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-packages
           path: |
             dist/jarwis-agent-linux
+            dist/jarwis-tray-linux
             dist/*.deb
             dist/*.rpm
 
@@ -151,20 +267,71 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          
+
       - name: List files
         run: find artifacts -type f
-        
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           name: Jarwis Agent ${{ github.ref_name }}
-          generate_release_notes: true
+          body: |
+            ## Jarwis Security Agent ${{ github.ref_name }}
+            
+            ### Downloads
+            
+            #### Windows
+            - **JarwisAgentSetup-GUI.exe** - Recommended. Professional installer with GUI wizard
+            - **JarwisAgentSetup-2.0.0.exe** - Inno Setup installer (alternative)
+            - **jarwis-agent.exe** - Standalone executable (CLI only)
+            - **jarwis-tray.exe** - System tray application
+            
+            #### macOS
+            - **JarwisAgent-2.0.0.dmg** - Disk image with application bundle
+            - **jarwis-agent-macos** - Standalone binary
+            
+            #### Linux
+            - **jarwis-agent_2.0.0_amd64.deb** - Debian/Ubuntu package
+            - **jarwis-agent-2.0.0-1.x86_64.rpm** - RHEL/Fedora package
+            - **jarwis-agent-linux** - Standalone binary
+            
+            ### Features
+            - Professional installation wizard with branding
+            - System tray application with status indicator
+            - Windows service for auto-start
+            - License agreement (EULA)
+            - Server configuration during install
+            - Activation key support
+            
+            ### Installation
+            
+            **Windows:** Download and run `JarwisAgentSetup-GUI.exe`
+            
+            **macOS:** Download DMG, mount and drag to Applications
+            
+            **Linux (Debian/Ubuntu):**
+            ```bash
+            sudo dpkg -i jarwis-agent_2.0.0_amd64.deb
+            sudo systemctl enable jarwis-agent
+            sudo systemctl start jarwis-agent
+            ```
+            
+            **Linux (RHEL/Fedora):**
+            ```bash
+            sudo rpm -i jarwis-agent-2.0.0-1.x86_64.rpm
+            sudo systemctl enable jarwis-agent
+            sudo systemctl start jarwis-agent
+            ```
           files: |
-            artifacts/windows-exe/jarwis-agent.exe
+            artifacts/windows-installers/jarwis-agent.exe
+            artifacts/windows-installers/jarwis-tray.exe
+            artifacts/windows-installers/JarwisAgentSetup-GUI.exe
+            artifacts/windows-installers/JarwisAgentSetup-*.exe
             artifacts/macos-dmg/jarwis-agent-macos
-            artifacts/macos-dmg/jarwis-agent-macos.dmg
+            artifacts/macos-dmg/jarwis-tray-macos
+            artifacts/macos-dmg/JarwisAgent-*.dmg
             artifacts/linux-packages/jarwis-agent-linux
+            artifacts/linux-packages/jarwis-tray-linux
             artifacts/linux-packages/*.deb
             artifacts/linux-packages/*.rpm
         env:
