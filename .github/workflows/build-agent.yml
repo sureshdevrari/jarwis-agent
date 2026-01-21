@@ -754,6 +754,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -797,6 +800,14 @@ jobs:
           echo ""
           echo "=== All required artifacts verified ==="
 
+      - name: List all release files
+        run: |
+          echo "=== Files to be released ==="
+          find artifacts -type f | head -50
+          echo ""
+          echo "=== File details ==="
+          ls -la artifacts/*/
+          
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -804,11 +815,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           files: |
-            artifacts/windows-installer/*
-            artifacts/macos-intel-installer/*
-            artifacts/macos-arm64-installer/*
-            artifacts/linux-installer/*
+            artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
