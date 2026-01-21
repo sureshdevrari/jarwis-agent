@@ -240,6 +240,32 @@ jobs:
         run: |
           choco install innosetup -y
           
+      - name: Prepare Inno Setup files
+        run: |
+          # Create directory structure expected by Inno Setup ISS file
+          # ISS file expects: dist/jarwis-agent/jarwis-agent.exe (already exists from PyInstaller)
+          # ISS file expects: dist/jarwis-agent/config/config.yaml
+          # ISS file expects: dist/jarwis-tray/jarwis-tray.exe
+          
+          # Create config subdirectory in jarwis-agent dist
+          New-Item -ItemType Directory -Force -Path "dist/jarwis-agent/config"
+          Copy-Item "config/config.yaml" "dist/jarwis-agent/config/"
+          
+          # Create jarwis-tray directory at expected location
+          # PyInstaller outputs to dist/windows/jarwis-tray/, but ISS expects dist/jarwis-tray/
+          if (Test-Path "dist/windows/jarwis-tray") {
+            New-Item -ItemType Directory -Force -Path "dist/jarwis-tray"
+            Copy-Item "dist/windows/jarwis-tray/*" "dist/jarwis-tray/" -Recurse -Force
+          }
+          
+          Write-Host "Files prepared for Inno Setup:"
+          Write-Host "  dist/jarwis-agent/:"
+          Get-ChildItem "dist/jarwis-agent" -Name
+          Write-Host "  dist/jarwis-agent/config/:"
+          Get-ChildItem "dist/jarwis-agent/config" -Name -ErrorAction SilentlyContinue
+          Write-Host "  dist/jarwis-tray/:"
+          Get-ChildItem "dist/jarwis-tray" -Name -ErrorAction SilentlyContinue
+          
       - name: Build Inno Setup installer
         run: |
           # Update version in ISS file
