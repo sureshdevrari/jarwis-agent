@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Jarwis Agent - WiX 4 MSI Installer Configuration
+  
+  WiX 4 Format - Complete rewrite from WiX 3 syntax
+  
+  Builds a Windows MSI installer for enterprise deployment.
+  Supports silent installation via: msiexec /i jarwis-agent.msi /quiet ACTIVATION_KEY=xxx
+  
+  Build with WiX 4:
+    wix build jarwis-agent-v4.wxs -d SourceDir=. -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext -o jarwis-agent.msi
+  
+  For more info: https://wixtoolset.org/docs/fourthree/
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!-- Package definition - replaces Product element in WiX 3 -->
+  <Package
+    Name="Jarwis Security Agent"
+    Version="!(bind.FileVersion.JarwisAgentExe)"
+    Manufacturer="Jarwis Security"
+    UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+    Scope="perMachine"
+    Language="1033"
+    Compressed="yes"
+    InstallerVersion="500">
+
+    <!-- Package metadata -->
+    <SummaryInformation
+      Description="Jarwis Security Testing Agent"
+      Manufacturer="Jarwis Security" />
+
+    <!-- Upgrade handling -->
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+      AllowSameVersionUpgrades="yes" />
+
+    <!-- Media template -->
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Custom properties for enterprise silent install -->
+    <Property Id="ACTIVATION_KEY" Secure="yes" />
+    <Property Id="SERVER_URL" Value="wss://jarwis.io/ws/agent" Secure="yes" />
+    <Property Id="AUTO_START" Value="1" Secure="yes" />
+
+    <!-- Add/Remove Programs metadata -->
+    <Icon Id="JarwisIcon.ico" SourceFile="$(SourceDir)\jarwis-agent.ico" />
+    <Property Id="ARPPRODUCTICON" Value="JarwisIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://jarwis.io/docs" />
+    <Property Id="ARPURLINFOABOUT" Value="https://jarwis.io" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://jarwis.io/download" />
+
+    <!-- Features -->
+    <Feature Id="ProductFeature" Title="Jarwis Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="ServiceComponents" />
+      <ComponentGroupRef Id="RegistryComponents" />
+      <ComponentGroupRef Id="ShortcutComponents" />
+    </Feature>
+
+    <!-- UI Reference for interactive install -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    
+    <!-- License and branding -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(SourceDir)\license.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(SourceDir)\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(SourceDir)\dialog.bmp" />
+
+  </Package>
+
+  <!-- Directory Structure -->
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Jarwis Agent">
+        <Directory Id="LogsFolder" Name="logs" />
+        <Directory Id="DataFolder" Name="data" />
+        <Directory Id="ConfigFolder" Name="config" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Jarwis Security" />
+    </StandardDirectory>
+  </Fragment>
+
+  <!-- Main Application Components -->
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      
+      <!-- Main executable -->
+      <Component Id="MainExecutable" Guid="B2C3D4E5-F6A7-8901-BCDE-F23456789012">
+        <File Id="JarwisAgentExe" 
+              Source="$(SourceDir)\jarwis-agent.exe" 
+              KeyPath="yes">
+          <Shortcut Id="DesktopShortcut"
+                    Name="Jarwis Agent"
+                    Directory="DesktopFolder"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="JarwisIcon.ico"
+                    Advertise="no" />
+        </File>
+      </Component>
+
+      <!-- System Tray App -->
+      <Component Id="TrayApp" Guid="B2C3D4E5-F6A7-8901-BCDE-F23456789013">
+        <File Id="JarwisTrayExe" 
+              Source="$(SourceDir)\jarwis-tray.exe" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Config Tool -->
+      <Component Id="ConfigTool" Guid="B2C3D4E5-F6A7-8901-BCDE-F23456789014">
+        <File Id="JarwisConfigExe" 
+              Source="$(SourceDir)\jarwis-config.exe" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- GUI Setup (for post-install configuration) -->
+      <Component Id="GUISetup" Guid="B2C3D4E5-F6A7-8901-BCDE-F23456789015">
+        <File Id="JarwisSetupGUIExe" 
+              Source="$(SourceDir)\JarwisAgentSetup-GUI.exe" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Configuration file -->
+      <Component Id="ConfigFile" Guid="C3D4E5F6-A7B8-9012-CDEF-345678901234">
+        <File Id="ConfigYaml" 
+              Source="$(SourceDir)\config.yaml" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- License file -->
+      <Component Id="LicenseFile" Guid="D4E5F6A7-B8C9-0123-DEF0-456789012345">
+        <File Id="LicenseTxt" 
+              Source="$(SourceDir)\LICENSE.txt" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- README -->
+      <Component Id="ReadmeFile" Guid="E5F6A7B8-C9D0-1234-EF01-567890123456">
+        <File Id="ReadmeTxt" 
+              Source="$(SourceDir)\README.txt" 
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Create logs directory -->
+      <Component Id="LogsDirectory" Guid="E5F6A7B8-C9D0-1234-EF01-567890123457">
+        <CreateFolder Directory="LogsFolder">
+          <Permission User="SYSTEM" GenericAll="yes" />
+          <Permission User="Administrators" GenericAll="yes" />
+          <Permission User="Users" GenericRead="yes" GenericWrite="yes" />
+        </CreateFolder>
+      </Component>
+
+      <!-- Create data directory -->
+      <Component Id="DataDirectory" Guid="E5F6A7B8-C9D0-1234-EF01-567890123458">
+        <CreateFolder Directory="DataFolder">
+          <Permission User="SYSTEM" GenericAll="yes" />
+          <Permission User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Windows Service Components -->
+  <Fragment>
+    <ComponentGroup Id="ServiceComponents" Directory="INSTALLFOLDER">
+      <Component Id="ServiceInstaller" Guid="F6A7B8C9-D0E1-2345-F012-678901234567">
+        <!-- Service uses the main executable -->
+        <File Id="ServiceExe" 
+              Source="$(SourceDir)\jarwis-agent.exe" 
+              Name="jarwis-service.exe"
+              KeyPath="yes" />
+        
+        <ServiceInstall
+          Id="JarwisAgentService"
+          Name="JarwisAgent"
+          DisplayName="Jarwis Security Agent"
+          Description="Background agent for Jarwis security testing platform. Enables remote security scanning and vulnerability assessment."
+          Type="ownProcess"
+          Start="auto"
+          Account="LocalSystem"
+          ErrorControl="normal"
+          Arguments="--service --server [SERVER_URL]"
+          Vital="yes">
+          
+          <!-- Service recovery options using util extension -->
+          <util:ServiceConfig
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart"
+            RestartServiceDelayInSeconds="60"
+            ResetPeriodInDays="1" />
+
+          <!-- Service dependencies -->
+          <ServiceDependency Id="Tcpip" />
+
+        </ServiceInstall>
+        
+        <ServiceControl
+          Id="StartJarwisService"
+          Name="JarwisAgent"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Registry Components -->
+  <Fragment>
+    <ComponentGroup Id="RegistryComponents" Directory="INSTALLFOLDER">
+      <Component Id="RegistryEntries" Guid="A7B8C9D0-E1F2-3456-0123-789012345678">
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Jarwis\Agent">
+          <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" KeyPath="yes" />
+          <RegistryValue Type="string" Name="Version" Value="!(bind.FileVersion.JarwisAgentExe)" />
+          <RegistryValue Type="string" Name="ServerUrl" Value="[SERVER_URL]" />
+          <RegistryValue Type="string" Name="ActivationKey" Value="[ACTIVATION_KEY]" />
+          <RegistryValue Type="string" Name="InstalledOn" Value="[Date]" />
+        </RegistryKey>
+      </Component>
+
+      <!-- Environment variable for PATH (optional) -->
+      <Component Id="EnvironmentPath" Guid="A7B8C9D0-E1F2-3456-0123-789012345679">
+        <Environment Id="PATH" 
+                     Name="PATH" 
+                     Value="[INSTALLFOLDER]" 
+                     Permanent="no" 
+                     Part="last" 
+                     Action="set" 
+                     System="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Shortcut Components -->
+  <Fragment>
+    <StandardDirectory Id="DesktopFolder" />
+    
+    <ComponentGroup Id="ShortcutComponents" Directory="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcuts" Guid="B8C9D0E1-F2A3-4567-1234-890123456789">
+        
+        <!-- Jarwis Agent shortcut -->
+        <Shortcut Id="JarwisAgentShortcut"
+                  Name="Jarwis Agent"
+                  Target="[INSTALLFOLDER]jarwis-agent.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="JarwisIcon.ico" />
+
+        <!-- System Tray shortcut -->
+        <Shortcut Id="JarwisTrayShortcut"
+                  Name="Jarwis System Tray"
+                  Target="[INSTALLFOLDER]jarwis-tray.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="JarwisIcon.ico" />
+
+        <!-- Config Tool shortcut -->
+        <Shortcut Id="JarwisConfigShortcut"
+                  Name="Jarwis Configuration"
+                  Target="[INSTALLFOLDER]jarwis-config.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="JarwisIcon.ico" />
+
+        <!-- Uninstall shortcut -->
+        <Shortcut Id="UninstallShortcut"
+                  Name="Uninstall Jarwis Agent"
+                  Target="[System64Folder]msiexec.exe"
+                  Arguments="/x [ProductCode]" />
+
+        <!-- Required registry key for shortcuts -->
+        <RegistryValue Root="HKCU" 
+                       Key="Software\Jarwis\Agent" 
+                       Name="StartMenuInstalled" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+
+        <!-- Remove folder on uninstall -->
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" 
+                      Directory="ApplicationProgramsFolder" 
+                      On="uninstall" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Custom Actions -->
+  <Fragment>
+    <!-- Write activation key to file for service to read -->
+    <CustomAction Id="WriteActivationKey"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='cmd.exe /c "echo [ACTIVATION_KEY] > "[INSTALLFOLDER]activation_key.txt""'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Start service after install if AUTO_START=1 -->
+    <CustomAction Id="StartServiceAction"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='sc.exe start JarwisAgent'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Launch tray app after install -->
+    <CustomAction Id="LaunchTrayApp"
+                  FileRef="JarwisTrayExe"
+                  ExeCommand=""
+                  Execute="immediate"
+                  Return="asyncNoWait" />
+
+    <InstallExecuteSequence>
+      <Custom Action="WriteActivationKey" Before="InstallFinalize" Condition="ACTIVATION_KEY" />
+      <Custom Action="StartServiceAction" After="InstallFinalize" Condition="AUTO_START=1" />
+    </InstallExecuteSequence>
+
+  </Fragment>
+
+</Wix>
