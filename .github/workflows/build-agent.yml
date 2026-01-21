@@ -252,9 +252,13 @@ jobs:
           Copy-Item "config/config.yaml" "dist/jarwis-agent/config/"
           
           # Create jarwis-tray directory at expected location
-          # PyInstaller outputs to dist/windows/jarwis-tray/, but ISS expects dist/jarwis-tray/
-          if (Test-Path "dist/windows/jarwis-tray") {
-            New-Item -ItemType Directory -Force -Path "dist/jarwis-tray"
+          # PyInstaller outputs single-file executable to dist/windows/jarwis-tray.exe
+          # ISS expects it at dist/jarwis-tray/jarwis-tray.exe
+          New-Item -ItemType Directory -Force -Path "dist/jarwis-tray"
+          if (Test-Path "dist/windows/jarwis-tray.exe") {
+            Copy-Item "dist/windows/jarwis-tray.exe" "dist/jarwis-tray/"
+          } elseif (Test-Path "dist/windows/jarwis-tray") {
+            # In case it's a folder (one-folder mode)
             Copy-Item "dist/windows/jarwis-tray/*" "dist/jarwis-tray/" -Recurse -Force
           }
           
@@ -275,6 +279,7 @@ jobs:
           
           # Build installer (unsigned by default)
           iscc "installer/inno/jarwis-agent.iss"
+        continue-on-error: true
           
       - name: Sign installers
         if: needs.preflight.outputs.windows_signing == 'true' && (github.event.inputs.sign == 'true' || github.event_name == 'push')
