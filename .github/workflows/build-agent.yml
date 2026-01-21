@@ -791,6 +791,3 @@ jobs:
             artifacts/linux-installer/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#   v 2 . 4 . 1   r e l e a s e   t e s t 
- 
- 
