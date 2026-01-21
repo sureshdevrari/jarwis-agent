@@ -1,0 +1,35 @@
+﻿      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          
+          # Check if release already exists and delete it
+          if gh release view "$VERSION" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists, deleting..."
+            gh release delete "$VERSION" --repo "${{ github.repository }}" --yes || true
+          fi
+          
+          # Wait a moment for rate limit reset
+          sleep 5
+          
+          # Create release with retry logic
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i to create release..."
+            if gh release create "$VERSION" \
+              --repo "${{ github.repository }}" \
+              --title "Jarwis Agent $VERSION" \
+              --generate-notes \
+              artifacts/windows-installer/* \
+              artifacts/macos-intel-installer/* \
+              artifacts/macos-arm64-installer/* \
+              artifacts/linux-installer/*; then
+              echo "Release created successfully!"
+              exit 0
+            fi
+            echo "Attempt $i failed, waiting 30 seconds..."
+            sleep 30
+          done
+          
+          echo "Failed to create release after 5 attempts"
+          exit 1
