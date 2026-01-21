@@ -733,72 +733,27 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          
+
       - name: List artifacts
-        run: |
-          echo "=== Downloaded Artifacts ==="
-          find artifacts -type f || echo "No artifacts found"
-          echo "=== End of artifacts ==="
-        
+        run: find artifacts -type f
+
       - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Jarwis Agent ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/windows-installer/*
+            artifacts/macos-intel-installer/*
+            artifacts/macos-arm64-installer/*
+            artifacts/linux-installer/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          shopt -s nullglob
-          
-          VERSION="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-          
-          echo "=========================================="
-          echo "Creating release $VERSION"
-          echo "=========================================="
-          
-          # Delete existing release if it exists
-          if gh release view "$VERSION" --repo "$REPO" > /dev/null 2>&1; then
-            echo "Deleting existing release..."
-            gh release delete "$VERSION" --repo "$REPO" --yes || true
-            sleep 3
-          fi
-          
-          # Collect all artifact files
-          FILES=()
-          for dir in artifacts/windows-installer artifacts/macos-intel-installer artifacts/macos-arm64-installer artifacts/linux-installer; do
-            if [ -d "$dir" ]; then
-              for f in "$dir"/*; do
-                [ -f "$f" ] && FILES+=("$f")
-              done
-            fi
-          done
-          
-          echo "Found ${#FILES[@]} files to upload:"
-          printf '  %s\n' "${FILES[@]}"
-          
-          # Create release with all files in one command
-          if [ ${#FILES[@]} -gt 0 ]; then
-            gh release create "$VERSION" \
-              --repo "$REPO" \
-              --title "Jarwis Agent $VERSION" \
-              --generate-notes \
-              "${FILES[@]}"
-          else
-            gh release create "$VERSION" \
-              --repo "$REPO" \
-              --title "Jarwis Agent $VERSION" \
-              --generate-notes
-          fi
-          
-          echo ""
-          echo "=========================================="
-          echo "Release $VERSION created successfully!"
-          echo "=========================================="
-          gh release view "$VERSION" --repo "$REPO"
