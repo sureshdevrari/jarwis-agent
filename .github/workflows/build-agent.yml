@@ -234,66 +234,17 @@ jobs:
             -ext WixToolset.Util.wixext `
             -o jarwis-agent-${{ env.VERSION }}.msi
         continue-on-error: true
-          
-      # === INNO SETUP BUILD (Primary installer) ===
-      - name: Install Inno Setup
-        run: |
-          choco install innosetup -y
-          
-      - name: Prepare Inno Setup files
-        run: |
-          # Create directory structure expected by Inno Setup ISS file
-          # ISS file expects: dist/jarwis-agent/jarwis-agent.exe (already exists from PyInstaller)
-          # ISS file expects: dist/jarwis-agent/config/config.yaml
-          # ISS file expects: dist/jarwis-tray/jarwis-tray.exe
-          
-          # Create config subdirectory in jarwis-agent dist
-          New-Item -ItemType Directory -Force -Path "dist/jarwis-agent/config"
-          Copy-Item "config/config.yaml" "dist/jarwis-agent/config/"
-          
-          # Create jarwis-tray directory at expected location
-          # PyInstaller outputs single-file executable to dist/windows/jarwis-tray.exe
-          # ISS expects it at dist/jarwis-tray/jarwis-tray.exe
-          New-Item -ItemType Directory -Force -Path "dist/jarwis-tray"
-          if (Test-Path "dist/windows/jarwis-tray.exe") {
-            Copy-Item "dist/windows/jarwis-tray.exe" "dist/jarwis-tray/"
-          } elseif (Test-Path "dist/windows/jarwis-tray") {
-            # In case it's a folder (one-folder mode)
-            Copy-Item "dist/windows/jarwis-tray/*" "dist/jarwis-tray/" -Recurse -Force
-          }
-          
-          Write-Host "Files prepared for Inno Setup:"
-          Write-Host "  dist/jarwis-agent/:"
-          Get-ChildItem "dist/jarwis-agent" -Name
-          Write-Host "  dist/jarwis-agent/config/:"
-          Get-ChildItem "dist/jarwis-agent/config" -Name -ErrorAction SilentlyContinue
-          Write-Host "  dist/jarwis-tray/:"
-          Get-ChildItem "dist/jarwis-tray" -Name -ErrorAction SilentlyContinue
-          
-      - name: Build Inno Setup installer
-        run: |
-          # Update version in ISS file
-          $issContent = Get-Content "installer/inno/jarwis-agent.iss" -Raw
-          $issContent = $issContent -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"${{ env.VERSION }}`""
-          Set-Content "installer/inno/jarwis-agent.iss" $issContent
-          
-          # Build installer (unsigned by default)
-          iscc "installer/inno/jarwis-agent.iss"
-        continue-on-error: true
-          
-      - name: Sign installers
+
+      # === SIGN MSI (Optional - only if secrets configured) ===
+      - name: Sign MSI installer
         if: needs.preflight.outputs.windows_signing == 'true' && (github.event.inputs.sign == 'true' || github.event_name == 'push')
         run: |
-          $files = @()
-          if (Test-Path "dist/windows/jarwis-agent-${{ env.VERSION }}.msi") { $files += "dist/windows/jarwis-agent-${{ env.VERSION }}.msi" }
-          if (Test-Path "dist/inno/jarwis-agent-${{ env.VERSION }}-setup.exe") { $files += "dist/inno/jarwis-agent-${{ env.VERSION }}-setup.exe" }
-          
-          if ($files.Count -gt 0) {
+          if (Test-Path "dist/windows/jarwis-agent-${{ env.VERSION }}.msi") {
             az trustedsigning sign `
               --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
               --certificate-profile ${{ secrets.AZURE_SIGNING_PROFILE }} `
               --endpoint https://eus.codesigning.azure.net `
-              --files $files `
+              --files "dist/windows/jarwis-agent-${{ env.VERSION }}.msi" `
               --description "Jarwis Security Agent Installer" `
               --timestamp-rfc3161 http://timestamp.acs.microsoft.com `
               --timestamp-digest SHA256
@@ -302,7 +253,6 @@ jobs:
             
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: windows-installer
           path: |
@@ -311,9 +261,8 @@ jobs:
             dist/windows/jarwis-config.exe
             dist/windows/JarwisAgentSetup-GUI.exe
             dist/windows/*.msi
-            dist/inno/*.exe
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ===========================================================================
   # macOS Build (Intel)
