@@ -11,7 +11,7 @@
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
   <?define ProductName = "Jarwis Security Agent" ?>
-  <?define ProductVersion = "1.0.0" ?>
+  <?define ProductVersion = "2.1.0" ?>
   <?define Manufacturer = "Jarwis Security" ?>
   <?define UpgradeCode = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" ?>
   
@@ -160,11 +160,40 @@
       <Custom Action="StartAgentService" After="InstallFinalize">AUTO_START=1</Custom>
     </InstallExecuteSequence>
 
-    <!-- UI for manual installation -->
-    <UIRef Id="WixUI_Minimal" />
-    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\license.rtf" />
-    <WixVariable Id="WixUIBannerBmp" Value="$(var.SourceDir)\banner.bmp" />
-    <WixVariable Id="WixUIDialogBmp" Value="$(var.SourceDir)\dialog.bmp" />
+    <!-- UI for manual installation - Professional Wizard -->
+    <UIRef Id="WixUI_Mondo" />
+    
+    <!-- Custom branding assets -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceDir)\..\installer\LICENSE.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.SourceDir)\..\installer\assets\bitmaps\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.SourceDir)\..\installer\assets\bitmaps\dialog.bmp" />
+    
+    <!-- Custom icon for Add/Remove Programs -->
+    <Icon Id="JarwisIcon" SourceFile="$(var.SourceDir)\..\installer\assets\icons\jarwis-agent.ico" />
+    <Property Id="ARPPRODUCTICON" Value="JarwisIcon" />
+    <Property Id="ARPHELPLINK" Value="https://jarwis.io/docs" />
+    <Property Id="ARPURLINFOABOUT" Value="https://jarwis.io" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://jarwis.io/download" />
+    
+    <!-- Skip license for silent install -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Jarwis Agent Status" />
+    
+    <!-- Custom action to launch after install -->
+    <CustomAction Id="LaunchAgentStatus"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='"[INSTALLFOLDER]jarwis-agent.exe" --status'
+                  Execute="immediate"
+                  Return="asyncNoWait" />
+    
+    <UI>
+      <Publish Dialog="ExitDialog" 
+               Control="Finish" 
+               Event="DoAction" 
+               Value="LaunchAgentStatus">
+        WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed
+      </Publish>
+    </UI>
 
   </Product>
 </Wix>

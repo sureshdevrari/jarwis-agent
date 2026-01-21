@@ -117,18 +117,50 @@ if errorlevel 1 (
 )
 
 echo [2/4] Copying additional files...
-copy "%PROJECT_ROOT%\config\config.yaml" "%BUILD_DIR%\config.yaml"
-copy "%PROJECT_ROOT%\LICENSE" "%BUILD_DIR%\LICENSE.txt"
+REM Copy config.yaml with error handling
+if exist "%PROJECT_ROOT%\config\config.yaml" (
+    copy "%PROJECT_ROOT%\config\config.yaml" "%BUILD_DIR%\config.yaml"
+    if errorlevel 1 (
+        echo ERROR: Failed to copy config.yaml
+        exit /b 1
+    )
+) else (
+    echo ERROR: config.yaml not found at %PROJECT_ROOT%\config\config.yaml
+    echo The installer requires config.yaml to function properly.
+    exit /b 1
+)
+
+REM Copy LICENSE with error handling
+if exist "%PROJECT_ROOT%\LICENSE" (
+    copy "%PROJECT_ROOT%\LICENSE" "%BUILD_DIR%\LICENSE.txt"
+) else (
+    echo WARNING: LICENSE file not found, creating placeholder
+    echo See https://jarwis.io/terms for license terms > "%BUILD_DIR%\LICENSE.txt"
+)
 echo Jarwis Security Agent - See https://jarwis.io for documentation > "%BUILD_DIR%\README.txt"
 
-REM Create license.rtf for WiX
-echo {\rtf1 Jarwis Security Agent License Agreement\par\par End User License Agreement...} > "%BUILD_DIR%\license.rtf"
+REM Generate branding assets if they don't exist
+if not exist "%INSTALLER_DIR%\assets\icons\jarwis-agent.ico" (
+    echo Generating branding assets...
+    cd /d "%INSTALLER_DIR%\assets"
+    python create_icons.py
+    cd /d "%PROJECT_ROOT%"
+)
 
-REM Create placeholder banner images if they don't exist
-if not exist "%BUILD_DIR%\banner.bmp" (
-    echo Creating placeholder installer images...
-    copy nul "%BUILD_DIR%\banner.bmp" >nul
-    copy nul "%BUILD_DIR%\dialog.bmp" >nul
+REM Copy branding assets for WiX
+if exist "%INSTALLER_DIR%\LICENSE.rtf" (
+    copy "%INSTALLER_DIR%\LICENSE.rtf" "%BUILD_DIR%\license.rtf"
+)
+if exist "%INSTALLER_DIR%\assets\bitmaps\banner.bmp" (
+    copy "%INSTALLER_DIR%\assets\bitmaps\banner.bmp" "%BUILD_DIR%\banner.bmp"
+    copy "%INSTALLER_DIR%\assets\bitmaps\dialog.bmp" "%BUILD_DIR%\dialog.bmp"
+) else (
+    echo WARNING: Branding assets not found at %INSTALLER_DIR%\assets\bitmaps\
+    echo Run 'python installer\assets\create_icons.py' to generate required assets.
+    echo Creating minimal valid BMP placeholders...
+    REM Create minimal valid 1x1 BMP files (62 bytes each) instead of empty files
+    powershell -Command "$bmp = [byte[]]@(0x42,0x4D,0x3E,0,0,0,0,0,0,0,0x36,0,0,0,0x28,0,0,0,0x01,0,0,0,0x01,0,0,0,0x01,0,0x18,0,0,0,0,0,0x08,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0xFF,0xFF,0xFF,0); [System.IO.File]::WriteAllBytes('%BUILD_DIR%\banner.bmp', $bmp)"
+    powershell -Command "$bmp = [byte[]]@(0x42,0x4D,0x3E,0,0,0,0,0,0,0,0x36,0,0,0,0x28,0,0,0,0x01,0,0,0,0x01,0,0,0,0x01,0,0x18,0,0,0,0,0,0x08,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0xFF,0xFF,0xFF,0); [System.IO.File]::WriteAllBytes('%BUILD_DIR%\dialog.bmp', $bmp)"
 )
 
 if %SIGN_BUILD%==1 (

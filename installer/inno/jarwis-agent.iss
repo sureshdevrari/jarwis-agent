@@ -73,9 +73,16 @@ LicenseFile=..\LICENSE.rtf
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 
-; Signing (uncomment for production)
-; SignTool=signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $f
-; SignedUninstaller=yes
+; Signing configuration - enable via /DSignBuild=1 on iscc command line
+; For Azure Trusted Signing, use: iscc /DSignBuild=1 /DUseAzureSigning=1 jarwis-agent.iss
+#ifdef SignBuild
+  #ifdef UseAzureSigning
+    SignTool=azsigntool sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 $f
+  #else
+    SignTool=signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $f
+  #endif
+  SignedUninstaller=yes
+#endif
 
 ; Uninstaller
 UninstallDisplayName={#MyAppName}
@@ -125,13 +132,13 @@ Name: "startmenu"; Description: "Create Start Menu shortcuts"; GroupDescription:
 Name: "desktopicon"; Description: "Create Desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-; Core files
-Source: "..\..\dist\windows\x64\jarwis-agent.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "..\..\dist\windows\x64\config.yaml"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+; Core files - Path matches PyInstaller output location
+Source: "..\..\dist\jarwis-agent\jarwis-agent.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "..\..\dist\jarwis-agent\config\config.yaml"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist; Components: core
 Source: "..\LICENSE.rtf"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion; Components: core
 
 ; System tray application
-Source: "..\..\dist\windows\x64\jarwis-tray.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: tray
+Source: "..\..\dist\jarwis-tray\jarwis-tray.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Components: tray
 
 ; Additional files would be added here based on components
 

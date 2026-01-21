@@ -4,7 +4,7 @@
 # ===========================================================================
 #
 # Runs after the PKG installation completes.
-# Creates necessary directories and starts the agent service.
+# Creates necessary directories and loads the agent service.
 #
 # ===========================================================================
 
@@ -12,15 +12,24 @@ set -e
 
 echo "Jarwis Agent: Running post-install..."
 
-# Create directories
+# Create all required directories
 mkdir -p /usr/local/var/jarwis
+mkdir -p /usr/local/var/jarwis/data
+mkdir -p /usr/local/var/jarwis/logs
 mkdir -p /usr/local/var/log
 mkdir -p /usr/local/etc/jarwis
 
 # Set permissions
-chmod 755 /usr/local/bin/jarwis-agent
+chmod 755 /usr/local/bin/jarwis-agent 2>/dev/null || true
 chmod 755 /usr/local/var/jarwis
-chmod 644 /Library/LaunchDaemons/com.jarwis.agent.plist
+chmod 755 /usr/local/var/jarwis/data
+chmod 755 /usr/local/var/jarwis/logs
+
+# Ensure LaunchDaemon plist has correct permissions
+if [ -f /Library/LaunchDaemons/com.jarwis.agent.plist ]; then
+    chmod 644 /Library/LaunchDaemons/com.jarwis.agent.plist
+    chown root:wheel /Library/LaunchDaemons/com.jarwis.agent.plist
+fi
 
 # Create default config if not exists
 if [ ! -f /usr/local/etc/jarwis/agent.conf ]; then

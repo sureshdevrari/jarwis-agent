@@ -41,11 +41,63 @@ DMG_NAME="jarwis-agent.dmg"
 VERSION="2.1.0"
 BUNDLE_ID="com.jarwis.agent"
 
+# Detect architecture
+CURRENT_ARCH="$(uname -m)"
+if [ "$CURRENT_ARCH" = "arm64" ]; then
+    ARCH_LABEL="apple-silicon"
+    PYINSTALLER_ARCH="--target-architecture arm64"
+    echo "Detected: Apple Silicon (arm64)"
+else
+    ARCH_LABEL="intel"
+    PYINSTALLER_ARCH="--target-architecture x86_64"
+    echo "Detected: Intel (x86_64)"
+fi
+
 # Parse arguments
 SIGN_BUILD=0
-if [ "$1" == "--sign" ]; then
-    SIGN_BUILD=1
+TARGET_ARCH="$CURRENT_ARCH"
+BUILD_UNIVERSAL=0
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --sign)
+            SIGN_BUILD=1
+            shift
+            ;;
+        --arch)
+            TARGET_ARCH="$2"
+            shift 2
+            ;;
+        --universal)
+            BUILD_UNIVERSAL=1
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--sign] [--arch arm64|x86_64] [--universal]"
+            exit 1
+            ;;
+    esac
+done
+
+# Update arch label and PyInstaller flags based on target
+if [ "$BUILD_UNIVERSAL" = "1" ]; then
+    ARCH_LABEL="universal"
+    PYINSTALLER_ARCH=""  # Let PyInstaller build for current arch, we'll combine later
+    echo "Building: Universal Binary (arm64 + x86_64)"
+elif [ "$TARGET_ARCH" = "arm64" ]; then
+    ARCH_LABEL="apple-silicon"
+    PYINSTALLER_ARCH="--target-architecture arm64"
+    echo "Building for: Apple Silicon (arm64)"
+elif [ "$TARGET_ARCH" = "x86_64" ]; then
+    ARCH_LABEL="intel"
+    PYINSTALLER_ARCH="--target-architecture x86_64"
+    echo "Building for: Intel (x86_64)"
 fi
+
+# Update output names with architecture
+PKG_NAME="jarwis-agent-${VERSION}-${ARCH_LABEL}.pkg"
+DMG_NAME="jarwis-agent-${VERSION}-${ARCH_LABEL}.dmg"
 
 # Create build directory
 mkdir -p "$BUILD_DIR"
@@ -56,8 +108,42 @@ cd "$PROJECT_ROOT"
 python3 -m PyInstaller "$INSTALLER_DIR/jarwis-agent.spec" \
     --distpath "$BUILD_DIR" \
     --workpath "$BUILD_DIR/build" \
+    $PYINSTALLER_ARCH \
     --clean \
     --noconfirm
+
+# For universal builds, we need to build both architectures and combine
+if [ "$BUILD_UNIVERSAL" = "1" ]; then
+    echo "Building Universal Binary..."
+    
+    # Build for arm64
+    echo "  Building arm64..."
+    python3 -m PyInstaller "$INSTALLER_DIR/jarwis-agent.spec" \
+        --distpath "$BUILD_DIR/arm64" \
+        --workpath "$BUILD_DIR/build-arm64" \
+        --target-architecture arm64 \
+        --clean \
+        --noconfirm
+    
+    # Build for x86_64
+    echo "  Building x86_64..."
+    python3 -m PyInstaller "$INSTALLER_DIR/jarwis-agent.spec" \
+        --distpath "$BUILD_DIR/x86_64" \
+        --workpath "$BUILD_DIR/build-x86_64" \
+        --target-architecture x86_64 \
+        --clean \
+        --noconfirm
+    
+    # Combine into universal binary using lipo
+    echo "  Creating universal binary with lipo..."
+    lipo -create \
+        "$BUILD_DIR/arm64/$APP_NAME" \
+        "$BUILD_DIR/x86_64/$APP_NAME" \
+        -output "$BUILD_DIR/$APP_NAME"
+    
+    # Cleanup architecture-specific builds
+    rm -rf "$BUILD_DIR/arm64" "$BUILD_DIR/x86_64" "$BUILD_DIR/build-arm64" "$BUILD_DIR/build-x86_64"
+fi
 
 echo "[2/6] Creating package structure..."
 

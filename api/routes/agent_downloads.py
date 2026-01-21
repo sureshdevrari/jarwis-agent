@@ -1,197 +1,141 @@
 # api/routes/agent_downloads.py
 """
-Agent Download Routes
+Agent Download Routes - GitHub Release Based
+
+All downloads are served from GitHub releases.
+The API dynamically fetches the latest release information.
 
 Provides endpoints for:
-- Agent installer downloads (signed binaries)
-- Release information (version, changelog)
+- Agent installer downloads (always from GitHub)
+- Latest release information (version, changelog)
 - Download statistics
 """
 
 import os
 import logging
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+import asyncio
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
+import httpx
 from pydantic import BaseModel
 
-from database.dependencies import get_current_user
+from database.dependencies import get_current_user, get_current_user_optional
 from database.models import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/agent-downloads", tags=["Agent Downloads"])
 
-# Agent release configuration
-AGENT_VERSION = "2.1.0"
-RELEASE_DATE = "2026-01-20"
-RELEASE_NOTES = """
-## Jarwis Agent v2.0.0
+# ============================================================================
+# GitHub Configuration
+# ============================================================================
 
-### 🚀 What's New
-- **Professional GUI Installer** - User-friendly setup wizard with branding
-- **System Tray Application** - Background status indicator and quick actions
-- **Post-Install Configuration** - Interactive server configuration with connection testing
-- **Feature Selection** - Choose which security testing modules to enable
-
-### 🛡️ Features
-- Web application security testing (OWASP Top 10)
-- Mobile dynamic analysis with Frida integration
-- Internal network scanning support
-- Cloud security assessment (AWS, Azure, GCP)
-- Static code analysis (SAST)
-- WebSocket-based secure connection to cloud
-- Auto-reconnection and heartbeat
-- Windows service / macOS LaunchDaemon / Linux systemd support
-
-### 📦 Installers
-- **Windows (GUI)**: `jarwis-agent-setup.exe` - Recommended for end users
-- **Windows (MSI)**: `jarwis-agent.msi` - Enterprise deployment (SCCM, Intune)
-- **macOS**: `jarwis-agent.pkg` - Signed and notarized
-- **Linux**: `.deb` (Debian/Ubuntu) and `.rpm` (RHEL/CentOS)
-
-### Supported Platforms
-- Windows 10/11 (x64)
-- macOS 11+ (Intel & Apple Silicon)
-- Linux (Ubuntu 20.04+, Debian 11+, RHEL 8+, CentOS Stream 8+)
-"""
-
-# Base directory for local agent builds - using absolute path from project root
-PROJECT_ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-LOCAL_BUILDS_DIR = PROJECT_ROOT / "dist"
-
-# GitHub Release URLs
 GITHUB_REPO = "sureshdevrari/jarwis-agent"
-GITHUB_RELEASE_BASE = f"https://github.com/{GITHUB_REPO}/releases/download/v{AGENT_VERSION}"
+GITHUB_API_BASE = "https://api.github.com"
+GITHUB_RELEASES_URL = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/releases"
 
-# Check if we're in development mode
-IS_DEV_MODE = os.environ.get("JARWIS_ENV", "development") == "development"
+# Cache for GitHub release data (to avoid hitting rate limits)
+_release_cache: Dict[str, Any] = {
+    "data": None,
+    "fetched_at": None,
+    "ttl_seconds": 300,  # Cache for 5 minutes
+}
 
-DOWNLOADS = {
+# ============================================================================
+# Asset filename mappings (what we expect in each release)
+# ============================================================================
+
+PLATFORM_ASSETS = {
     "windows": {
         "setup": {
-            "filename": "JarwisAgentSetup-GUI.exe",
-            "github_filename": "JarwisAgentSetup-GUI.exe",
-            "size_bytes": 45000000,  # ~45 MB (includes PyQt6)
-            "sha256": "",
-            "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-GUI.exe",
+            "patterns": ["JarwisAgentSetup-GUI.exe", "jarwis-agent-setup.exe"],
             "description": "⭐ Recommended - Professional GUI installer wizard",
-        },
-        "inno": {
-            "filename": f"JarwisAgentSetup-{AGENT_VERSION}.exe",
-            "github_filename": f"JarwisAgentSetup-{AGENT_VERSION}.exe",
-            "size_bytes": 35000000,  # ~35 MB
-            "sha256": "",
             "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-{AGENT_VERSION}.exe",
-            "description": "Inno Setup installer (alternative)",
         },
         "exe": {
-            "filename": "jarwis-agent.exe",
-            "github_filename": "jarwis-agent.exe",
-            "size_bytes": 15049524,  # ~15 MB
-            "sha256": "",
+            "patterns": ["jarwis-agent.exe"],
+            "description": "Standalone CLI agent executable",
             "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent.exe",
-            "description": "Standalone CLI executable",
         },
         "tray": {
-            "filename": "jarwis-tray.exe",
-            "github_filename": "jarwis-tray.exe",
-            "size_bytes": 25000000,  # ~25 MB
-            "sha256": "",
+            "patterns": ["jarwis-tray.exe"],
+            "description": "System tray status application",
             "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-tray.exe",
-            "description": "System tray application",
+        },
+        "config": {
+            "patterns": ["jarwis-config.exe"],
+            "description": "Configuration tool for server setup",
+            "content_type": "application/x-executable",
+        },
+        "msi": {
+            "patterns": ["jarwis-agent.msi", "JarwisAgent.msi"],
+            "description": "Enterprise MSI installer (SCCM, Intune)",
+            "content_type": "application/x-msi",
         },
     },
     "macos": {
-        "dmg_installer": {
-            "filename": f"JarwisAgentSetup-{AGENT_VERSION}.dmg",
-            "github_filename": f"JarwisAgentSetup-{AGENT_VERSION}.dmg",
-            "size_bytes": 45000000,  # ~45 MB
-            "sha256": "",
-            "content_type": "application/x-apple-diskimage",
-            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-{AGENT_VERSION}.dmg",
-            "description": "⭐ Recommended - DMG with GUI installer wizard",
+        "pkg_intel": {
+            "patterns": ["jarwis-agent-*-intel.pkg", "jarwis-agent-intel.pkg"],
+            "description": "⭐ macOS Intel installer (signed & notarized)",
+            "content_type": "application/x-newton-compatible-pkg",
         },
-        "setup": {
-            "filename": "JarwisAgentSetup-macos",
-            "github_filename": "JarwisAgentSetup-macos",
-            "size_bytes": 40000000,  # ~40 MB
-            "sha256": "",
-            "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-macos",
-            "description": "GUI installer executable",
+        "pkg_arm": {
+            "patterns": ["jarwis-agent-*-apple-silicon.pkg", "jarwis-agent-arm64.pkg"],
+            "description": "⭐ macOS Apple Silicon installer (signed & notarized)",
+            "content_type": "application/x-newton-compatible-pkg",
+        },
+        "dmg_intel": {
+            "patterns": ["JarwisAgentSetup-*-intel.dmg", "jarwis-agent-intel.dmg"],
+            "description": "macOS Intel DMG image",
+            "content_type": "application/x-apple-diskimage",
+        },
+        "dmg_arm": {
+            "patterns": ["JarwisAgentSetup-*-apple-silicon.dmg", "jarwis-agent-arm64.dmg"],
+            "description": "macOS Apple Silicon DMG image",
+            "content_type": "application/x-apple-diskimage",
         },
         "binary": {
-            "filename": "jarwis-agent-macos",
-            "github_filename": "jarwis-agent-macos",
-            "size_bytes": 14700470,  # ~14 MB
-            "sha256": "",
-            "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-macos",
+            "patterns": ["jarwis-agent-macos", "jarwis-agent-darwin"],
             "description": "Standalone CLI binary",
+            "content_type": "application/x-executable",
         },
     },
     "linux": {
-        "installer": {
-            "filename": f"jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
-            "github_filename": f"jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
-            "size_bytes": 50000000,  # ~50 MB
-            "sha256": "",
-            "content_type": "application/gzip",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-{AGENT_VERSION}-linux-installer.tar.gz",
-            "description": "⭐ Installer with GUI wizard (extract & run install.sh)",
-        },
         "deb": {
-            "filename": f"jarwis-agent_{AGENT_VERSION}_amd64.deb",
-            "github_filename": f"jarwis-agent_{AGENT_VERSION}_amd64.deb",
-            "size_bytes": 29111956,  # ~28 MB
-            "sha256": "",
+            "patterns": ["jarwis-agent_*_amd64.deb", "jarwis-agent*.deb"],
+            "description": "⭐ Debian/Ubuntu package",
             "content_type": "application/vnd.debian.binary-package",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent_{AGENT_VERSION}_amd64.deb",
-            "description": "Debian/Ubuntu package",
         },
         "rpm": {
-            "filename": f"jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
-            "github_filename": f"jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
-            "size_bytes": 29126659,  # ~28 MB
-            "sha256": "",
+            "patterns": ["jarwis-agent-*.x86_64.rpm", "jarwis-agent*.rpm"],
+            "description": "⭐ RHEL/CentOS/Fedora package",
             "content_type": "application/x-rpm",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-{AGENT_VERSION}-1.x86_64.rpm",
-            "description": "RHEL/CentOS/Fedora package",
-        },
-        "setup": {
-            "filename": "JarwisAgentSetup-linux",
-            "github_filename": "JarwisAgentSetup-linux",
-            "size_bytes": 45000000,  # ~45 MB
-            "sha256": "",
-            "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/JarwisAgentSetup-linux",
-            "description": "GUI installer executable (requires X11)",
         },
         "binary": {
-            "filename": "jarwis-agent-linux",
-            "github_filename": "jarwis-agent-linux",
-            "size_bytes": 29380312,  # ~28 MB
-            "sha256": "",
-            "content_type": "application/x-executable",
-            "download_url": f"{GITHUB_RELEASE_BASE}/jarwis-agent-linux",
+            "patterns": ["jarwis-agent-linux", "jarwis-agent-linux-amd64"],
             "description": "Standalone CLI binary",
+            "content_type": "application/x-executable",
+        },
+        "tarball": {
+            "patterns": ["jarwis-agent-*-linux.tar.gz", "jarwis-agent-linux.tar.gz"],
+            "description": "Portable tarball archive",
+            "content_type": "application/gzip",
         },
     },
 }
 
+# ============================================================================
+# Response Models
+# ============================================================================
 
-# Response models
 class ReleaseInfo(BaseModel):
     version: str
+    tag_name: str
     release_date: str
     release_notes: str
+    html_url: str
     downloads: dict
 
 
@@ -201,66 +145,229 @@ class DownloadInfo(BaseModel):
     filename: str
     download_url: str
     size_bytes: int
-    sha256: str
+    size_human: str
 
+
+# ============================================================================
+# GitHub API Functions
+# ============================================================================
+
+async def _fetch_latest_release() -> Optional[Dict[str, Any]]:
+    """
+    Fetch the latest release from GitHub API.
+    Uses caching to avoid rate limits.
+    """
+    global _release_cache
+    
+    # Check cache
+    if _release_cache["data"] and _release_cache["fetched_at"]:
+        age = datetime.now() - _release_cache["fetched_at"]
+        if age.total_seconds() < _release_cache["ttl_seconds"]:
+            logger.debug("Returning cached release data")
+            return _release_cache["data"]
+    
+    # Fetch from GitHub
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{GITHUB_RELEASES_URL}/latest",
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "Jarwis-Agent-API",
+                }
+            )
+            
+            if response.status_code == 404:
+                logger.warning("No releases found on GitHub")
+                return None
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            # Update cache
+            _release_cache["data"] = data
+            _release_cache["fetched_at"] = datetime.now()
+            
+            logger.info(f"Fetched latest release: {data.get('tag_name')}")
+            return data
+            
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch release from GitHub: {e}")
+        # Return cached data if available (even if stale)
+        if _release_cache["data"]:
+            logger.warning("Using stale cache due to GitHub API error")
+            return _release_cache["data"]
+        return None
+
+
+async def _fetch_all_releases() -> list:
+    """Fetch all releases from GitHub API."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                GITHUB_RELEASES_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "Jarwis-Agent-API",
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch releases: {e}")
+        return []
+
+
+def _match_asset_pattern(asset_name: str, patterns: list) -> bool:
+    """Check if asset name matches any of the patterns (supports wildcards)."""
+    import fnmatch
+    for pattern in patterns:
+        if fnmatch.fnmatch(asset_name, pattern) or fnmatch.fnmatch(asset_name.lower(), pattern.lower()):
+            return True
+    return False
+
+
+def _map_assets_to_downloads(assets: list) -> Dict[str, Dict[str, Any]]:
+    """
+    Map GitHub release assets to our platform/format structure.
+    """
+    downloads = {}
+    
+    for platform, formats in PLATFORM_ASSETS.items():
+        downloads[platform] = {}
+        
+        for fmt, config in formats.items():
+            # Find matching asset
+            matched_asset = None
+            for asset in assets:
+                if _match_asset_pattern(asset["name"], config["patterns"]):
+                    matched_asset = asset
+                    break
+            
+            if matched_asset:
+                downloads[platform][fmt] = {
+                    "filename": matched_asset["name"],
+                    "download_url": matched_asset["browser_download_url"],
+                    "size_bytes": matched_asset["size"],
+                    "size_human": _format_size(matched_asset["size"]),
+                    "description": config["description"],
+                    "content_type": config["content_type"],
+                    "available": True,
+                    "download_count": matched_asset.get("download_count", 0),
+                }
+            else:
+                # Asset not found in this release
+                downloads[platform][fmt] = {
+                    "filename": config["patterns"][0].replace("*", "VERSION"),
+                    "download_url": None,
+                    "size_bytes": 0,
+                    "size_human": "N/A",
+                    "description": config["description"],
+                    "content_type": config["content_type"],
+                    "available": False,
+                    "download_count": 0,
+                }
+    
+    return downloads
+
+
+# ============================================================================
+# API Endpoints
+# ============================================================================
 
 @router.get("/release", response_model=ReleaseInfo)
 async def get_release_info():
     """
-    Get current agent release information.
+    Get the latest agent release information from GitHub.
     
     Returns version, release date, changelog, and available downloads.
     """
-    downloads = {}
-    for platform, formats in DOWNLOADS.items():
-        downloads[platform] = {}
-        for fmt, info in formats.items():
-            downloads[platform][fmt] = {
-                "filename": info["filename"],
-                "size_bytes": info["size_bytes"],
-                "size_human": _format_size(info["size_bytes"]),
-                "sha256": info.get("sha256", ""),
-                "download_url": info["download_url"],
-                "description": info.get("description", ""),
-            }
+    release = await _fetch_latest_release()
+    
+    if not release:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to fetch release information from GitHub. Please try again later."
+        )
+    
+    # Map assets to downloads
+    downloads = _map_assets_to_downloads(release.get("assets", []))
     
     return ReleaseInfo(
-        version=AGENT_VERSION,
-        release_date=RELEASE_DATE,
-        release_notes=RELEASE_NOTES,
+        version=release["tag_name"].lstrip("v"),
+        tag_name=release["tag_name"],
+        release_date=release["published_at"][:10],
+        release_notes=release.get("body", "No release notes available."),
+        html_url=release["html_url"],
         downloads=downloads,
     )
+
+
+@router.get("/releases")
+async def list_releases():
+    """
+    List all available releases.
+    """
+    releases = await _fetch_all_releases()
+    
+    return {
+        "count": len(releases),
+        "releases": [
+            {
+                "version": r["tag_name"].lstrip("v"),
+                "tag_name": r["tag_name"],
+                "release_date": r["published_at"][:10],
+                "prerelease": r["prerelease"],
+                "draft": r["draft"],
+                "html_url": r["html_url"],
+                "asset_count": len(r.get("assets", [])),
+            }
+            for r in releases
+        ]
+    }
 
 
 @router.get("/recommended/{platform}")
 async def get_recommended_download(platform: str):
     """
-    Get recommended download for a platform.
-    
-    Returns the best installer option for the given platform.
+    Get recommended download for a platform from the latest GitHub release.
     """
     platform = platform.lower()
     
-    recommendations = {
-        "windows": "setup",  # GUI installer
-        "macos": "pkg",      # Signed PKG
-        "linux": "deb",      # Most common
-    }
-    
-    if platform not in DOWNLOADS:
+    if platform not in PLATFORM_ASSETS:
         raise HTTPException(status_code=404, detail=f"Unknown platform: {platform}")
     
-    recommended_format = recommendations.get(platform, list(DOWNLOADS[platform].keys())[0])
-    info = DOWNLOADS[platform][recommended_format]
+    release = await _fetch_latest_release()
+    if not release:
+        raise HTTPException(status_code=503, detail="Unable to fetch release from GitHub")
     
-    return {
-        "platform": platform,
-        "format": recommended_format,
-        "filename": info["filename"],
-        "download_url": info["download_url"],
-        "size_human": _format_size(info["size_bytes"]),
-        "description": info.get("description", ""),
+    downloads = _map_assets_to_downloads(release.get("assets", []))
+    
+    # Recommended formats per platform
+    recommendations = {
+        "windows": ["setup", "exe", "msi"],
+        "macos": ["pkg_arm", "pkg_intel", "dmg_arm", "dmg_intel", "binary"],
+        "linux": ["deb", "rpm", "binary", "tarball"],
     }
+    
+    # Find first available recommended format
+    for fmt in recommendations.get(platform, []):
+        if fmt in downloads[platform] and downloads[platform][fmt]["available"]:
+            info = downloads[platform][fmt]
+            return {
+                "platform": platform,
+                "format": fmt,
+                "version": release["tag_name"].lstrip("v"),
+                "filename": info["filename"],
+                "download_url": info["download_url"],
+                "size_human": info["size_human"],
+                "description": info["description"],
+            }
+    
+    raise HTTPException(
+        status_code=404,
+        detail=f"No downloads available for {platform} in the latest release"
+    )
 
 
 @router.get("/download/{platform}/{format}")
@@ -268,51 +375,99 @@ async def download_agent(
     platform: str,
     format: str,
     request: Request,
-    token: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
-    Get download URL for agent installer.
+    Download agent installer from GitHub releases.
     
-    Redirects to GitHub releases for actual download.
-    Tracks download statistics.
+    Redirects to the GitHub download URL for the requested platform/format.
     """
+    platform = platform.lower()
+    
     # Validate platform
-    if platform not in DOWNLOADS:
+    if platform not in PLATFORM_ASSETS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid platform. Must be one of: {list(DOWNLOADS.keys())}"
+            detail=f"Invalid platform. Must be one of: {list(PLATFORM_ASSETS.keys())}"
         )
     
     # Validate format
-    if format not in DOWNLOADS[platform]:
+    if format not in PLATFORM_ASSETS[platform]:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid format for {platform}. Must be one of: {list(DOWNLOADS[platform].keys())}"
+            detail=f"Invalid format for {platform}. Must be one of: {list(PLATFORM_ASSETS[platform].keys())}"
         )
     
-    download_info = DOWNLOADS[platform][format]
+    # Get latest release
+    release = await _fetch_latest_release()
+    if not release:
+        raise HTTPException(status_code=503, detail="Unable to fetch release from GitHub")
+    
+    downloads = _map_assets_to_downloads(release.get("assets", []))
+    
+    download_info = downloads[platform].get(format)
+    if not download_info or not download_info["available"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Download not available for {platform}/{format} in release {release['tag_name']}"
+        )
     
     # Log download for analytics
+    user_id = current_user.id if current_user else "anonymous"
     logger.info(
-        f"Agent download: user={current_user.id}, platform={platform}, "
-        f"format={format}, file={download_info['filename']}"
+        f"Agent download: user={user_id}, platform={platform}, "
+        f"format={format}, file={download_info['filename']}, version={release['tag_name']}"
     )
     
     # Track download in database (optional)
-    try:
-        await _track_download(
-            user_id=current_user.id,
-            platform=platform,
-            format=format,
-            filename=download_info['filename'],
-            ip_address=request.client.host if request.client else None,
-        )
-    except Exception as e:
-        logger.warning(f"Failed to track download: {e}")
+    if current_user:
+        try:
+            await _track_download(
+                user_id=current_user.id,
+                platform=platform,
+                format=format,
+                filename=download_info['filename'],
+                version=release['tag_name'],
+                ip_address=request.client.host if request.client else None,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to track download: {e}")
     
-    # Redirect to GitHub releases
-    return RedirectResponse(url=download_info["download_url"], status_code=302)
+    # Redirect to GitHub download URL
+    return RedirectResponse(
+        url=download_info["download_url"],
+        status_code=302,
+        headers={"X-Download-Version": release["tag_name"]}
+    )
+
+
+@router.get("/download/{platform}/{format}/stream")
+async def stream_download(platform: str, format: str, request: Request):
+    """
+    Stream the download through our server (instead of redirecting).
+    
+    Useful when direct GitHub access is blocked.
+    """
+    platform = platform.lower()
+    
+    if platform not in PLATFORM_ASSETS or format not in PLATFORM_ASSETS[platform]:
+        raise HTTPException(status_code=400, detail="Invalid platform or format")
+    
+    release = await _fetch_latest_release()
+    if not release:
+        raise HTTPException(status_code=503, detail="Unable to fetch release from GitHub")
+    
+    downloads = _map_assets_to_downloads(release.get("assets", []))
+    download_info = downloads[platform].get(format)
+    
+    if not download_info or not download_info["available"]:
+        raise HTTPException(status_code=404, detail="Download not available")
+    
+    return await _stream_from_url(
+        download_info["download_url"],
+        download_info["filename"],
+        download_info["content_type"]
+    )
 
 
 @router.get("/install-script")
@@ -320,55 +475,89 @@ async def get_install_script():
     """
     Get the Linux one-liner install script.
     
-    Usage: curl -sL https://jarwis.io/api/agent-downloads/install-script | sudo bash
+    Usage: curl -sL https://your-server/api/agent-downloads/install-script | sudo bash
     """
+    release = await _fetch_latest_release()
+    version = release["tag_name"] if release else "latest"
+    
     script = f"""#!/bin/bash
 # Jarwis Agent Quick Install Script
 # Usage: curl -sL https://jarwis.io/api/agent-downloads/install-script | sudo bash
 
 set -e
 
-AGENT_VERSION="{AGENT_VERSION}"
-GITHUB_RELEASE="{GITHUB_RELEASE_BASE}"
+GITHUB_REPO="{GITHUB_REPO}"
+API_BASE="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
 
 echo "============================================"
-echo "   Jarwis Agent Installer v$AGENT_VERSION"
+echo "   Jarwis Agent Installer"
 echo "============================================"
+echo ""
+
+# Fetch latest release info
+echo "Fetching latest release..."
+RELEASE_INFO=$(curl -sL "$API_BASE")
+VERSION=$(echo "$RELEASE_INFO" | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
+echo "Latest version: $VERSION"
 echo ""
 
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
+DOWNLOAD_BASE="https://github.com/$GITHUB_REPO/releases/download/$VERSION"
+
 case "$OS" in
     linux)
         if command -v apt-get &> /dev/null; then
             echo "Detected Debian/Ubuntu - Installing via .deb package..."
-            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent_${{AGENT_VERSION}}_amd64.deb"
-            TMP_FILE="/tmp/jarwis-agent.deb"
-            curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"
-            sudo dpkg -i "$TMP_FILE"
-            rm "$TMP_FILE"
+            # Find the .deb file in release
+            DEB_FILE=$(echo "$RELEASE_INFO" | grep -o '"name": *"[^"]*\\.deb"' | head -1 | cut -d'"' -f4)
+            if [ -n "$DEB_FILE" ]; then
+                curl -sL "$DOWNLOAD_BASE/$DEB_FILE" -o "/tmp/$DEB_FILE"
+                sudo dpkg -i "/tmp/$DEB_FILE"
+                rm "/tmp/$DEB_FILE"
+            else
+                echo "No .deb package found, installing binary..."
+                sudo curl -sL "$DOWNLOAD_BASE/jarwis-agent-linux" -o /usr/local/bin/jarwis-agent
+                sudo chmod +x /usr/local/bin/jarwis-agent
+            fi
         elif command -v yum &> /dev/null || command -v dnf &> /dev/null; then
             echo "Detected RHEL/CentOS/Fedora - Installing via .rpm package..."
-            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-${{AGENT_VERSION}}-1.x86_64.rpm"
-            TMP_FILE="/tmp/jarwis-agent.rpm"
-            curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"
-            sudo rpm -i "$TMP_FILE"
-            rm "$TMP_FILE"
+            RPM_FILE=$(echo "$RELEASE_INFO" | grep -o '"name": *"[^"]*\\.rpm"' | head -1 | cut -d'"' -f4)
+            if [ -n "$RPM_FILE" ]; then
+                curl -sL "$DOWNLOAD_BASE/$RPM_FILE" -o "/tmp/$RPM_FILE"
+                sudo rpm -i "/tmp/$RPM_FILE"
+                rm "/tmp/$RPM_FILE"
+            else
+                echo "No .rpm package found, installing binary..."
+                sudo curl -sL "$DOWNLOAD_BASE/jarwis-agent-linux" -o /usr/local/bin/jarwis-agent
+                sudo chmod +x /usr/local/bin/jarwis-agent
+            fi
         else
             echo "Installing standalone binary..."
-            DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-linux"
-            sudo curl -sL "$DOWNLOAD_URL" -o /usr/local/bin/jarwis-agent
+            sudo curl -sL "$DOWNLOAD_BASE/jarwis-agent-linux" -o /usr/local/bin/jarwis-agent
             sudo chmod +x /usr/local/bin/jarwis-agent
         fi
         ;;
     darwin)
-        echo "Detected macOS - Downloading DMG..."
-        DOWNLOAD_URL="$GITHUB_RELEASE/jarwis-agent-macos.dmg"
-        curl -sL "$DOWNLOAD_URL" -o ~/Downloads/jarwis-agent-macos.dmg
-        echo "Downloaded to ~/Downloads/jarwis-agent-macos.dmg"
-        echo "Please open the DMG and drag the app to Applications."
+        echo "Detected macOS..."
+        if [ "$ARCH" = "arm64" ]; then
+            echo "Apple Silicon detected"
+            PKG_PATTERN="apple-silicon.pkg"
+        else
+            echo "Intel Mac detected"
+            PKG_PATTERN="intel.pkg"
+        fi
+        PKG_FILE=$(echo "$RELEASE_INFO" | grep -o '"name": *"[^"]*'$PKG_PATTERN'"' | head -1 | cut -d'"' -f4)
+        if [ -n "$PKG_FILE" ]; then
+            curl -sL "$DOWNLOAD_BASE/$PKG_FILE" -o "/tmp/$PKG_FILE"
+            sudo installer -pkg "/tmp/$PKG_FILE" -target /
+            rm "/tmp/$PKG_FILE"
+        else
+            echo "No .pkg found. Please download manually from:"
+            echo "https://github.com/$GITHUB_REPO/releases/latest"
+        fi
         ;;
     *)
         echo "Unsupported OS: $OS"
@@ -393,24 +582,107 @@ async def get_checksums(platform: str):
     """
     Get SHA256 checksums for all downloads of a platform.
     
-    Used for verifying download integrity.
+    Note: Checksums should be included in the release notes or a separate checksums.txt file.
     """
-    if platform not in DOWNLOADS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid platform. Must be one of: {list(DOWNLOADS.keys())}"
-        )
+    if platform not in PLATFORM_ASSETS:
+        raise HTTPException(status_code=400, detail=f"Invalid platform: {platform}")
     
+    release = await _fetch_latest_release()
+    if not release:
+        raise HTTPException(status_code=503, detail="Unable to fetch release")
+    
+    # Look for checksums file in assets
     checksums = {}
-    for fmt, info in DOWNLOADS[platform].items():
-        checksums[info["filename"]] = info["sha256"]
+    for asset in release.get("assets", []):
+        if "checksum" in asset["name"].lower() or "sha256" in asset["name"].lower():
+            # Found checksums file - would need to download and parse
+            checksums["_checksums_file"] = asset["browser_download_url"]
+            break
     
-    return checksums
+    downloads = _map_assets_to_downloads(release.get("assets", []))
+    for fmt, info in downloads[platform].items():
+        if info["available"]:
+            checksums[info["filename"]] = "See checksums file in release"
+    
+    return {
+        "version": release["tag_name"],
+        "platform": platform,
+        "checksums": checksums,
+    }
 
 
-# Helper functions
+@router.get("/build-status")
+async def get_build_status():
+    """
+    Check which agent builds are available in the latest GitHub release.
+    """
+    release = await _fetch_latest_release()
+    
+    if not release:
+        return {
+            "status": "no_release",
+            "message": "No releases found on GitHub",
+            "github_repo": GITHUB_REPO,
+            "create_release_url": f"https://github.com/{GITHUB_REPO}/releases/new",
+        }
+    
+    downloads = _map_assets_to_downloads(release.get("assets", []))
+    
+    # Count available downloads
+    total_formats = 0
+    available_formats = 0
+    
+    platforms_status = {}
+    for platform, formats in downloads.items():
+        platforms_status[platform] = {}
+        for fmt, info in formats.items():
+            total_formats += 1
+            if info["available"]:
+                available_formats += 1
+            platforms_status[platform][fmt] = {
+                "filename": info["filename"],
+                "available": info["available"],
+                "download_url": info["download_url"],
+                "size_human": info["size_human"],
+                "download_count": info.get("download_count", 0),
+            }
+    
+    return {
+        "status": "ok",
+        "version": release["tag_name"],
+        "release_date": release["published_at"][:10],
+        "html_url": release["html_url"],
+        "github_repo": GITHUB_REPO,
+        "total_assets": len(release.get("assets", [])),
+        "available_formats": f"{available_formats}/{total_formats}",
+        "platforms": platforms_status,
+    }
+
+
+@router.post("/clear-cache")
+async def clear_release_cache():
+    """
+    Clear the cached release data (admin only).
+    
+    Forces the next request to fetch fresh data from GitHub.
+    """
+    global _release_cache
+    _release_cache = {
+        "data": None,
+        "fetched_at": None,
+        "ttl_seconds": 300,
+    }
+    return {"message": "Cache cleared", "next_fetch": "on next request"}
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
 def _format_size(size_bytes: int) -> str:
     """Format byte size to human readable string."""
+    if size_bytes == 0:
+        return "N/A"
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
@@ -418,54 +690,30 @@ def _format_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
-def _find_local_build(platform: str, format: str, download_info: dict) -> Optional[Path]:
-    """Find local build file for given platform/format."""
-    # Get the local filename (PyInstaller output) vs release filename
-    local_filename = download_info.get("local_filename", download_info["filename"])
-    release_filename = download_info["filename"]
+async def _stream_from_url(url: str, filename: str, content_type: str) -> StreamingResponse:
+    """
+    Stream a file from a URL to the client.
+    """
+    async def stream_content():
+        async with httpx.AsyncClient(follow_redirects=True, timeout=300.0) as client:
+            async with client.stream("GET", url) as response:
+                if response.status_code != 200:
+                    logger.error(f"Download failed: {response.status_code} for {url}")
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Failed to download: HTTP {response.status_code}"
+                    )
+                async for chunk in response.aiter_bytes(chunk_size=65536):
+                    yield chunk
     
-    # Platform-specific subdirectories
-    platform_subdirs = {
-        "windows": ["windows/x64", "windows/x86", "windows"],
-        "macos": ["macos/universal", "macos"],
-        "linux": ["linux/amd64", "linux"],
-    }
-    
-    subdirs = platform_subdirs.get(platform, [platform])
-    
-    # Check in order of preference for both local and release filenames
-    search_paths = []
-    for subdir in subdirs:
-        search_paths.extend([
-            LOCAL_BUILDS_DIR / subdir / local_filename,
-            LOCAL_BUILDS_DIR / subdir / release_filename,
-        ])
-    
-    # Also check root dist folder
-    search_paths.extend([
-        LOCAL_BUILDS_DIR / local_filename,
-        LOCAL_BUILDS_DIR / release_filename,
-    ])
-    
-    logger.debug(f"Searching for {platform}/{format} in: {[str(p) for p in search_paths]}")
-    
-    for path in search_paths:
-        if path.exists():
-            logger.info(f"Found local build: {path}")
-            return path
-    
-    logger.debug(f"No local build found for {platform}/{format}")
-    return None
-
-
-def _get_build_command(platform: str) -> str:
-    """Get the build command for a platform."""
-    commands = {
-        "windows": "cd installer\\windows && build.bat",
-        "macos": "cd installer/macos && ./build.sh",
-        "linux": "cd installer/linux && ./build.sh",
-    }
-    return commands.get(platform, "See installer/README.md")
+    return StreamingResponse(
+        stream_content(),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Download-Source": "github-stream",
+        }
+    )
 
 
 async def _track_download(
@@ -473,41 +721,12 @@ async def _track_download(
     platform: str,
     format: str,
     filename: str,
+    version: str,
     ip_address: Optional[str] = None,
 ):
     """
     Track download in database for analytics.
-    
-    In a real implementation, this would insert into a downloads table.
     """
     # TODO: Implement database tracking
+    logger.info(f"Download tracked: user={user_id}, platform={platform}, format={format}, version={version}")
     pass
-
-
-@router.get("/build-status")
-async def get_build_status():
-    """
-    Check which agent builds are available.
-    All builds are now hosted on GitHub releases.
-    """
-    status = {
-        "is_dev_mode": IS_DEV_MODE,
-        "version": AGENT_VERSION,
-        "github_repo": GITHUB_REPO,
-        "release_url": f"https://github.com/{GITHUB_REPO}/releases/tag/v{AGENT_VERSION}",
-        "platforms": {}
-    }
-    
-    for platform, formats in DOWNLOADS.items():
-        status["platforms"][platform] = {}
-        for fmt, info in formats.items():
-            status["platforms"][platform][fmt] = {
-                "filename": info['filename'],
-                "available": True,  # Always available via GitHub
-                "download_url": info['download_url'],
-                "size_bytes": info['size_bytes'],
-                "size_human": _format_size(info['size_bytes']),
-                "sha256": info.get('sha256', ''),
-            }
-    
-    return status

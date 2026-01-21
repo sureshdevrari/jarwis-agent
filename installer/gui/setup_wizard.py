@@ -53,6 +53,22 @@ except ImportError:
 
 
 # ============================================================================
+# Asset Path Helper
+# ============================================================================
+
+def get_asset_path(filename: str) -> Path:
+    """Get path to bundled asset file (works for both dev and PyInstaller)."""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running in development
+        base_path = Path(__file__).parent.parent / 'assets'
+    
+    return base_path / filename
+
+
+# ============================================================================
 # Configuration
 # ============================================================================
 
@@ -427,13 +443,22 @@ class WelcomePage(QWizardPage):
         # Left side panel with branding
         side_panel = QFrame()
         side_panel.setObjectName("sidePanel")
-        side_panel.setFixedWidth(200)
+        side_panel.setFixedWidth(220)
         side_layout = QVBoxLayout(side_panel)
         side_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Logo placeholder
-        logo_label = QLabel("🛡️")
-        logo_label.setStyleSheet("font-size: 64px; color: white;")
+        # Logo image
+        logo_label = QLabel()
+        logo_path = get_asset_path('jarwis-logo.png')
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            # Scale to fit nicely in the side panel - larger size
+            scaled_pixmap = pixmap.scaled(180, 180, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(scaled_pixmap)
+        else:
+            # Fallback if logo not found
+            logo_label.setText("🛡️")
+            logo_label.setStyleSheet("font-size: 64px; color: white;")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         side_layout.addWidget(logo_label)
         
@@ -933,8 +958,15 @@ class JarwisSetupWizard(QWizard):
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setMinimumSize(700, 500)
         
-        # Set icon
-        # self.setWindowIcon(QIcon("path/to/icon.ico"))
+        # Set window icon (shows in taskbar and title bar)
+        icon_path = get_asset_path('jarwis.ico')
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            # Try PNG as fallback
+            png_path = get_asset_path('jarwis-logo.png')
+            if png_path.exists():
+                self.setWindowIcon(QIcon(str(png_path)))
         
         # Add pages
         self.addPage(WelcomePage())
@@ -984,6 +1016,15 @@ def run_as_admin():
 
 
 def main():
+    # Create application FIRST (required for any Qt widgets)
+    app = QApplication(sys.argv)
+    app.setApplicationName("Jarwis Agent Setup")
+    app.setOrganizationName("Jarwis Security")
+    
+    # Set application-wide font
+    font = QFont("Segoe UI", 10)
+    app.setFont(font)
+    
     # Check for admin rights (required for service installation)
     if not is_admin():
         result = QMessageBox.question(
@@ -1016,15 +1057,7 @@ def main():
         else:
             i += 1
     
-    # Create and run application
-    app = QApplication(sys.argv)
-    app.setApplicationName("Jarwis Agent Setup")
-    app.setOrganizationName("Jarwis Security")
-    
-    # Set application-wide font
-    font = QFont("Segoe UI", 10)
-    app.setFont(font)
-    
+    # Create and show wizard
     wizard = JarwisSetupWizard(config)
     wizard.show()
     
