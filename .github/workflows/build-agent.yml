@@ -184,12 +184,17 @@ jobs:
         run: |
           cd dist/windows
           
-          # Copy required files
+          # Copy required files for WiX
           Copy-Item "../../config/config.yaml" .
-          Copy-Item "../../installer/LICENSE.rtf" ./license.rtf
+          # Create LICENSE.txt from LICENSE.rtf content
+          Get-Content "../../installer/LICENSE.rtf" | Out-File -Encoding utf8 LICENSE.txt
           Copy-Item "../../installer/assets/bitmaps/banner.bmp" .
           Copy-Item "../../installer/assets/bitmaps/dialog.bmp" .
-          "See https://jarwis.io" | Out-File -Encoding utf8 README.txt
+          "Jarwis Security Agent - See https://jarwis.io for documentation" | Out-File -Encoding utf8 README.txt
+          
+          # List files for debugging
+          Write-Host "Files in dist/windows:"
+          Get-ChildItem -Name
           
           # Build MSI
           wix build "../../installer/windows/jarwis-agent.wxs" `
