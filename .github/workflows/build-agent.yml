@@ -815,8 +815,17 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: false
           files: |
-            artifacts/**/*
+            artifacts/windows-installer/*.exe
+            artifacts/windows-installer/*.msi
+            artifacts/macos-intel-installer/*.pkg
+            artifacts/macos-intel-installer/*.dmg
+            artifacts/macos-intel-installer/jarwis-agent
+            artifacts/macos-arm64-installer/*.pkg
+            artifacts/macos-arm64-installer/*.dmg
+            artifacts/macos-arm64-installer/jarwis-agent
+            artifacts/linux-installer/*.deb
+            artifacts/linux-installer/*.rpm
+            artifacts/linux-installer/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
