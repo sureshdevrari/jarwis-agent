@@ -181,11 +181,31 @@ def create_inno_setup_images(source_png: Path, output_dir: Path):
 def main():
     # Paths
     project_root = Path(__file__).parent.parent.parent
-    source_logo = project_root / 'assets' / 'logos' / 'png' / 'PNG-01.png'
     output_dir = Path(__file__).parent
     
-    if not source_logo.exists():
-        print(f"ERROR: Source logo not found: {source_logo}")
+    # Try multiple possible logo locations
+    possible_logos = [
+        project_root / 'assets' / 'logos' / 'png' / 'PNG-01.png',
+        output_dir / 'jarwis-logo.png',
+        output_dir / 'jarwis-icon.png',
+        output_dir.parent / 'jarwis-logo.png',
+    ]
+    
+    source_logo = None
+    for logo_path in possible_logos:
+        if logo_path.exists():
+            source_logo = logo_path
+            break
+    
+    if source_logo is None:
+        print(f"ERROR: Source logo not found. Searched:")
+        for p in possible_logos:
+            print(f"  - {p}")
+        print(f"\nProject root: {project_root}")
+        print(f"Output dir: {output_dir}")
+        print(f"\nExisting files in {output_dir}:")
+        for f in output_dir.iterdir():
+            print(f"  - {f.name}")
         sys.exit(1)
     
     print(f"Source logo: {source_logo}")
