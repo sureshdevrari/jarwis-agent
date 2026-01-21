@@ -745,72 +745,39 @@ jobs:
         run: find artifacts -type f
         
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: Jarwis Agent ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-          generate_release_notes: true
-          body: |
-            ## Jarwis Security Agent ${{ github.ref_name }}
-            
-            ### ⚠️ Security Warnings
-            
-            This release contains **unsigned installers**. You may see security warnings during installation:
-            
-            **Windows:** SmartScreen may show "Windows protected your PC". Click "More info" → "Run anyway"
-            
-            **macOS:** Gatekeeper will block the app. Go to System Settings → Privacy & Security → Click "Open Anyway"
-            
-            **Linux:** No warnings - Linux doesn't require code signing
-            
-            See [INSTALLATION.md](https://github.com/${{ github.repository }}/blob/main/installer/INSTALLATION.md) for detailed instructions.
-            
-            ---
-            
-            ### 🚀 Installation
-            
-            **Windows (Recommended - GUI Installer):**
-            Download `jarwis-agent-*-setup.exe` and run it.
-            
-            **Windows (Enterprise/Silent - MSI):**
-            ```powershell
-            msiexec /i jarwis-agent-*.msi /quiet ACTIVATION_KEY=your-key
-            ```
-            
-            **macOS (Intel):**
-            Download `jarwis-agent-*-intel.pkg` or `.dmg`
-            
-            **macOS (Apple Silicon M1/M2/M3):**
-            Download `jarwis-agent-*-apple-silicon.pkg` or `.dmg`
-            
-            **Linux (Debian/Ubuntu):**
-            ```bash
-            sudo dpkg -i jarwis-agent_*_amd64.deb
-            ```
-            
-            **Linux (RHEL/CentOS/Fedora):**
-            ```bash
-            sudo rpm -i jarwis-agent-*.x86_64.rpm
-            ```
-            
-            ### 📦 Included Components
-            - `jarwis-agent` - Main security testing agent
-            - `jarwis-tray` - System tray status application (Windows)
-            - `jarwis-config` - Configuration utility
-            - `JarwisAgentSetup-GUI` - GUI installer wizard (Windows)
-            
-            ### 📋 Requirements
-            - Windows 10/11 (64-bit)
-            - macOS 11+ (Intel or Apple Silicon)
-            - Linux (Ubuntu 20.04+, RHEL 8+, Debian 11+)
-            - 4 GB RAM minimum
-            - Internet connection for cloud features
-            
-          files: |
-            artifacts/windows-installer/*
-            artifacts/macos-intel-installer/*
-            artifacts/macos-arm64-installer/*
-            artifacts/linux-installer/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          echo "Creating release $VERSION for $REPO"
+          
+          # Check if release already exists and delete it
+          if gh release view "$VERSION" --repo "$REPO" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists, deleting..."
+            gh release delete "$VERSION" --repo "$REPO" --yes || true
+            sleep 10
+          fi
+          
+          # Collect all artifact files  
+          shopt -s nullglob
+          FILES=(artifacts/windows-installer/* artifacts/macos-intel-installer/* artifacts/macos-arm64-installer/* artifacts/linux-installer/*)
+          echo "Files to upload: ${FILES[*]}"
+          
+          # Create release with retry logic (5 attempts with increasing delays)
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i to create release..."
+            if gh release create "$VERSION" \
+              --repo "$REPO" \
+              --title "Jarwis Agent $VERSION" \
+              --generate-notes \
+              "${FILES[@]}"; then
+              echo "Release $VERSION created successfully!"
+              exit 0
+            fi
+            DELAY=$((i * 30))
+            echo "Attempt $i failed, waiting $DELAY seconds..."
+            sleep $DELAY
+          done
+          echo "Failed to create release after 5 attempts"
+          exit 1
