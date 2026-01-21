@@ -768,18 +768,7 @@ jobs:
             if gh release create "$VERSION" \
               --repo "$REPO" \
               --title "Jarwis Agent $VERSION" \
-              --notes "## Jarwis Security Agent $VERSION
-
-### Installation
-
-**Windows:** Download \`JarwisAgentSetup-GUI.exe\` (recommended) or \`.msi\` for enterprise deployment.
-
-**macOS:** Download the \`.pkg\` or \`.dmg\` for your architecture (Intel or Apple Silicon).
-
-**Linux:** Download \`.deb\` (Debian/Ubuntu) or \`.rpm\` (RHEL/CentOS).
-
-See [INSTALLATION.md](https://github.com/$REPO/blob/main/installer/INSTALLATION.md) for detailed instructions.
-"; then
+              --notes "Jarwis Security Agent release - installers available for Windows, macOS, and Linux"; then
               echo "Empty release created successfully!"
               break
             fi
