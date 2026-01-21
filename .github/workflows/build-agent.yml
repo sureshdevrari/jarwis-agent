@@ -750,34 +750,100 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
+          echo "=========================================="
           echo "Creating release $VERSION for $REPO"
+          echo "=========================================="
           
-          # Check if release already exists and delete it
+          # Step 1: Delete existing release if it exists
           if gh release view "$VERSION" --repo "$REPO" > /dev/null 2>&1; then
             echo "Release $VERSION already exists, deleting..."
             gh release delete "$VERSION" --repo "$REPO" --yes || true
-            sleep 10
+            sleep 5
           fi
           
-          # Collect all artifact files  
-          shopt -s nullglob
-          FILES=(artifacts/windows-installer/* artifacts/macos-intel-installer/* artifacts/macos-arm64-installer/* artifacts/linux-installer/*)
-          echo "Files to upload: ${FILES[*]}"
-          
-          # Create release with retry logic (5 attempts with increasing delays)
-          for i in 1 2 3 4 5; do
-            echo "Attempt $i to create release..."
+          # Step 2: Create empty release first (small API call)
+          echo ""
+          echo "Step 1: Creating empty release..."
+          for attempt in 1 2 3; do
             if gh release create "$VERSION" \
               --repo "$REPO" \
               --title "Jarwis Agent $VERSION" \
-              --generate-notes \
-              "${FILES[@]}"; then
-              echo "Release $VERSION created successfully!"
-              exit 0
+              --notes "## Jarwis Security Agent $VERSION
+
+### Installation
+
+**Windows:** Download \`JarwisAgentSetup-GUI.exe\` (recommended) or \`.msi\` for enterprise deployment.
+
+**macOS:** Download the \`.pkg\` or \`.dmg\` for your architecture (Intel or Apple Silicon).
+
+**Linux:** Download \`.deb\` (Debian/Ubuntu) or \`.rpm\` (RHEL/CentOS).
+
+See [INSTALLATION.md](https://github.com/$REPO/blob/main/installer/INSTALLATION.md) for detailed instructions.
+"; then
+              echo "Empty release created successfully!"
+              break
             fi
-            DELAY=$((i * 30))
-            echo "Attempt $i failed, waiting $DELAY seconds..."
-            sleep $DELAY
+            echo "Attempt $attempt failed, waiting 10 seconds..."
+            sleep 10
           done
-          echo "Failed to create release after 5 attempts"
-          exit 1
+          
+          # Step 3: Upload files one by one with delays
+          echo ""
+          echo "Step 2: Uploading assets one by one..."
+          
+          upload_file() {
+            local file="$1"
+            local filename=$(basename "$file")
+            echo ""
+            echo "Uploading: $filename ($(du -h "$file" | cut -f1))"
+            
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$VERSION" "$file" --repo "$REPO" --clobber; then
+                echo "  Uploaded successfully!"
+                return 0
+              fi
+              delay=$((attempt * 15))
+              echo "  Attempt $attempt failed, waiting ${delay}s..."
+              sleep $delay
+            done
+            echo "  WARNING: Failed to upload $filename after 5 attempts"
+            return 1
+          }
+          
+          # Upload Windows artifacts
+          echo ""
+          echo "--- Windows Artifacts ---"
+          for f in artifacts/windows-installer/*; do
+            [ -f "$f" ] && upload_file "$f"
+            sleep 3
+          done
+          
+          # Upload macOS Intel artifacts
+          echo ""
+          echo "--- macOS Intel Artifacts ---"
+          for f in artifacts/macos-intel-installer/*; do
+            [ -f "$f" ] && upload_file "$f"
+            sleep 3
+          done
+          
+          # Upload macOS ARM artifacts
+          echo ""
+          echo "--- macOS ARM Artifacts ---"
+          for f in artifacts/macos-arm64-installer/*; do
+            [ -f "$f" ] && upload_file "$f"
+            sleep 3
+          done
+          
+          # Upload Linux artifacts
+          echo ""
+          echo "--- Linux Artifacts ---"
+          for f in artifacts/linux-installer/*; do
+            [ -f "$f" ] && upload_file "$f"
+            sleep 3
+          done
+          
+          echo ""
+          echo "=========================================="
+          echo "Release $VERSION completed!"
+          echo "=========================================="
+          gh release view "$VERSION" --repo "$REPO"
