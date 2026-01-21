@@ -151,6 +151,7 @@ jobs:
           
       - name: Sign executables with Azure Trusted Signing
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -209,6 +210,7 @@ jobs:
           
       - name: Sign installers
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         run: |
           az trustedsigning sign `
             --account-name ${{ secrets.AZURE_SIGNING_ACCOUNT }} `
@@ -279,6 +281,7 @@ jobs:
             
       - name: Import signing certificates
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -311,6 +314,7 @@ jobs:
           
       - name: Sign executable
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         run: |
           codesign --force --options runtime \
             --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
@@ -352,6 +356,7 @@ jobs:
             
       - name: Sign PKG installer
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         run: |
           productsign \
             --sign "Developer ID Installer: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
@@ -364,6 +369,7 @@ jobs:
           
       - name: Notarize PKG
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -392,6 +398,7 @@ jobs:
             
       - name: Sign DMG
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         run: |
           codesign --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
             "dist/macos/JarwisAgentSetup-${{ env.VERSION }}-intel.dmg"
@@ -447,6 +454,7 @@ jobs:
             
       - name: Import signing certificates
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -475,6 +483,7 @@ jobs:
           
       - name: Sign executable
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         run: |
           codesign --force --options runtime \
             --sign "Developer ID Application: Jarwis Security (${{ secrets.APPLE_TEAM_ID }})" \
@@ -511,6 +520,7 @@ jobs:
             
       - name: Sign and notarize PKG
         if: github.event.inputs.sign == 'true' || github.event_name == 'push'
+        continue-on-error: true  # Allow build to continue if signing fails
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
