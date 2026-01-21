@@ -63,8 +63,6 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  # Extract version from tag (removes 'v' prefix), fallback to input or default
-  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && substring(github.ref_name, 1) || github.event.inputs.version || '2.1.0' }}
 
 jobs:
   # ===========================================================================
@@ -76,7 +74,22 @@ jobs:
     outputs:
       windows_signing: ${{ steps.check-secrets.outputs.windows_signing }}
       macos_signing: ${{ steps.check-secrets.outputs.macos_signing }}
+      version: ${{ steps.set-version.outputs.version }}
     steps:
+      - name: Set version from tag or input
+        id: set-version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Extract version from tag (remove 'v' prefix)
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            # Use input or default
+            VERSION="${{ github.event.inputs.version || '2.1.0' }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+          
       - name: Checkout code
         uses: actions/checkout@v4
         
@@ -119,6 +132,8 @@ jobs:
     needs: preflight
     name: Build Windows Installer
     runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
     
     steps:
       - name: Checkout code
@@ -271,6 +286,8 @@ jobs:
     name: Build macOS Installer (Intel)
     needs: preflight
     runs-on: macos-15-intel  # Intel runner (macos-13 retired, using macos-15-intel per https://github.com/actions/runner-images/issues/13046)
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
     
     steps:
       - name: Checkout code
@@ -449,6 +466,8 @@ jobs:
     name: Build macOS Installer (Apple Silicon)
     needs: preflight
     runs-on: macos-latest  # ARM64 runner (M1/M2)
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
     
     steps:
       - name: Checkout code
@@ -602,6 +621,8 @@ jobs:
     name: Build Linux Installer
     needs: preflight
     runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
     
     steps:
       - name: Checkout code
