@@ -179,9 +179,21 @@ def create_inno_setup_images(source_png: Path, output_dir: Path):
 
 
 def main():
+    # Debug output
+    print(f"=== Debug Info ===")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"__file__: {__file__}")
+    print(f"Script path: {Path(__file__).resolve()}")
+    
     # Paths
-    project_root = Path(__file__).parent.parent.parent
-    output_dir = Path(__file__).parent
+    project_root = Path(__file__).parent.parent.parent.resolve()
+    output_dir = Path(__file__).parent.resolve()
+    
+    print(f"Project root: {project_root}")
+    print(f"Output dir: {output_dir}")
+    
+    # Also check relative to current working directory
+    cwd = Path(os.getcwd())
     
     # Try multiple possible logo locations
     possible_logos = [
@@ -189,23 +201,27 @@ def main():
         output_dir / 'jarwis-logo.png',
         output_dir / 'jarwis-icon.png',
         output_dir.parent / 'jarwis-logo.png',
+        cwd / 'jarwis-logo.png',  # Relative to CWD
+        cwd / 'installer' / 'assets' / 'jarwis-logo.png',  # Full path from project root
+        Path('jarwis-logo.png'),  # Just filename in CWD
     ]
     
+    print(f"\nSearching for logo files:")
     source_logo = None
     for logo_path in possible_logos:
-        if logo_path.exists():
+        exists = logo_path.exists()
+        print(f"  {logo_path} -> {'EXISTS' if exists else 'NOT FOUND'}")
+        if exists and source_logo is None:
             source_logo = logo_path
-            break
     
     if source_logo is None:
-        print(f"ERROR: Source logo not found. Searched:")
-        for p in possible_logos:
-            print(f"  - {p}")
-        print(f"\nProject root: {project_root}")
-        print(f"Output dir: {output_dir}")
-        print(f"\nExisting files in {output_dir}:")
-        for f in output_dir.iterdir():
-            print(f"  - {f.name}")
+        print(f"\nERROR: Source logo not found!")
+        print(f"\nListing files in {output_dir}:")
+        try:
+            for f in output_dir.iterdir():
+                print(f"  - {f.name}")
+        except Exception as e:
+            print(f"  Error listing: {e}")
         sys.exit(1)
     
     print(f"Source logo: {source_logo}")
