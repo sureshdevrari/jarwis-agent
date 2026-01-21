@@ -809,23 +809,20 @@ jobs:
           ls -la artifacts/*/
           
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
           name: Jarwis Agent ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            ## Jarwis Security Agent ${{ github.ref_name }}
+            
+            Download the appropriate installer for your platform below.
           files: |
-            artifacts/windows-installer/*.exe
-            artifacts/windows-installer/*.msi
-            artifacts/macos-intel-installer/*.pkg
-            artifacts/macos-intel-installer/*.dmg
-            artifacts/macos-intel-installer/jarwis-agent
-            artifacts/macos-arm64-installer/*.pkg
-            artifacts/macos-arm64-installer/*.dmg
-            artifacts/macos-arm64-installer/jarwis-agent
-            artifacts/linux-installer/*.deb
-            artifacts/linux-installer/*.rpm
-            artifacts/linux-installer/*.tar.gz
+            artifacts/windows-installer/*
+            artifacts/macos-intel-installer/*
+            artifacts/macos-arm64-installer/*
+            artifacts/linux-installer/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
