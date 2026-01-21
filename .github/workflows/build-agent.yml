@@ -106,8 +106,9 @@ jobs:
           
       - name: Generate branding assets
         run: |
-          cd installer/assets
-          python create_icons.py
+          # Run from project root so paths resolve correctly
+          python installer/assets/create_icons.py
+        continue-on-error: true
           
       - name: Build main executable with PyInstaller
         run: |
