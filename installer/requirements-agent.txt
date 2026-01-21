@@ -1,0 +1,28 @@
+# Jarwis Agent - Minimal Dependencies
+# This file contains ONLY the dependencies needed for the standalone agent
+
+# Core HTTP/Network
+requests>=2.31.0
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Configuration
+pyyaml>=6.0.1
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+
+# System utilities
+psutil>=5.9.0
+colorama>=0.4.6
+
+# GUI (for installer wizard and system tray)
+PyQt6>=6.6.0
+
+# Image handling (for branding)
+Pillow>=10.0.0
+
+# WebSocket for real-time communication
+websockets>=12.0
+
+# Logging
+rich>=13.7.0

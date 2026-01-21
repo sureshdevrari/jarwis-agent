@@ -102,7 +102,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller PyQt6 Pillow
-          pip install -r requirements.txt
+          pip install -r installer/requirements-agent.txt
           
       - name: Generate branding assets
         run: |
@@ -252,8 +252,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          pip install pyinstaller PyQt6 Pillow
+          pip install -r installer/requirements-agent.txt
           
       - name: Generate macOS app icon
         run: |
@@ -434,8 +434,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          pip install pyinstaller PyQt6 Pillow
+          pip install -r installer/requirements-agent.txt
           
       - name: Build executable with PyInstaller (ARM64)
         run: |
@@ -576,8 +576,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          pip install pyinstaller PyQt6 Pillow
+          pip install -r installer/requirements-agent.txt
           
           # Install fpm for package building
           sudo apt-get update

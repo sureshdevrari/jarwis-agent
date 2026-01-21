@@ -10,6 +10,76 @@
 
 ---
 
+## 🚨 CRITICAL: Jarwis Agent Installer (SEPARATE REPOSITORY)
+
+The Jarwis Agent installer has its **own dedicated GitHub repository**:
+
+| Repository | Purpose | URL |
+|------------|---------|-----|
+| **jarwis-agent** | Agent installer builds (CI/CD) | https://github.com/sureshdevrari/jarwis-agent |
+| **jarwis-ai-pentest** | Main application (this repo) | Local D:\jarwis-ai-pentest |
+
+### ⚠️ DO NOT USE WRONG REPO!
+- **CORRECT**: `https://github.com/sureshdevrari/jarwis-agent`
+- **WRONG**: `jarwis-1.1` (does not exist for agent builds)
+
+### Agent Installer Architecture
+
+```
+D:\jarwis-ai-pentest\installer\    # Local source files
+├── jarwis-agent.spec              # PyInstaller main agent spec
+├── jarwis-tray.spec               # System tray app spec
+├── jarwis-config.spec             # Config tool spec
+├── jarwis-setup-gui.spec          # GUI installer wizard spec
+├── gui/                           # PyQt6 GUI installer source
+│   ├── setup_wizard.py            # GUI installation wizard
+│   ├── system_tray.py             # System tray application
+│   └── post_install_config.py     # Post-install configuration
+├── assets/                        # Branding assets
+│   ├── create_icons.py            # Icon generator (needs assets/logos/png/PNG-01.png)
+│   ├── icons/                     # Generated .ico/.icns files
+│   └── bitmaps/                   # WiX/Inno Setup bitmaps
+├── windows/                       # Windows-specific (WiX MSI)
+├── macos/                         # macOS-specific (PKG/DMG)
+├── linux/                         # Linux-specific (DEB/RPM/systemd)
+└── inno/                          # Inno Setup installer
+
+.github/workflows/build-agent.yml  # CI/CD pipeline for ALL platforms
+```
+
+### GitHub Actions Build Pipeline
+
+The workflow builds for **3 platforms** with these runners:
+- **Windows**: `windows-latest` (MSI, EXE, GUI installer)
+- **macOS Intel**: `macos-15` (NOT macos-13 - deprecated!)
+- **macOS ARM**: `macos-latest` (Apple Silicon)
+- **Linux**: `ubuntu-latest` (DEB, RPM, tarball)
+
+### Agent Downloads API
+
+Downloads are served from GitHub releases, NOT local server:
+- API: `api/routes/agent_downloads.py`
+- Fetches latest release from: `https://api.github.com/repos/sureshdevrari/jarwis-agent/releases/latest`
+- 5-minute cache for performance
+
+### Building Locally (Windows)
+
+```powershell
+cd D:\jarwis-ai-pentest
+.\.venv\Scripts\Activate.ps1
+
+# Generate icons first
+cd installer/assets
+python create_icons.py
+
+# Build GUI installer
+cd ..
+pyinstaller jarwis-setup-gui.spec --clean --noconfirm
+# Output: dist/JarwisAgentSetup-GUI.exe
+```
+
+---
+
 ## 🔄 AUTO-GENERATED DOCUMENTATION (Always Current)
 
 These files are auto-generated from code introspection and **cannot go stale**:
