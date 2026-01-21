@@ -237,7 +237,7 @@ jobs:
   build-macos-intel:
     name: Build macOS Installer (Intel)
     needs: preflight
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-15  # Intel runner (updated from deprecated macos-13)
     
     steps:
       - name: Checkout code
