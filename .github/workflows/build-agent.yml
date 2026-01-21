@@ -731,6 +731,8 @@ jobs:
     needs: [build-windows, build-macos-intel, build-macos-arm64, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout code
@@ -742,97 +744,61 @@ jobs:
           path: artifacts
           
       - name: List artifacts
-        run: find artifacts -type f
+        run: |
+          echo "=== Downloaded Artifacts ==="
+          find artifacts -type f || echo "No artifacts found"
+          echo "=== End of artifacts ==="
         
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
+          shopt -s nullglob
+          
           VERSION="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
+          
           echo "=========================================="
-          echo "Creating release $VERSION for $REPO"
+          echo "Creating release $VERSION"
           echo "=========================================="
           
-          # Step 1: Delete existing release if it exists
+          # Delete existing release if it exists
           if gh release view "$VERSION" --repo "$REPO" > /dev/null 2>&1; then
-            echo "Release $VERSION already exists, deleting..."
+            echo "Deleting existing release..."
             gh release delete "$VERSION" --repo "$REPO" --yes || true
-            sleep 5
+            sleep 3
           fi
           
-          # Step 2: Create empty release first (small API call)
-          echo ""
-          echo "Step 1: Creating empty release..."
-          for attempt in 1 2 3; do
-            if gh release create "$VERSION" \
+          # Collect all artifact files
+          FILES=()
+          for dir in artifacts/windows-installer artifacts/macos-intel-installer artifacts/macos-arm64-installer artifacts/linux-installer; do
+            if [ -d "$dir" ]; then
+              for f in "$dir"/*; do
+                [ -f "$f" ] && FILES+=("$f")
+              done
+            fi
+          done
+          
+          echo "Found ${#FILES[@]} files to upload:"
+          printf '  %s\n' "${FILES[@]}"
+          
+          # Create release with all files in one command
+          if [ ${#FILES[@]} -gt 0 ]; then
+            gh release create "$VERSION" \
               --repo "$REPO" \
               --title "Jarwis Agent $VERSION" \
-              --notes "Jarwis Agent release"; then
-              echo "Empty release created successfully!"
-              break
-            fi
-            echo "Attempt $attempt failed, waiting 10 seconds..."
-            sleep 10
-          done
-          
-          # Step 3: Upload files one by one with delays
-          echo ""
-          echo "Step 2: Uploading assets one by one..."
-          
-          upload_file() {
-            local file="$1"
-            local filename=$(basename "$file")
-            echo ""
-            echo "Uploading: $filename ($(du -h "$file" | cut -f1))"
-            
-            for attempt in 1 2 3 4 5; do
-              if gh release upload "$VERSION" "$file" --repo "$REPO" --clobber; then
-                echo "  Uploaded successfully!"
-                return 0
-              fi
-              delay=$((attempt * 15))
-              echo "  Attempt $attempt failed, waiting ${delay}s..."
-              sleep $delay
-            done
-            echo "  WARNING: Failed to upload $filename after 5 attempts"
-            return 1
-          }
-          
-          # Upload Windows artifacts
-          echo ""
-          echo "--- Windows Artifacts ---"
-          for f in artifacts/windows-installer/*; do
-            [ -f "$f" ] && upload_file "$f"
-            sleep 3
-          done
-          
-          # Upload macOS Intel artifacts
-          echo ""
-          echo "--- macOS Intel Artifacts ---"
-          for f in artifacts/macos-intel-installer/*; do
-            [ -f "$f" ] && upload_file "$f"
-            sleep 3
-          done
-          
-          # Upload macOS ARM artifacts
-          echo ""
-          echo "--- macOS ARM Artifacts ---"
-          for f in artifacts/macos-arm64-installer/*; do
-            [ -f "$f" ] && upload_file "$f"
-            sleep 3
-          done
-          
-          # Upload Linux artifacts
-          echo ""
-          echo "--- Linux Artifacts ---"
-          for f in artifacts/linux-installer/*; do
-            [ -f "$f" ] && upload_file "$f"
-            sleep 3
-          done
+              --generate-notes \
+              "${FILES[@]}"
+          else
+            gh release create "$VERSION" \
+              --repo "$REPO" \
+              --title "Jarwis Agent $VERSION" \
+              --generate-notes
+          fi
           
           echo ""
           echo "=========================================="
-          echo "Release $VERSION completed!"
+          echo "Release $VERSION created successfully!"
           echo "=========================================="
           gh release view "$VERSION" --repo "$REPO"
