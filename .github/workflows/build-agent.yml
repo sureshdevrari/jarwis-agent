@@ -768,7 +768,7 @@ jobs:
             if gh release create "$VERSION" \
               --repo "$REPO" \
               --title "Jarwis Agent $VERSION" \
-              --notes "Jarwis Security Agent release - installers available for Windows, macOS, and Linux"; then
+              --notes "Jarwis Agent release"; then
               echo "Empty release created successfully!"
               break
             fi
