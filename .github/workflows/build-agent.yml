@@ -63,7 +63,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  VERSION: ${{ github.event.inputs.version || '2.1.0' }}
+  # Extract version from tag (removes 'v' prefix), fallback to input or default
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && substring(github.ref_name, 1) || github.event.inputs.version || '2.1.0' }}
 
 jobs:
   # ===========================================================================
@@ -233,7 +234,6 @@ jobs:
             -ext WixToolset.UI.wixext `
             -ext WixToolset.Util.wixext `
             -o jarwis-agent-${{ env.VERSION }}.msi
-        continue-on-error: true
 
       # === SIGN MSI (Optional - only if secrets configured) ===
       - name: Sign MSI installer
@@ -433,7 +433,6 @@ jobs:
             
       - name: Upload macOS Intel artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: macos-intel-installer
           path: |
@@ -441,7 +440,7 @@ jobs:
             dist/macos/JarwisAgentSetup-*-intel.dmg
             dist/macos/jarwis-agent
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ===========================================================================
   # macOS Build (Apple Silicon)
@@ -587,7 +586,6 @@ jobs:
             
       - name: Upload macOS ARM64 artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: macos-arm64-installer
           path: |
@@ -595,7 +593,7 @@ jobs:
             dist/macos-arm64/JarwisAgentSetup-*-apple-silicon.dmg
             dist/macos-arm64/jarwis-agent
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ===========================================================================
   # Linux Build
@@ -713,7 +711,6 @@ jobs:
             
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: linux-installer
           path: |
@@ -721,7 +718,7 @@ jobs:
             dist/linux/jarwis-agent-*-1.x86_64.rpm
             dist/linux/jarwis-agent-*-linux-x86_64.tar.gz
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ===========================================================================
   # Create Release
@@ -730,7 +727,13 @@ jobs:
     name: Create Release
     needs: [build-windows, build-macos-intel, build-macos-arm64, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only run if tag AND all builds succeeded
+    if: |
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.build-windows.result == 'success' &&
+      needs.build-macos-intel.result == 'success' &&
+      needs.build-macos-arm64.result == 'success' &&
+      needs.build-linux.result == 'success'
     permissions:
       contents: write
 
@@ -740,8 +743,43 @@ jobs:
         with:
           path: artifacts
 
-      - name: List artifacts
-        run: find artifacts -type f
+      - name: Verify artifacts exist
+        run: |
+          echo "=== Artifact Structure ==="
+          find artifacts -type f
+          echo ""
+          echo "=== Verifying required files ==="
+          
+          # Windows - check executables exist
+          if ! ls artifacts/windows-installer/*.exe 1>/dev/null 2>&1; then
+            echo "ERROR: Windows executables missing"
+            exit 1
+          fi
+          echo "✅ Windows executables found"
+          
+          # macOS Intel - check PKG exists
+          if ! ls artifacts/macos-intel-installer/*.pkg 1>/dev/null 2>&1; then
+            echo "ERROR: macOS Intel PKG missing"
+            exit 1
+          fi
+          echo "✅ macOS Intel PKG found"
+          
+          # macOS ARM64 - check PKG exists
+          if ! ls artifacts/macos-arm64-installer/*.pkg 1>/dev/null 2>&1; then
+            echo "ERROR: macOS ARM64 PKG missing"
+            exit 1
+          fi
+          echo "✅ macOS ARM64 PKG found"
+          
+          # Linux - check DEB exists
+          if ! ls artifacts/linux-installer/*.deb 1>/dev/null 2>&1; then
+            echo "ERROR: Linux DEB missing"
+            exit 1
+          fi
+          echo "✅ Linux DEB found"
+          
+          echo ""
+          echo "=== All required artifacts verified ==="
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -750,6 +788,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             artifacts/windows-installer/*
             artifacts/macos-intel-installer/*
