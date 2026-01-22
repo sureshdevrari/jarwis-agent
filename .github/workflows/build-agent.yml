@@ -811,38 +811,180 @@ jobs:
           echo ""
           echo "=== File details ==="
           ls -la artifacts/*/
-          
-      - name: Create GitHub Release
+
+      # STEP 1: Create draft release first (no files)
+      - name: Create Draft Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== Creating release for ${{ github.ref_name }} ==="
-          
-          # List files to upload
-          echo "Windows files:"
-          ls -la artifacts/windows-installer/ || echo "No windows-installer folder"
-          echo "macOS Intel files:"
-          ls -la artifacts/macos-intel-installer/ || echo "No macos-intel-installer folder"
-          echo "macOS ARM files:"
-          ls -la artifacts/macos-arm64-installer/ || echo "No macos-arm64-installer folder"
-          echo "Linux files:"
-          ls -la artifacts/linux-installer/ || echo "No linux-installer folder"
-          
-          # Collect all files
-          FILES=""
-          for dir in artifacts/*/; do
-            for file in "$dir"*; do
-              if [ -f "$file" ]; then
-                FILES="$FILES $file"
-              fi
-            done
-          done
-          
-          echo "=== Files to upload: ==="
-          echo $FILES
-          
-          # Create the release
+          echo "=== Creating DRAFT release for ${{ github.ref_name }} ==="
           gh release create "${{ github.ref_name }}" \
             --title "Jarwis Agent ${{ github.ref_name }}" \
             --generate-notes \
-            $FILES 2>&1 || { echo "Release creation failed"; exit 1; }
+            --draft
+          echo "✅ Draft release created successfully"
+
+      # STEP 2: Upload Windows artifacts (with retry)
+      - name: Upload Windows Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading Windows artifacts ==="
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=5
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Uploading $file (attempt $attempt/$max_attempts)..."
+              if gh release upload "${{ github.ref_name }}" "$file" --clobber; then
+                echo "✅ Successfully uploaded: $file"
+                return 0
+              else
+                echo "⚠️ Upload failed, waiting ${delay}s before retry..."
+                sleep $delay
+                delay=$((delay * 2))
+                attempt=$((attempt + 1))
+              fi
+            done
+            
+            echo "❌ Failed to upload $file after $max_attempts attempts"
+            return 1
+          }
+          
+          for file in artifacts/windows-installer/*; do
+            if [ -f "$file" ]; then
+              upload_with_retry "$file" || exit 1
+              echo "Waiting 5s before next upload..."
+              sleep 5
+            fi
+          done
+          echo "✅ All Windows artifacts uploaded"
+
+      # STEP 3: Upload macOS Intel artifacts (with retry)
+      - name: Upload macOS Intel Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading macOS Intel artifacts ==="
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=5
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Uploading $file (attempt $attempt/$max_attempts)..."
+              if gh release upload "${{ github.ref_name }}" "$file" --clobber; then
+                echo "✅ Successfully uploaded: $file"
+                return 0
+              else
+                echo "⚠️ Upload failed, waiting ${delay}s before retry..."
+                sleep $delay
+                delay=$((delay * 2))
+                attempt=$((attempt + 1))
+              fi
+            done
+            
+            echo "❌ Failed to upload $file after $max_attempts attempts"
+            return 1
+          }
+          
+          for file in artifacts/macos-intel-installer/*; do
+            if [ -f "$file" ]; then
+              upload_with_retry "$file" || exit 1
+              echo "Waiting 5s before next upload..."
+              sleep 5
+            fi
+          done
+          echo "✅ All macOS Intel artifacts uploaded"
+
+      # STEP 4: Upload macOS ARM64 artifacts (with retry)
+      - name: Upload macOS ARM64 Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading macOS ARM64 artifacts ==="
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=5
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Uploading $file (attempt $attempt/$max_attempts)..."
+              if gh release upload "${{ github.ref_name }}" "$file" --clobber; then
+                echo "✅ Successfully uploaded: $file"
+                return 0
+              else
+                echo "⚠️ Upload failed, waiting ${delay}s before retry..."
+                sleep $delay
+                delay=$((delay * 2))
+                attempt=$((attempt + 1))
+              fi
+            done
+            
+            echo "❌ Failed to upload $file after $max_attempts attempts"
+            return 1
+          }
+          
+          for file in artifacts/macos-arm64-installer/*; do
+            if [ -f "$file" ]; then
+              upload_with_retry "$file" || exit 1
+              echo "Waiting 5s before next upload..."
+              sleep 5
+            fi
+          done
+          echo "✅ All macOS ARM64 artifacts uploaded"
+
+      # STEP 5: Upload Linux artifacts (with retry)
+      - name: Upload Linux Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading Linux artifacts ==="
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=5
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Uploading $file (attempt $attempt/$max_attempts)..."
+              if gh release upload "${{ github.ref_name }}" "$file" --clobber; then
+                echo "✅ Successfully uploaded: $file"
+                return 0
+              else
+                echo "⚠️ Upload failed, waiting ${delay}s before retry..."
+                sleep $delay
+                delay=$((delay * 2))
+                attempt=$((attempt + 1))
+              fi
+            done
+            
+            echo "❌ Failed to upload $file after $max_attempts attempts"
+            return 1
+          }
+          
+          for file in artifacts/linux-installer/*; do
+            if [ -f "$file" ]; then
+              upload_with_retry "$file" || exit 1
+              echo "Waiting 5s before next upload..."
+              sleep 5
+            fi
+          done
+          echo "✅ All Linux artifacts uploaded"
+
+      # STEP 6: Publish release (remove draft status)
+      - name: Publish Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Publishing release ${{ github.ref_name }} ==="
+          gh release edit "${{ github.ref_name }}" --draft=false
+          echo "✅ Release published successfully!"
+          
+          # Verify
+          echo "=== Release verification ==="
+          gh release view "${{ github.ref_name }}"
