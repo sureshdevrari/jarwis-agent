@@ -812,11 +812,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "=== Creating release for ${{ github.ref_name }} ==="
+          
+          # List files to upload
+          echo "Windows files:"
+          ls -la artifacts/windows-installer/ || echo "No windows-installer folder"
+          echo "macOS Intel files:"
+          ls -la artifacts/macos-intel-installer/ || echo "No macos-intel-installer folder"
+          echo "macOS ARM files:"
+          ls -la artifacts/macos-arm64-installer/ || echo "No macos-arm64-installer folder"
+          echo "Linux files:"
+          ls -la artifacts/linux-installer/ || echo "No linux-installer folder"
+          
+          # Collect all files
+          FILES=""
+          for dir in artifacts/*/; do
+            for file in "$dir"*; do
+              if [ -f "$file" ]; then
+                FILES="$FILES $file"
+              fi
+            done
+          done
+          
+          echo "=== Files to upload: ==="
+          echo $FILES
+          
           # Create the release
-          gh release create ${{ github.ref_name }} \
+          gh release create "${{ github.ref_name }}" \
             --title "Jarwis Agent ${{ github.ref_name }}" \
             --generate-notes \
-            artifacts/windows-installer/* \
-            artifacts/macos-intel-installer/* \
-            artifacts/macos-arm64-installer/* \
-            artifacts/linux-installer/*
+            $FILES 2>&1 || { echo "Release creation failed"; exit 1; }
