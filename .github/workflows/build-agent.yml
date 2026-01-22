@@ -61,6 +61,10 @@ on:
         required: false
         default: false
 
+# Workflow-level permissions
+permissions:
+  contents: write
+
 env:
   PYTHON_VERSION: '3.11'
 
